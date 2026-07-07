@@ -7,7 +7,7 @@ import {
   getRecentActivitiesService
 } from "../services/dashboardService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
-import { serializeBigInt } from "../utils/bigIntSerializer.js";
+import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const getStats = async (req, res) => {
   try {

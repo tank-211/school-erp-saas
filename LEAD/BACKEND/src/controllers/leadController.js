@@ -14,7 +14,7 @@ import {
 import { successResponse, errorResponse } from "../utils/response.js";
 import fs from "fs";
 import csv from "csv-parser";
-import { serializeBigInt } from "../utils/bigIntSerializer.js";
+import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const createLead = async (req, res) => {
   try {

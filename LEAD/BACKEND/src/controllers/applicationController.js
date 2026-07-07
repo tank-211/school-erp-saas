@@ -10,7 +10,7 @@ import {
   updateStudentInfoService,
   updateParentInfoService
 } from "../services/applicationService.js";
-import { serializeBigInt } from "../utils/bigIntSerializer.js";
+import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const getApplications = async (req, res) => {
   try {
