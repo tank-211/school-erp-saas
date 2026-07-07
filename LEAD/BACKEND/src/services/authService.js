@@ -2,13 +2,13 @@ import { hashPassword, comparePassword } from "../utils/bcrypt.js";
 import { generateToken } from "../utils/jwt.js";
 import prisma from '../prisma/index.js';
 console.log("🔥 AUTH SERVICE FILE LOADED 🔥");
-console.log("prisma.user =", prisma.user);
+console.log("prisma.app_user =", prisma.app_user);
 console.log("prisma.app_user =", prisma.app_user);
 console.log(Object.keys(prisma));
-console.log("prisma.user =", prisma.user);
+console.log("prisma.app_user =", prisma.app_user);
 console.log("prisma.app_user =", prisma.app_user);
 export const registerService = async (data) => {
-  const existingUser = await prisma.user.findFirst({
+  const existingUser = await prisma.app_user.findFirst({
     where: { email: data.email },
   });
 
@@ -47,7 +47,7 @@ export const registerService = async (data) => {
   });
 
 
-  const user = await prisma.user.create({
+  const user = await prisma.app_user.create({
     data: {
       name: data.name,
       email: data.email,
@@ -77,7 +77,7 @@ export const registerService = async (data) => {
 
 export const loginService = async (email, password) => {
   console.log("LOGIN EMAIL:", email);
-  const user = await prisma.user.findFirst({
+  const user = await prisma.app_user.findFirst({
     where: { email },
   });
   console.log("FOUND USER:", user);
@@ -122,7 +122,7 @@ export const loginService = async (email, password) => {
 };
 
 export const getCurrentUserService = async (userId) => {
-  const user = await prisma.user.findFirst({
+  const user = await prisma.app_user.findFirst({
     where: { id: userId },
     select: {
       id: true,
@@ -141,7 +141,7 @@ export const getCurrentUserService = async (userId) => {
 };
 
 export const updateProfileService = async (userId, data) => {
-  const updatedUser = await prisma.user.update({
+  const updatedUser = await prisma.app_user.update({
     where: { id: userId },
     data: {
       ...(data.name && { name: data.name }),
@@ -159,7 +159,7 @@ export const updateProfileService = async (userId, data) => {
 };
 
 export const changePasswordService = async (userId, currentPassword, newPassword) => {
-  const user = await prisma.user.findFirst({
+  const user = await prisma.app_user.findFirst({
     where: { id: userId },
   });
 
@@ -167,14 +167,14 @@ export const changePasswordService = async (userId, currentPassword, newPassword
     throw new Error("User not found");
   }
 
-  const passwordMatch = await comparePassword(currentPassword, user.password); console.log("PASSWORD MATCH:", passwordMatch);
+  const passwordMatch = await comparePassword(currentPassword, user.password_hash); console.log("PASSWORD MATCH:", passwordMatch);
   if (!passwordMatch) {
     throw new Error("Current password is incorrect");
   }
 
   const hashedPassword = await hashPassword(newPassword);
 
-  await prisma.user.update({
+  await prisma.app_user.update({
     where: { id: userId },
     data: { password_hash : hashedPassword },
   });
