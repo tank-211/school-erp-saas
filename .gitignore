@@ -1,0 +1,28 @@
+# Node
+**/node_modules
+
+# Environment
+**/.env
+
+# Build
+**/dist
+**/build
+
+# Uploads
+**/uploads
+
+# Logs
+**/*.log
+
+# VS Code
+.vscode
+
+# Python
+**/.venv
+
+# Graphify
+**/graphify-out/
+**/.graphify*
+
+# Zip
+*.zip

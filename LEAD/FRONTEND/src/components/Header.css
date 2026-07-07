@@ -1,0 +1,185 @@
+.header {
+  height: 64px;
+  background: white;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 9;
+}
+.logout-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+}
+.header-search {
+  flex: 1;
+  max-width: 480px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+.header-search input {
+  width: 100%;
+  padding: 9px 12px 9px 38px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.header-search input:focus { border-color: var(--primary); background: white; }
+.header-search input::placeholder { color: var(--text-muted); }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.campus-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-add-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-display);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-add-lead:hover { background: var(--primary-dark); }
+
+.icon-btn {
+  width: 38px; height: 38px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  position: relative;
+  transition: all 0.15s;
+}
+.icon-btn:hover { border-color: var(--primary); color: var(--primary); }
+.notif-badge {
+  position: absolute;
+  top: -4px; right: -4px;
+  background: var(--accent-red);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-wrapper { position: relative; }
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 100;
+}
+.notif-header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.notif-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid #f8fafc;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.notif-item:hover { background: var(--primary-lighter); }
+.notif-dot {
+  width: 8px; height: 8px;
+  background: var(--primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+.header-user:hover { background: var(--bg); }
+.user-avatar {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--primary), #059669);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: var(--font-display);
+  flex-shrink: 0;
+}
+.user-info { display: flex; flex-direction: column; }
+.user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
+.user-role-tag { font-size: 11px; color: var(--text-muted); }

@@ -1,0 +1,65 @@
+.leads-page { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+.leads-page-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.view-toggle { display: flex; gap: 4px; border: 1.5px solid var(--border); border-radius: 9px; padding: 3px; background: white; }
+.view-btn { width: 32px; height: 32px; background: none; border: none; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.15s; }
+.view-btn.active { background: var(--primary); color: white; }
+
+/* Stat Cards */
+.leads-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.lead-stat-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; position: relative; transition: box-shadow 0.2s, transform 0.15s; }
+.lead-stat-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.lsc-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+.lsc-delta { position: absolute; top: 14px; right: 14px; font-size: 11px; font-weight: 600; }
+.lsc-delta.pos { color: #10b981; }
+.lsc-delta.neg { color: #ef4444; }
+.lsc-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; }
+.lsc-value { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text-primary); }
+
+/* Filter Bar */
+.leads-filter-bar { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; }
+.filter-toprow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.filter-heading { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.export-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: white; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text-secondary); transition: all 0.15s; }
+.export-btn:hover { border-color: var(--primary); color: var(--primary); }
+.filter-controls { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+.filt-group { display: flex; flex-direction: column; gap: 4px; }
+.filt-label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+.filt-select { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font-body); color: var(--text-primary); background: var(--bg); cursor: pointer; outline: none; min-width: 140px; transition: border-color 0.15s; }
+.filt-select:focus { border-color: var(--primary); }
+.filt-search { padding: 8px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 12px; font-family: var(--font-body); color: var(--text-primary); background: var(--bg); outline: none; width: 180px; transition: border-color 0.15s; }
+.filt-search:focus { border-color: var(--primary); background: white; }
+
+/* Grid */
+.leads-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.lead-card-full { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; cursor: pointer; transition: box-shadow 0.2s, transform 0.15s; }
+.lead-card-full:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); border-color: #d1fae5; }
+.lcf-header { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.lcf-name { font-size: 13px; font-weight: 600; color: var(--text-primary); flex: 1; }
+.lcf-score { font-size: 14px; font-weight: 700; font-family: var(--font-display); }
+.lcf-more { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 0 2px; }
+.lcf-grade { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-secondary); margin-bottom: 3px; }
+.lcf-parent-label { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.lcf-divider { height: 1px; background: #f1f5f9; margin-bottom: 10px; }
+.lcf-contact { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.lcf-row { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-secondary); }
+.src-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.lcf-footer { display: flex; align-items: center; justify-content: space-between; }
+.lcf-time { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); }
+
+/* Table view (reused from old) */
+.leads-table-wrap { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.leads-table { width: 100%; border-collapse: collapse; }
+.leads-table thead tr { border-bottom: 1px solid var(--border); background: #fafafa; }
+.leads-table th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+.leads-table td { padding: 12px 14px; border-bottom: 1px solid #f8fafc; vertical-align: middle; }
+.leads-table tbody tr:hover { background: var(--primary-lighter); }
+.leads-table tbody tr:last-child td { border-bottom: none; }
+.lead-name-cell { display: flex; align-items: center; gap: 10px; }
+.lead-avatar { width: 34px; height: 34px; background: linear-gradient(135deg, var(--primary), #059669); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; font-family: var(--font-display); flex-shrink: 0; }
+.lead-table-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.lead-table-parent { font-size: 11px; color: var(--text-muted); }
+.lead-action-btn { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 18px; padding: 2px 6px; border-radius: 6px; transition: all 0.15s; }
+.lead-action-btn:hover { background: var(--bg); color: var(--text-primary); }
+
+@media (max-width: 1200px) { .leads-stats { grid-template-columns: repeat(3, 1fr); } .leads-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .leads-stats { grid-template-columns: repeat(2, 1fr); } .leads-grid { grid-template-columns: 1fr; } }

@@ -1,0 +1,814 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model academic_year {
+  id            BigInt          @id @default(autoincrement())
+  school_id     BigInt
+  year_name     String          @db.VarChar(50)
+  start_date    DateTime        @db.Date
+  end_date      DateTime        @db.Date
+  is_active     Boolean?        @default(false)
+  status        String?         @default("inactive") @db.VarChar(50)
+  created_at    DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamp(6)
+  created_by    String?         @db.VarChar(100)
+  updated_by    String?         @db.VarChar(100)
+  school        school          @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  admission     admission[]
+  application   application[]
+  fee_structure fee_structure[]
+  lead          lead[]
+
+  @@unique([school_id, year_name])
+  @@index([is_active], map: "idx_academic_year_is_active")
+  @@index([school_id], map: "idx_academic_year_school_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model admission {
+  id                     BigInt                   @id @default(autoincrement())
+  school_id              BigInt
+  student_id             BigInt
+  lead_id                BigInt?
+  academic_year_id       BigInt
+  class_id               BigInt
+  section_id             BigInt
+  admission_date         DateTime                 @db.Date
+  status                 String?                  @default("active") @db.VarChar(50)
+  admission_type         String?                  @db.VarChar(50)
+  registration_number    String?                  @unique @db.VarChar(50)
+  previous_school        String?                  @db.VarChar(255)
+  created_at             DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamp(6)
+  created_by             String?                  @db.VarChar(100)
+  application_id         BigInt?
+  academic_year          academic_year            @relation(fields: [academic_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  application            application?             @relation(fields: [application_id], references: [id], onUpdate: NoAction)
+  school_class           school_class             @relation(fields: [class_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lead                   lead?                    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+  school                 school                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  section                section                  @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student                student                  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  application_progress   application_progress?
+  documents              documents[]
+  student_fee_assignment student_fee_assignment[]
+
+  @@index([academic_year_id], map: "idx_admission_academic_year_id")
+  @@index([application_id], map: "idx_admission_application_id")
+  @@index([class_id], map: "idx_admission_class_id")
+  @@index([lead_id], map: "idx_admission_lead_id")
+  @@index([school_id], map: "idx_admission_school_id")
+  @@index([section_id], map: "idx_admission_section_id")
+  @@index([status], map: "idx_admission_status")
+  @@index([student_id], map: "idx_admission_student_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model app_user {
+  id                                                                BigInt                  @id @default(autoincrement())
+  school_id                                                         BigInt
+  name                                                              String                  @db.VarChar(150)
+  email                                                             String                  @unique @db.VarChar(100)
+  password_hash                                                     String                  @db.VarChar(255)
+  role                                                              String                  @default("counselor") @db.VarChar(50)
+  status                                                            String                  @default("active") @db.VarChar(50)
+  created_at                                                        DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at                                                        DateTime?               @default(now()) @db.Timestamp(6)
+  created_by                                                        String?                 @db.VarChar(100)
+  school                                                            school                  @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  application                                                       application[]
+  application_documents_application_documents_uploaded_byToapp_user application_documents[] @relation("application_documents_uploaded_byToapp_user")
+  application_documents_application_documents_verified_byToapp_user application_documents[] @relation("application_documents_verified_byToapp_user")
+  audit_log                                                         audit_log[]
+  lead_activity                                                     lead_activity[]
+
+  @@unique([school_id, email])
+  @@index([email], map: "idx_app_user_email")
+  @@index([role], map: "idx_app_user_role")
+  @@index([school_id], map: "idx_app_user_school_id")
+  @@index([status], map: "idx_app_user_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model application {
+  id                        BigInt                     @id @default(autoincrement())
+  school_id                 BigInt
+  academic_year_id          BigInt
+  lead_id                   BigInt?
+  application_number        String                     @unique @db.VarChar(50)
+  status                    String                     @default("draft") @db.VarChar(50)
+  current_step              Int?                       @default(1)
+  assigned_to               BigInt?
+  rejection_reason          String?
+  created_at                DateTime?                  @default(now()) @db.Timestamp(6)
+  updated_at                DateTime?                  @default(now()) @db.Timestamp(6)
+  submitted_at              DateTime?                  @db.Timestamp(6)
+  admission                 admission[]
+  academic_year             academic_year              @relation(fields: [academic_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  app_user                  app_user?                  @relation(fields: [assigned_to], references: [id], onUpdate: NoAction)
+  lead                      lead?                      @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+  school                    school                     @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  application_academic_info application_academic_info?
+  application_documents     application_documents[]
+  application_parent_info   application_parent_info?
+  application_student_info  application_student_info?
+
+  @@unique([school_id, application_number])
+  @@index([academic_year_id], map: "idx_application_academic_year_id")
+  @@index([assigned_to], map: "idx_application_assigned_to")
+  @@index([current_step], map: "idx_application_current_step")
+  @@index([lead_id], map: "idx_application_lead_id")
+  @@index([school_id], map: "idx_application_school_id")
+  @@index([status], map: "idx_application_status")
+}
+
+model application_academic_info {
+  id                         BigInt      @id @default(autoincrement())
+  application_id             BigInt      @unique(map: "unique_application_academic_info_application")
+  school_id                  BigInt?
+  desired_class              String      @db.VarChar(100)
+  previous_school            String?     @db.VarChar(255)
+  previous_class             String?     @db.VarChar(100)
+  marks_percentage           Decimal?    @db.Decimal(5, 2)
+  board_name                 String?     @db.VarChar(100)
+  academic_year              String?     @db.VarChar(50)
+  additional_qualifications  String?
+  extracurricular_activities String?
+  achievements               String?
+  created_at                 DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?   @default(now()) @db.Timestamp(6)
+  application                application @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([application_id], map: "idx_application_academic_info_application_id")
+  @@index([desired_class], map: "idx_application_academic_info_desired_class")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model application_documents {
+  id                                                   BigInt      @id @default(autoincrement())
+  application_id                                       BigInt
+  document_type                                        String      @db.VarChar(100)
+  file_name                                            String?     @db.VarChar(255)
+  file_path                                            String?     @db.VarChar(500)
+  document_number                                      String?     @db.VarChar(255)
+  file_size                                            Int?
+  mime_type                                            String?     @db.VarChar(100)
+  verification_status                                  String?     @default("pending") @db.VarChar(50)
+  rejection_reason                                     String?
+  uploaded_by                                          BigInt?
+  verified_by                                          BigInt?
+  verified_at                                          DateTime?   @db.Timestamp(6)
+  uploaded_at                                          DateTime?   @default(now()) @db.Timestamp(6)
+  created_at                                           DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at                                           DateTime?   @default(now()) @db.Timestamp(6)
+  application                                          application @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  app_user_application_documents_uploaded_byToapp_user app_user?   @relation("application_documents_uploaded_byToapp_user", fields: [uploaded_by], references: [id], onUpdate: NoAction)
+  app_user_application_documents_verified_byToapp_user app_user?   @relation("application_documents_verified_byToapp_user", fields: [verified_by], references: [id], onUpdate: NoAction)
+
+  @@unique([application_id, document_type], map: "unique_app_id_and_type")
+  @@index([application_id], map: "idx_application_documents_application_id")
+  @@index([document_type], map: "idx_application_documents_document_type")
+  @@index([uploaded_by], map: "idx_application_documents_uploaded_by")
+  @@index([verification_status], map: "idx_application_documents_verification_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model application_parent_info {
+  id                       BigInt      @id @default(autoincrement())
+  application_id           BigInt      @unique(map: "unique_application_parent")
+  father_name              String?     @db.VarChar(150)
+  father_occupation        String?     @db.VarChar(100)
+  father_phone             String?     @db.VarChar(20)
+  father_email             String?     @db.VarChar(100)
+  mother_name              String?     @db.VarChar(150)
+  mother_occupation        String?     @db.VarChar(100)
+  mother_phone             String?     @db.VarChar(20)
+  mother_email             String?     @db.VarChar(100)
+  guardian_name            String?     @db.VarChar(150)
+  guardian_relation        String?     @db.VarChar(50)
+  guardian_phone           String?     @db.VarChar(20)
+  guardian_email           String?     @db.VarChar(100)
+  primary_contact_person   String      @db.VarChar(150)
+  primary_contact_relation String      @db.VarChar(50)
+  primary_contact_phone    String      @db.VarChar(20)
+  address                  String?
+  city                     String?     @db.VarChar(100)
+  state                    String?     @db.VarChar(100)
+  postal_code              String?     @db.VarChar(20)
+  income_range             String?     @db.VarChar(50)
+  created_at               DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at               DateTime?   @default(now()) @db.Timestamp(6)
+  application              application @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([application_id], map: "idx_application_parent_info_application_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model application_progress {
+  id                      BigInt    @id @default(autoincrement())
+  admission_id            BigInt    @unique
+  student_info_status     String?   @default("pending") @db.VarChar(50)
+  parent_info_status      String?   @default("pending") @db.VarChar(50)
+  academic_details_status String?   @default("pending") @db.VarChar(50)
+  photos_status           String?   @default("pending") @db.VarChar(50)
+  documents_status        String?   @default("pending") @db.VarChar(50)
+  review_status           String?   @default("pending") @db.VarChar(50)
+  created_at              DateTime? @default(now()) @db.Timestamp(6)
+  updated_at              DateTime? @default(now()) @db.Timestamp(6)
+  admission               admission @relation(fields: [admission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([admission_id], map: "idx_application_progress_admission_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model application_student_info {
+  id             BigInt      @id @default(autoincrement())
+  application_id BigInt      @unique(map: "unique_application_student_info_application")
+  first_name     String      @db.VarChar(100)
+  middle_name    String?     @db.VarChar(100)
+  last_name      String      @db.VarChar(100)
+  date_of_birth  DateTime    @db.Date
+  gender         String?     @db.VarChar(20)
+  email          String?     @db.VarChar(100)
+  phone          String?     @db.VarChar(20)
+  address        String?
+  city           String?     @db.VarChar(100)
+  state          String?     @db.VarChar(100)
+  postal_code    String?     @db.VarChar(20)
+  country        String?     @db.VarChar(100)
+  blood_group    String?     @db.VarChar(10)
+  aadhar_number  String?     @db.VarChar(20)
+  created_at     DateTime?   @default(now()) @db.Timestamp(6)
+  updated_at     DateTime?   @default(now()) @db.Timestamp(6)
+  application    application @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([aadhar_number], map: "idx_application_student_info_aadhar")
+  @@index([application_id], map: "idx_application_student_info_application_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model audit_log {
+  id             BigInt    @id @default(autoincrement())
+  school_id      BigInt
+  user_id        BigInt?
+  action         String    @db.VarChar(100)
+  entity         String    @db.VarChar(100)
+  entity_id      BigInt
+  status         String?   @db.VarChar(50)
+  old_data       Json?
+  new_data       Json?
+  change_summary String?
+  ip_address     String?   @db.VarChar(45)
+  user_agent     String?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  school         school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  app_user       app_user? @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+
+  @@index([action], map: "idx_audit_log_action")
+  @@index([created_at], map: "idx_audit_log_created_at")
+  @@index([entity], map: "idx_audit_log_entity")
+  @@index([entity_id], map: "idx_audit_log_entity_id")
+  @@index([school_id], map: "idx_audit_log_school_id")
+  @@index([user_id], map: "idx_audit_log_user_id")
+}
+
+model campaign {
+  id         BigInt    @id @default(autoincrement())
+  school_id  BigInt?
+  name       String?   @db.VarChar(100)
+  channel    String?   @db.VarChar(20)
+  status     String?   @db.VarChar(50)
+  start_date DateTime? @db.Date
+  end_date   DateTime? @db.Date
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  school     school?   @relation(fields: [school_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model campus_visit {
+  id                 BigInt        @id @default(autoincrement())
+  school_id          BigInt
+  lead_id            BigInt?
+  visit_date         DateTime      @db.Date
+  start_time         DateTime      @db.Time(6)
+  end_time           DateTime      @db.Time(6)
+  visitor_name       String        @db.VarChar(255)
+  visitor_phone      String        @db.VarChar(20)
+  student_name       String?       @db.VarChar(255)
+  grade              String?       @db.VarChar(50)
+  number_of_visitors Int?          @default(1)
+  tour_preferences   String?
+  internal_notes     String?
+  status             visit_status? @default(scheduled)
+  visit_type         String?       @default("campus_visit") @db.VarChar(50)
+  created_by         BigInt?
+  assigned_to        BigInt?
+  created_at         DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?     @default(now()) @db.Timestamp(6)
+  lead               lead?         @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
+  school             school        @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([school_id, assigned_to, visit_date, start_time], map: "unique_counselor_slot")
+  @@index([school_id, visit_date, status], map: "idx_campus_visit_dashboard")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model communication_log {
+  id             BigInt    @id @default(autoincrement())
+  school_id      BigInt?
+  recipient_type String?   @db.VarChar(50)
+  recipient_id   BigInt?
+  channel        String?   @db.VarChar(20)
+  subject        String?   @db.VarChar(255)
+  message        String?
+  status         String?   @db.VarChar(50)
+  sent_at        DateTime? @default(now()) @db.Timestamp(6)
+  delivered_at   DateTime? @db.Timestamp(6)
+  opened_at      DateTime? @db.Timestamp(6)
+  clicked_at     DateTime? @db.Timestamp(6)
+  created_by     BigInt?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  school         school?   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model communication_logs {
+  id              BigInt    @id @default(autoincrement())
+  school_id       BigInt
+  sender_id       BigInt
+  recipient_type  String    @db.VarChar(20)
+  recipient_id    BigInt
+  recipient_email String    @db.VarChar(255)
+  subject         String?   @db.VarChar(255)
+  content         String?
+  channel         String?   @default("email") @db.VarChar(10)
+  status          String?   @default("pending") @db.VarChar(20)
+  error_message   String?
+  sent_at         DateTime? @default(now()) @db.Timestamp(6)
+  delivered_at    DateTime? @db.Timestamp(6)
+  opened_at       DateTime? @db.Timestamp(6)
+  clicked_at      DateTime? @db.Timestamp(6)
+  school          school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([school_id, recipient_id, recipient_type], map: "idx_comm_logs_school_recipient")
+}
+
+model communication_templates {
+  id         BigInt    @id @default(autoincrement())
+  school_id  BigInt
+  name       String    @db.VarChar(100)
+  subject    String    @db.VarChar(255)
+  content    String
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  school     school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model documents {
+  id              BigInt    @id @default(autoincrement())
+  admission_id    BigInt
+  document_type   String    @db.VarChar(100)
+  file_name       String    @db.VarChar(255)
+  file_path       String    @db.VarChar(500)
+  document_number String?   @db.VarChar(255)
+  file_size       Int?
+  mime_type       String?   @db.VarChar(100)
+  uploaded_by     String?   @db.VarChar(100)
+  upload_date     DateTime? @default(now()) @db.Timestamp(6)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @default(now()) @db.Timestamp(6)
+  admission       admission @relation(fields: [admission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([admission_id], map: "idx_documents_admission_id")
+  @@index([document_type], map: "idx_documents_document_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fee_structure {
+  id                     BigInt                   @id @default(autoincrement())
+  school_id              BigInt
+  academic_year_id       BigInt
+  class_id               BigInt
+  fee_type               String                   @db.VarChar(100)
+  amount                 Decimal                  @db.Decimal(12, 2)
+  due_date               DateTime?                @db.Date
+  description            String?
+  is_active              Boolean?                 @default(true)
+  created_at             DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamp(6)
+  academic_year          academic_year            @relation(fields: [academic_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school_class           school_class             @relation(fields: [class_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school                 school                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_fee_assignment student_fee_assignment[]
+
+  @@unique([academic_year_id, class_id, fee_type])
+  @@index([academic_year_id], map: "idx_fee_structure_academic_year_id")
+  @@index([class_id], map: "idx_fee_structure_class_id")
+  @@index([school_id], map: "idx_fee_structure_school_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model invoice {
+  id             BigInt    @id @default(autoincrement())
+  school_id      BigInt
+  student_id     BigInt
+  invoice_number String    @unique @db.VarChar(50)
+  invoice_date   DateTime  @db.Date
+  due_date       DateTime  @db.Date
+  total_amount   Decimal   @db.Decimal(12, 2)
+  paid_amount    Decimal?  @default(0) @db.Decimal(12, 2)
+  pending_amount Decimal   @db.Decimal(12, 2)
+  status         String?   @default("unpaid") @db.VarChar(50)
+  notes          String?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  updated_at     DateTime? @default(now()) @db.Timestamp(6)
+  created_by     String?   @db.VarChar(100)
+  school         school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student        student   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payment        payment[]
+
+  @@index([invoice_number], map: "idx_invoice_invoice_number")
+  @@index([school_id], map: "idx_invoice_school_id")
+  @@index([status], map: "idx_invoice_status")
+  @@index([student_id], map: "idx_invoice_student_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model lead {
+  id                BigInt          @id @default(autoincrement())
+  school_id         BigInt
+  academic_year_id  BigInt
+  first_name        String          @db.VarChar(100)
+  last_name         String?         @db.VarChar(100)
+  email             String?         @db.VarChar(100)
+  phone             String          @db.VarChar(20)
+  desired_class     String?         @db.VarChar(100)
+  source            String?         @db.VarChar(100)
+  follow_up_status  String?         @default("pending") @db.VarChar(50)
+  notes             String?
+  inactivity_reason String?         @db.VarChar(255)
+  created_at        DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?       @default(now()) @db.Timestamp(6)
+  assigned_to       String?         @db.VarChar(100)
+  last_contacted_at DateTime?       @db.Timestamp(6)
+  created_by        String?         @db.VarChar(100)
+  admission         admission[]
+  application       application[]
+  campus_visit      campus_visit[]
+  academic_year     academic_year   @relation(fields: [academic_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school            school          @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lead_activity     lead_activity[]
+
+  @@index([academic_year_id], map: "idx_lead_academic_year_id")
+  @@index([follow_up_status], map: "idx_lead_follow_up_status")
+  @@index([school_id], map: "idx_lead_school_id")
+  @@index([school_id, follow_up_status, last_contacted_at(sort: Desc)], map: "idx_lead_school_status_date")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model lead_activity {
+  id                  BigInt    @id @default(autoincrement())
+  lead_id             BigInt
+  activity_type       String    @db.VarChar(50)
+  notes               String?
+  outcome             String?   @db.VarChar(50)
+  next_follow_up_date DateTime? @db.Date
+  scheduled_time      DateTime? @db.Time(6)
+  created_by          BigInt?
+  created_at          DateTime? @default(now()) @db.Timestamp(6)
+  updated_at          DateTime? @default(now()) @db.Timestamp(6)
+  app_user            app_user? @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  lead                lead      @relation(fields: [lead_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([activity_type], map: "idx_lead_activity_activity_type")
+  @@index([created_at], map: "idx_lead_activity_created_at")
+  @@index([created_by], map: "idx_lead_activity_created_by")
+  @@index([lead_id], map: "idx_lead_activity_lead_id")
+}
+
+model message_template {
+  id           BigInt    @id @default(autoincrement())
+  school_id    BigInt?
+  name         String?   @db.VarChar(100)
+  category     String?   @db.VarChar(50)
+  subject      String?   @db.VarChar(255)
+  content      String?
+  last_used_at DateTime? @db.Timestamp(6)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  school       school?   @relation(fields: [school_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model parent_detail {
+  id           BigInt    @id @default(autoincrement())
+  school_id    BigInt
+  student_id   BigInt
+  relation     String    @db.VarChar(50)
+  first_name   String    @db.VarChar(100)
+  last_name    String?   @db.VarChar(100)
+  email        String?   @db.VarChar(100)
+  phone        String    @db.VarChar(20)
+  occupation   String?   @db.VarChar(100)
+  address      String?
+  city         String?   @db.VarChar(100)
+  income_range String?   @db.VarChar(50)
+  created_at   DateTime? @default(now()) @db.Timestamp(6)
+  updated_at   DateTime? @default(now()) @db.Timestamp(6)
+  school       school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student      student   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([school_id], map: "idx_parent_detail_school_id")
+  @@index([student_id], map: "idx_parent_detail_student_id")
+  @@index([student_id], map: "idx_parent_student_lookup")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payment {
+  id             BigInt    @id @default(autoincrement())
+  school_id      BigInt
+  student_id     BigInt
+  invoice_id     BigInt
+  payment_number String    @unique @db.VarChar(50)
+  amount         Decimal   @db.Decimal(12, 2)
+  payment_date   DateTime  @db.Date
+  payment_method String    @db.VarChar(50)
+  transaction_id String?   @db.VarChar(100)
+  bank_name      String?   @db.VarChar(100)
+  cheque_number  String?   @db.VarChar(50)
+  status         String?   @default("pending") @db.VarChar(50)
+  remarks        String?
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  updated_at     DateTime? @default(now()) @db.Timestamp(6)
+  received_by    String?   @db.VarChar(100)
+  invoice        invoice   @relation(fields: [invoice_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school         school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student        student   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([invoice_id], map: "idx_payment_invoice_id")
+  @@index([payment_date], map: "idx_payment_payment_date")
+  @@index([school_id], map: "idx_payment_school_id")
+  @@index([status], map: "idx_payment_status")
+  @@index([student_id], map: "idx_payment_student_id")
+}
+
+model scheduled_emails {
+  id             BigInt    @id @default(autoincrement())
+  school_id      BigInt
+  sender_id      BigInt
+  recipient_type String    @db.VarChar(20)
+  recipient_id   BigInt
+  recipients     String
+  subject        String?   @db.VarChar(255)
+  message        String?
+  attachments    Json?     @default("[]")
+  scheduled_at   DateTime  @db.Timestamp(6)
+  status         String?   @default("pending") @db.VarChar(20)
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model school {
+  id                      BigInt                    @id @default(autoincrement())
+  name                    String                    @unique @db.VarChar(255)
+  email                   String?                   @unique @db.VarChar(100)
+  phone                   String?                   @db.VarChar(20)
+  address                 String?
+  city                    String?                   @db.VarChar(100)
+  state                   String?                   @db.VarChar(100)
+  postal_code             String?                   @db.VarChar(20)
+  country                 String?                   @db.VarChar(100)
+  established_year        Int?
+  principal_name          String?                   @db.VarChar(150)
+  status                  String?                   @default("active") @db.VarChar(50)
+  plan_type               String?                   @default("trial") @db.VarChar(50)
+  is_active               Boolean?                  @default(true)
+  expiry_date             DateTime?                 @db.Date
+  created_at              DateTime?                 @default(now()) @db.Timestamp(6)
+  updated_at              DateTime?                 @default(now()) @db.Timestamp(6)
+  created_by              String?                   @db.VarChar(100)
+  updated_by              String?                   @db.VarChar(100)
+  max_students            Int?                      @default(100)
+  max_users               Int?                      @default(20)
+  subscription_plan       String?                   @default("trial")
+  subscription_status     String?                   @default("active")
+  trial_end_date          DateTime?
+  academic_year           academic_year[]
+  admission               admission[]
+  app_user                app_user[]
+  application             application[]
+  audit_log               audit_log[]
+  campaign                campaign[]
+  campus_visit            campus_visit[]
+  communication_log       communication_log[]
+  communication_logs      communication_logs[]
+  communication_templates communication_templates[]
+  fee_structure           fee_structure[]
+  invoice                 invoice[]
+  lead                    lead[]
+  message_template        message_template[]
+  parent_detail           parent_detail[]
+  payment                 payment[]
+  school_class            school_class[]
+  section                 section[]
+  student                 student[]
+  student_fee_assignment  student_fee_assignment[]
+  task                    task[]
+
+  @@index([name], map: "idx_school_name")
+  @@index([status], map: "idx_school_status")
+}
+
+model school_class {
+  id                  BigInt          @id @default(autoincrement())
+  school_id           BigInt
+  class_name          String          @db.VarChar(100)
+  class_numeric_value Int
+  medium              String?         @db.VarChar(50)
+  description         String?
+  created_at          DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?       @default(now()) @db.Timestamp(6)
+  admission           admission[]
+  fee_structure       fee_structure[]
+  school              school          @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  section             section[]
+
+  @@unique([school_id, class_name])
+  @@index([school_id], map: "idx_school_class_school_id")
+}
+
+model section {
+  id            BigInt       @id @default(autoincrement())
+  school_id     BigInt
+  class_id      BigInt
+  section_name  String       @db.VarChar(50)
+  capacity      Int?         @default(60)
+  class_teacher String?      @db.VarChar(150)
+  description   String?
+  created_at    DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?    @default(now()) @db.Timestamp(6)
+  admission     admission[]
+  school_class  school_class @relation(fields: [class_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school        school       @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([class_id, section_name])
+  @@index([class_id], map: "idx_section_class_id")
+  @@index([school_id], map: "idx_section_school_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model service_provider_staff {
+  id            Int       @id @default(autoincrement())
+  full_name     String    @db.VarChar(255)
+  email         String    @unique @db.VarChar(255)
+  password_hash String
+  internal_role String?   @default("staff") @db.VarChar(50)
+  is_active     Boolean?  @default(true)
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  last_login    DateTime? @db.Timestamp(6)
+
+  @@index([email], map: "idx_sp_staff_email")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model student {
+  id                     BigInt                   @id @default(autoincrement())
+  school_id              BigInt
+  admission_number       String                   @unique @db.VarChar(50)
+  first_name             String                   @db.VarChar(100)
+  middle_name            String?                  @db.VarChar(100)
+  last_name              String?                  @db.VarChar(100)
+  date_of_birth          DateTime?                @db.Date
+  gender                 String?                  @db.VarChar(20)
+  email                  String?                  @unique @db.VarChar(100)
+  phone                  String?                  @db.VarChar(20)
+  address                String?
+  city                   String?                  @db.VarChar(100)
+  state                  String?                  @db.VarChar(100)
+  postal_code            String?                  @db.VarChar(20)
+  country                String?                  @db.VarChar(100)
+  blood_group            String?                  @db.VarChar(10)
+  aadhar_number          String?                  @unique @db.VarChar(20)
+  status                 String?                  @default("active") @db.VarChar(50)
+  created_at             DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at             DateTime?                @default(now()) @db.Timestamp(6)
+  created_by             String?                  @db.VarChar(100)
+  admission              admission[]
+  invoice                invoice[]
+  parent_detail          parent_detail[]
+  payment                payment[]
+  school                 school                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_fee_assignment student_fee_assignment[]
+
+  @@index([admission_number], map: "idx_student_admission_number")
+  @@index([email], map: "idx_student_email")
+  @@index([school_id], map: "idx_student_school_id")
+  @@index([status], map: "idx_student_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model student_fee_assignment {
+  id                    BigInt        @id @default(autoincrement())
+  school_id             BigInt
+  student_id            BigInt
+  admission_id          BigInt
+  fee_structure_id      BigInt
+  amount                Decimal       @db.Decimal(12, 2)
+  due_date              DateTime?     @db.Date
+  concession_percentage Decimal?      @default(0) @db.Decimal(5, 2)
+  concession_amount     Decimal?      @default(0) @db.Decimal(12, 2)
+  final_amount          Decimal       @db.Decimal(12, 2)
+  status                String?       @default("pending") @db.VarChar(50)
+  created_at            DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?     @default(now()) @db.Timestamp(6)
+  admission             admission     @relation(fields: [admission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  fee_structure         fee_structure @relation(fields: [fee_structure_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school                school        @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student               student       @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([admission_id, fee_structure_id])
+  @@index([admission_id], map: "idx_student_fee_assignment_admission_id")
+  @@index([school_id], map: "idx_student_fee_assignment_school_id")
+  @@index([status], map: "idx_student_fee_assignment_status")
+  @@index([student_id], map: "idx_student_fee_assignment_student_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model task {
+  id               BigInt    @id @default(autoincrement())
+  school_id        BigInt
+  assigned_to      BigInt
+  title            String    @db.VarChar(255)
+  task_description String?
+  priority         String?   @default("medium") @db.VarChar(20)
+  is_done          Boolean?  @default(false)
+  due_date         DateTime? @default(dbgenerated("CURRENT_DATE")) @db.Date
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  school           school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([school_id, assigned_to, is_done, due_date], map: "idx_task_workspace")
+}
+
+model super_admin {
+  id            BigInt    @id @default(autoincrement())
+  name          String    @db.VarChar(150)
+  email         String    @unique @db.VarChar(150)
+  password_hash String    @db.VarChar(255)
+  role          String    @default("super_admin")
+  is_active     Boolean   @default(true)
+  created_at    DateTime? @default(now())
+  updated_at    DateTime? @default(now())
+}
+
+enum visit_status {
+  scheduled
+  completed
+  cancelled
+  no_show
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  schoolId  Int
+}
+
+model Settings {
+  id                 Int     @id @default(autoincrement())
+  schoolName         String
+  email              String
+  phone              String?
+  emailNotifications Boolean @default(true)
+  smsNotifications   Boolean @default(false)
+  timezone           String  @default("Asia/Kolkata")
+  language           String  @default("English")
+  campus             String?
+  dateFormat         String? @default("DD/MM/YYYY")
+  twoFactorEnabled   Boolean @default(false)
+  schoolId           Int     @unique
+  app                Boolean @default(true)
+  newLead            Boolean @default(true)
+  task               Boolean @default(true)
+  weekly             Boolean @default(true)
+  whatsapp           Boolean @default(false)
+}
+
+model SettingsLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  schoolId  Int
+  action    String
+  changes   Json
+  createdAt DateTime @default(now())
+}

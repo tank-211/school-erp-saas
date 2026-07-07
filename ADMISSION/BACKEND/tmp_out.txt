@@ -1,0 +1,145 @@
+✓ Client connected to PostgreSQL pool
+✅ PostgreSQL Database Connected Successfully
+   Database: school_erp
+   Host: localhost
+   Time from DB: 2026-04-12T12:00:32.943Z
+✓ Client connected to PostgreSQL pool
+Channels: [
+  { channel: 'email', count: '10' },
+  { channel: 'sms', count: '5' },
+  { channel: 'whatsapp', count: '3' }
+]
+Logs: [
+  {
+    id: '1',
+    school_id: '1',
+    recipient_type: 'lead',
+    recipient_id: '1',
+    channel: 'email',
+    subject: 'Welcome',
+    message: 'Welcome to our school',
+    status: 'delivered',
+    sent_at: 2026-04-09T06:32:53.274Z,
+    delivered_at: 2026-04-09T06:32:53.274Z,
+    opened_at: 2026-04-09T06:32:53.274Z,
+    clicked_at: null,
+    created_by: '1',
+    created_at: 2026-04-09T06:32:53.274Z
+  },
+  {
+    id: '2',
+    school_id: '1',
+    recipient_type: 'lead',
+    recipient_id: '2',
+    channel: 'sms',
+    subject: null,
+    message: 'Visit scheduled',
+    status: 'sent',
+    sent_at: 2026-04-09T06:32:53.274Z,
+    delivered_at: null,
+    opened_at: null,
+    clicked_at: null,
+    created_by: '1',
+    created_at: 2026-04-09T06:32:53.274Z
+  },
+  {
+    id: '3',
+    school_id: '1',
+    recipient_type: 'student',
+    recipient_id: '1',
+    channel: 'whatsapp',
+    subject: null,
+    message: 'Fee reminder',
+    status: 'delivered',
+    sent_at: 2026-04-09T06:32:53.274Z,
+    delivered_at: 2026-04-09T06:32:53.274Z,
+    opened_at: null,
+    clicked_at: null,
+    created_by: '1',
+    created_at: 2026-04-09T06:32:53.274Z
+  },
+  {
+    id: '4',
+    school_id: '1',
+    recipient_type: 'parent',
+    recipient_id: '1',
+    channel: 'email',
+    subject: 'PTM Meeting',
+    message: 'Join PTM tomorrow',
+    status: 'opened',
+    sent_at: 2026-04-09T06:32:53.274Z,
+    delivered_at: 2026-04-09T06:32:53.274Z,
+    opened_at: 2026-04-09T06:32:53.274Z,
+    clicked_at: null,
+    created_by: '1',
+    created_at: 2026-04-09T06:32:53.274Z
+  },
+  {
+    id: '5',
+    school_id: '1',
+    recipient_type: 'lead',
+    recipient_id: '3',
+    channel: 'email',
+    subject: 'Admission Open',
+    message: 'Apply now',
+    status: 'clicked',
+    sent_at: 2026-04-09T06:32:53.274Z,
+    delivered_at: 2026-04-09T06:32:53.274Z,
+    opened_at: 2026-04-09T06:32:53.274Z,
+    clicked_at: 2026-04-09T06:32:53.274Z,
+    created_by: '1',
+    created_at: 2026-04-09T06:32:53.274Z
+  }
+]
+Campaigns: [
+  {
+    id: '1',
+    school_id: '1',
+    name: 'Admission Campaign 2026',
+    channel: 'email',
+    status: 'active',
+    start_date: 2025-12-31T18:30:00.000Z,
+    end_date: 2026-03-30T18:30:00.000Z,
+    created_at: 2026-04-09T06:36:48.285Z
+  },
+  {
+    id: '2',
+    school_id: '1',
+    name: 'Fee Reminder Campaign',
+    channel: 'sms',
+    status: 'active',
+    start_date: 2026-01-31T18:30:00.000Z,
+    end_date: 2026-02-27T18:30:00.000Z,
+    created_at: 2026-04-09T06:36:48.285Z
+  },
+  {
+    id: '3',
+    school_id: '1',
+    name: 'Campus Visit Drive',
+    channel: 'whatsapp',
+    status: 'completed',
+    start_date: 2025-11-30T18:30:00.000Z,
+    end_date: 2025-12-30T18:30:00.000Z,
+    created_at: 2026-04-09T06:36:48.285Z
+  },
+  {
+    id: '4',
+    school_id: '1',
+    name: 'Re-engagement Campaign',
+    channel: 'email',
+    status: 'draft',
+    start_date: 2026-03-31T18:30:00.000Z,
+    end_date: 2026-04-29T18:30:00.000Z,
+    created_at: 2026-04-09T06:36:48.285Z
+  },
+  {
+    id: '5',
+    school_id: '1',
+    name: 'New Session Outreach',
+    channel: 'sms',
+    status: 'active',
+    start_date: 2026-02-28T18:30:00.000Z,
+    end_date: 2026-04-30T18:30:00.000Z,
+    created_at: 2026-04-09T06:36:48.285Z
+  }
+]
