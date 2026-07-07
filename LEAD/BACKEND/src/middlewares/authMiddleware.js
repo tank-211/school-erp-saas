@@ -3,11 +3,22 @@ import { errorResponse } from "../utils/response.js";
 
 export const authMiddleware = async (req, res, next) => {
   try {
+
+    console.log("Authorization:", req.headers.authorization);
+
     const token = req.headers.authorization?.split(" ")[1];
+
+    console.log("Extracted Token:", token);
+    console.log("Token Type:", typeof token);
 
     if (!token) {
       return res.status(401).json(errorResponse("No token provided"));
     }
+
+
+    console.log("Authorization Header:", req.headers.authorization);
+    console.log("Extracted Token:", token);
+    console.log("Token Type:", typeof token);
 
     const decoded = verifyToken(token);
 
