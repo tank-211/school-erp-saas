@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 
 const SettingsContext = createContext()
+const API_URL = import.meta.env.VITE_API_URL;
 
 export const SettingsProvider = ({ children }) => {
   const [settings, setSettings] = useState(null)
@@ -8,7 +9,7 @@ export const SettingsProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem("authToken")
 
-    fetch("/api/settings", {
+    fetch(`${API_URL}/settings`, {
       headers: {
         Authorization: "Bearer " + token
       }
