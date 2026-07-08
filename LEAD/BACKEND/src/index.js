@@ -25,7 +25,10 @@ const app = express();
 // 🔥 VERY IMPORTANT — FIRST
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: [
+      "http://localhost:5173",
+      "https://school-erp-saas-odbv.onrender.com",
+    ],
     credentials: true,
   })
 );
