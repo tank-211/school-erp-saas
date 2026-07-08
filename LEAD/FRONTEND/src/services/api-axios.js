@@ -87,6 +87,7 @@ export const authAPI = {
   login: async (credentials) => {
     try {
       const response = await apiClient.post('/auth/login', credentials);
+      console.log(response.data);
       const { data } = response;
 
       if (data.token) {
