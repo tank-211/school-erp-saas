@@ -28,6 +28,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://school-erp-saas-odbv.onrender.com",
+      "https://school-erp-saas-new.onrender.com",
     ],
     credentials: true,
   })
