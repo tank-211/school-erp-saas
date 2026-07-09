@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Pipeline.css';
-
+const API_URL = import.meta.env.VITE_API_URL;
 const initialColumns = [
   {
     id: 'new_inquiry',
@@ -62,7 +62,7 @@ export default function Pipeline() {
         localStorage.getItem("authToken");
 
       const response = await fetch(
-        "http://localhost:5000/api/pipeline",
+        `${API_URL}/pipeline`,
         {
           headers: {
             Authorization: `Bearer ${token}`

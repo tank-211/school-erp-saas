@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { leadsAPI } from '../services/api' // adjust path if needed
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
-
+const API_URL = import.meta.env.VITE_API_URL;
 const statusMapUIToBackend = {
   New: "new",
   Qualified: "qualified",
@@ -120,7 +120,7 @@ export default function Leads() {
       const token = localStorage.getItem("authToken");
 
       const res = await fetch(
-        `http://localhost:5000/api/communications/history/${leadId}`,
+        `${API_URL}/communications/history/${leadId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -195,7 +195,7 @@ export default function Leads() {
 useEffect(() => {
   const token = localStorage.getItem("authToken");
 
-  fetch("/api/users", {
+  fetch(`${API_URL}/users`, {
     headers: {
       Authorization: `Bearer ${token}`
     }
@@ -211,7 +211,7 @@ const handleAssignLead = async (leadId, userId) => {
   try {
     const token = localStorage.getItem("authToken");
 
-    await fetch(`/api/leads/${leadId}/assign`, {
+    await fetch(`${API_URL}/leads/${leadId}/assign`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",

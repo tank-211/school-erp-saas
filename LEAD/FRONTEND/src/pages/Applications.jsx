@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import './Applications.css'
 import { useNavigate } from "react-router-dom";
 
-
+const API_URL = import.meta.env.VITE_API_URL;
 const statusColors = { 'Under Review': { text: '#3b82f6', bg: '#eff6ff' }, Approved: { text: '#10b981', bg: '#d1fae5' }, Waitlisted: { text: '#f59e0b', bg: '#fef3c7' }, Draft: { text: '#94a3b8', bg: '#f1f5f9' }, Rejected: { text: '#ef4444', bg: '#fee2e2' } }
 const feeColors = { 'Paid': { text: '#10b981', bg: '#d1fae5' }, 'Partially Paid': { text: '#f59e0b', bg: '#fef3c7' }, 'Not Paid': { text: '#ef4444', bg: '#fee2e2' } }
 const docColors = { Verified: { text: '#10b981', bg: '#d1fae5' }, Uploaded: { text: '#3b82f6', bg: '#eff6ff' }, Draft: { text: '#94a3b8', bg: '#f1f5f9' } }
@@ -24,12 +24,12 @@ const fetchApplications = async () => {
     const token = localStorage.getItem("authToken");
 
     const [appsRes, statsRes] = await Promise.all([
-      fetch("http://localhost:5000/api/applications", {
+      fetch(`${API_URL}/applications`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
       }),
-      fetch("http://localhost:5000/api/applications/stats", {
+      fetch(`${API_URL}/applications/stats`, {
         headers: {
           Authorization: `Bearer ${token}`
         }

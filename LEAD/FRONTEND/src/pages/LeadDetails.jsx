@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./LeadDetails.css";
-
+const API_URL = import.meta.env.VITE_API_URL;
 export default function LeadDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -19,7 +19,7 @@ export default function LeadDetails() {
       const token = localStorage.getItem("authToken");
 
       const res = await fetch(
-        `http://localhost:5000/api/leads/${id}/details`,
+        `${API_URL}/leads/${id}/details`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -65,7 +65,7 @@ if (!lead) {
       const token = localStorage.getItem("authToken");
 
       const res = await fetch(
-        `http://localhost:5000/api/applications/from-lead/${lead.id}`,
+        `${API_URL}/applications/from-lead/${lead.id}`,
         {
           method: "POST",
           headers: {

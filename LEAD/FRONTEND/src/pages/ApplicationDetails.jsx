@@ -1,7 +1,7 @@
 import { useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./ApplicationDetails.css";
-
+const API_URL = import.meta.env.VITE_API_URL;
 export default function ApplicationDetails() {
   const { id } = useParams();
 
@@ -55,7 +55,7 @@ export default function ApplicationDetails() {
       const token = localStorage.getItem("authToken");
 
       const res = await fetch(
-        `http://localhost:5000/api/applications/${id}`,
+        `${API_URL}/applications/${id}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -119,7 +119,7 @@ export default function ApplicationDetails() {
         const token = localStorage.getItem("authToken");
 
         const res = await fetch(
-        `http://localhost:5000/api/applications/${id}/status`,
+        `${API_URL}/applications/${id}/status`,
         {
             method: "PUT",
             headers: {
@@ -165,7 +165,7 @@ export default function ApplicationDetails() {
         formData.append("documentType", documentName);
 
         const res = await fetch(
-          `http://localhost:5000/api/applications/${id}/documents`,
+          `${API_URL}/applications/${id}/documents`,
           {
             method: "POST",
             headers: {
@@ -194,7 +194,7 @@ export default function ApplicationDetails() {
           const token = localStorage.getItem("authToken");
 
           await fetch(
-            `http://localhost:5000/api/applications/document/${documentId}/verify`,
+            `${API_URL}/applications/document/${documentId}/verify`,
             {
               method: "PUT",
               headers: {
@@ -215,7 +215,7 @@ export default function ApplicationDetails() {
             const token = localStorage.getItem("authToken");
 
             const res = await fetch(
-              `http://localhost:5000/api/applications/${id}/student`,
+              `${API_URL}/applications/${id}/student`,
               {
                 method: "PUT",
                 headers: {
@@ -245,7 +245,7 @@ export default function ApplicationDetails() {
             const token = localStorage.getItem("authToken");
 
             const res = await fetch(
-              `http://localhost:5000/api/applications/${id}/parent`,
+              `${API_URL}/applications/${id}/parent`,
               {
                 method: "PUT",
                 headers: {
@@ -288,7 +288,7 @@ export default function ApplicationDetails() {
           const token = localStorage.getItem("authToken");
 
           await fetch(
-            `http://localhost:5000/api/applications/document/${documentId}`,
+            `${API_URL}/applications/document/${documentId}`,
             {
               method: "DELETE",
               headers: {
@@ -671,7 +671,7 @@ export default function ApplicationDetails() {
                     className="view-btn"
                     onClick={() =>
                       window.open(
-                        `http://localhost:5000/${doc.file_path}`,
+                        `${API_URL.replace("/api", "")}/${doc.file_path}`,
                         "_blank"
                       )
                     }

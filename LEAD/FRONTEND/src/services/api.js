@@ -2,7 +2,7 @@
  * API Service for School CRM
  * Provides reusable functions for all backend API calls with JWT authentication
  */
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 // Token management utilities
 export const tokenManager = {
@@ -48,7 +48,7 @@ export const tokenManager = {
 // Base API configuration
 const apiConfig = {
   baseURL: API_BASE_URL,
-  timeout: 10000, // 10 seconds
+  timeout: 60000, // 60 seconds
 };
 
 // Create headers with authentication
