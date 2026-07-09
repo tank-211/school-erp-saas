@@ -53,6 +53,8 @@ export const getLeads = async (req, res) => {
       limit: parseInt(req.query.limit) || 6,
       status: req.query.status,
       source: req.query.source,
+      counselor: req.query.counselor,
+      date: req.query.date,
       search: req.query.search,
       myLeads: req.query.myLeads === "true",
     };

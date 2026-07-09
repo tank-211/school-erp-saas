@@ -101,12 +101,15 @@ const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
    GET ALL LEADS
 ========================= */
  const getAllLeadsService = async (filters, schoolId) => {
-  const { page = 1, limit = 6, status, source, search } = filters;
+  const { page = 1, limit = 6, status, source, counselor, date, search } = filters;
 
   const where = { school_id: BigInt(schoolId) };
 
   if (status) where.follow_up_status = status;
   if (source) where.source = source;
+  if (counselor) where.assigned_to = counselor;
+  if (date === "This Week") where.created_at = { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
+  if (date === "This Month") where.created_at = { gte: new Date(new Date().setMonth(new Date().getMonth() - 1)) };
 
   if (search) {
     where.OR = [
