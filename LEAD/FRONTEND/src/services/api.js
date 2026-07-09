@@ -402,6 +402,14 @@ export const leadsAPI = {
   }
 }; // ✅ THIS LINE WAS MISSING
 
+export const usersAPI = {
+
+  getCounselors: async () => {
+    return apiRequest("/users/counselors");
+  }
+
+};
+
 // Activities API functions
 export const activitiesAPI = {
   /**
@@ -566,6 +574,7 @@ export default {
   communication: communicationAPI,
   settings: settingsAPI,
   health: healthAPI,
+  users: usersAPI,
 
   // Legacy functions
   getDashboardStats,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createLead } from '../services/api'
 import './AddLeadModal.css'
-import { leadsAPI } from '../services/api'
+import { leadsAPI, usersAPI } from "../services/api";
 
 const getUserFromToken = () => {
   const token = localStorage.getItem("authToken");
@@ -65,7 +65,6 @@ const initialForm = {
 
 const GRADES = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12']
 const SOURCES = ['Website','Referral','Walk-in','Ads','Social Media','Phone Inquiry','Email Campaign']
-const COUNSELORS = ['Mrs. Priya Sharma','Mr. Amit Patel','Mrs. Sunita Kumar','Mr. Rajesh Verma']
 
 export default function AddLeadModal({ open, onClose }) {
   const [tab, setTab] = useState('manual')
@@ -75,6 +74,7 @@ export default function AddLeadModal({ open, onClose }) {
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState(null) // { type: 'success'|'error', text: '...' }
   const [file, setFile] = useState(null)
+  const [counselors, setCounselors] = useState([]);
 
   const handleBulkUpload = async () => {
   if (!file) {
@@ -116,6 +116,29 @@ export default function AddLeadModal({ open, onClose }) {
     else document.body.style.overflow = ''
     return () => { document.body.style.overflow = '' }
   }, [open])
+
+  useEffect(() => {
+
+    const fetchCounselors = async () => {
+
+      try {
+
+        const res = await usersAPI.getCounselors();
+
+        console.log("FULL RESPONSE:", res);
+        console.log("COUNSELORS:", res.data);
+
+        setCounselors(res.data);
+
+      } catch (err) {
+        console.log(err);
+      }
+
+    };
+
+    fetchCounselors();
+
+  }, []);
 
   if (!open) return null
 
@@ -178,7 +201,9 @@ export default function AddLeadModal({ open, onClose }) {
 
     source: form.source || undefined,
     notes: form.notes || undefined,
+    assignedTo: form.counselor,
     status: 'new',
+    
 
     // 🔥 THIS IS WHAT YOU MISSED
   };
@@ -376,7 +401,30 @@ export default function AddLeadModal({ open, onClose }) {
                 </div>
                 <div className="form-row">
                   <S label="Lead Source" name="source" options={SOURCES} value={form.source} onChange={(e) => set('source', e.target.value)} error={errors.source}  half />
-                  <S label="Assign Counselor" name="counselor" options={COUNSELORS} value={form.counselor} onChange={(e) => set('counselor', e.target.value)} error={errors.counselor} half />
+                  <div className="form-field half">
+                    <label className="field-label">
+                      Assign Counselor
+                    </label>
+
+                    <select
+                      className="field-select"
+                      value={form.counselor}
+                      onChange={(e) => set("counselor", e.target.value)}
+                    >
+                      <option value="">
+                        Select assign counselor
+                      </option>
+
+                      {counselors.map((user) => (
+                        <option
+                          key={user.id}
+                          value={user.id}
+                        >
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="form-row">
                   <div className="form-field" style={{ flex: 1 }}>
