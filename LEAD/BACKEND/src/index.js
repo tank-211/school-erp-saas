@@ -25,12 +25,25 @@ const app = express();
 // 🔥 VERY IMPORTANT — FIRST
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://school-erp-saas-odbv.onrender.com",
-      "https://school-erp-saas-new.onrender.com",
-      "https://school-erp-saas-iota.vercel.app",
-    ],
+    origin(origin, callback) {
+      if (!origin) return callback(null, true);
+
+      const allowed = [
+        "http://localhost:5173",
+        "https://school-erp-saas-odbv.onrender.com",
+        "https://school-erp-saas-new.onrender.com",
+        "https://school-erp-saas-iota.vercel.app",
+      ];
+
+      if (
+        allowed.includes(origin) ||
+        origin.endsWith(".vercel.app")
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
