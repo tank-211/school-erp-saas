@@ -18,23 +18,40 @@ export const getAllUsersService = async (schoolId) => {
 };
 
 export const inviteUserService = async (email, schoolId) => {
-  const user = await prisma.user.create({
-    data: {
-      email,
-      name: "Invited User",
-      password_hash: await bcrypt.hash("temp123", 10),
-      school_id,
-      role: "user",
-    },
-  });
+  try {
+    console.log("EMAIL:", email);
+    console.log("SCHOOL:", schoolId);
 
-  return {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    createdAt: user.createdAt,
-  };
+    const existing = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    console.log("EXISTING:", existing);
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: email.split("@")[0],
+        password_hash: await bcrypt.hash("temp123", 10),
+        school_id: BigInt(schoolId),
+        role: "user",
+      },
+    });
+
+    console.log("CREATED USER:", user);
+
+    return {
+      id: Number(user.id),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.created_at,
+    };
+  } catch (err) {
+    console.error("PRISMA ERROR:");
+    console.error(err);
+    throw err;
+  }
 };
 
 export const updateUserRoleService = async (
@@ -76,4 +93,20 @@ export const toggleUserStatusService = async (
       status: user.status === "active" ? "inactive" : "active"
     }
   })
+};
+
+export const getCounselorsService = async (schoolId) => {
+  return await prisma.user.findMany({
+    where: {
+      school_id: BigInt(schoolId),
+      role: "counselor",
+    },
+    select: {
+      id: true,
+      name: true,
+    },
+    orderBy: {
+      name: "asc",
+    },
+  });
 };

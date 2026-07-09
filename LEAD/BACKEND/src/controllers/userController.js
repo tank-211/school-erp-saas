@@ -1,4 +1,5 @@
-import { getAllUsersService, inviteUserService, updateUserRoleService, toggleUserStatusService } from "../services/userService.js";
+import { getAllUsersService, inviteUserService, updateUserRoleService, toggleUserStatusService, getCounselorsService } from "../services/userService.js";
+import { serializeBigInt } from "../utils/bigintSerializer.js";
 import { successResponse, errorResponse } from "../utils/response.js";
 
 export const getAllUsers = async (req, res) => {
@@ -33,9 +34,17 @@ export const inviteUser = async (req, res) => {
   try {
     const user = await inviteUserService(req.body.email, req.user.schoolId);
 
-    res.status(201).json(successResponse(user, "User invited"));
-  } catch (error) {
-    res.status(400).json(errorResponse(error.message));
+    res.status(201).json(successResponse(serializeBigInt(user), "User invited"));
+  }catch (error) {
+    console.log("========== INVITE ERROR ==========");
+    console.error(error);
+    console.error(error.message);
+    console.error(error.stack);
+
+    res.status(400).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
@@ -95,5 +104,34 @@ export const toggleUserStatus = async (req, res) => {
       success: false,
       message: error.message
     })
+  }
+};
+export const getCounselors = async (req, res) => {
+  try {
+    const counselors = await getCounselorsService(req.user.schoolId);
+
+    console.log("COUNSELORS FROM DB:");
+    console.log(counselors);
+
+    const safe = JSON.parse(
+      JSON.stringify(
+        counselors,
+        (k, v) => (typeof v === "bigint" ? Number(v) : v)
+      )
+    );
+
+    console.log("COUNSELORS SENT TO FRONTEND:");
+    console.log(safe);
+
+    res.json({
+      success: true,
+      data: safe,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };

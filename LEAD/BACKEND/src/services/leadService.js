@@ -59,7 +59,7 @@ const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
       notes: data.notes,
       follow_up_status:
         allowedStatus.includes(data.status) ? data.status : "pending",
-      assigned_to: String(userId),
+      assigned_to: String(data.assignedTo || userId),
       created_by: String(userId)
     }
 });
@@ -346,7 +346,7 @@ const updatedLead = await prisma.lead.update({
     id: BigInt(leadId)
   },
   data: {
-    assigned_to: String(userId)
+    assigned_to: String(data.assignedTo || userId),
   }
 });
 
