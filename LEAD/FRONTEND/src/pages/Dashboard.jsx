@@ -58,7 +58,8 @@ const getActivityLabel = (activity) => {
       return activity.activity_type?.replaceAll("_", " ");
   }
 };
-
+console.log("API URL =", import.meta.env.VITE_API_URL);
+console.log(import.meta.env);
 export default function Dashboard() {
   const COLORS = ['#10b981', '#8b5cf6', '#ef4444', '#f59e0b'];
   const [stats, setStats] = useState(null);

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { leadsAPI } from '../services/api' // adjust path if needed
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+
 const API_URL = import.meta.env.VITE_API_URL;
 const statusMapUIToBackend = {
   New: "new",
@@ -82,12 +85,7 @@ export default function Leads() {
     qualified: 0,
     converted: 0,
   })
-  const filtered = leadsData.filter(
-    (lead) =>
-      lead.name
-        .toLowerCase()
-        .includes(search.toLowerCase())
-  );
+  const filtered = leadsData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const selectedLeadId = searchParams.get("leadId");
@@ -142,11 +140,34 @@ export default function Leads() {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const apiFilters = {};
+      const apiFilters = {};
+      if (search.trim()) {
+        apiFilters.search = search;
+      }
 
-        if (filters.status !== "All Statuses") {
-          apiFilters.status = statusMapUIToBackend[filters.status];
-        }
+      if (filters.status !== "All Statuses") {
+          apiFilters.status =
+              statusMapUIToBackend[filters.status];
+      }
+
+      if (filters.source !== "All Sources") {
+          apiFilters.source = filters.source;
+      }
+
+      if (filters.counselor !== "All Counselors") {
+
+          const selectedUser = users.find(
+              user => user.name === filters.counselor
+          );
+
+          if (selectedUser) {
+              apiFilters.counselor = selectedUser.id;
+          }
+      }
+
+      if (filters.date !== "All Time") {
+          apiFilters.date = filters.date;
+      }
 
         const res = await leadsAPI.getAll({
           ...apiFilters,
@@ -173,7 +194,7 @@ export default function Leads() {
     
 
     fetchLeads();
-  }, [filters, page]); // 🔥 THIS IS THE FIX
+  }, [filters, page, search]); // 🔥 THIS IS THE FIX
 
 
   useEffect(() => {
@@ -240,6 +261,60 @@ const handleAssignLead = async (leadId, userId) => {
   }
 };
 
+const exportToExcel = async () => {
+
+    try {
+
+        const res = await leadsAPI.getAll({
+            limit: 100000
+        });
+
+        const data = res.data.map(lead => ({
+            Name: lead.name,
+            Phone: lead.phone,
+            Email: lead.email,
+            Grade: lead.grade,
+            Source: lead.source,
+            Status: lead.status,
+            Counselor: lead.counselor
+        }));
+
+        const worksheet =
+            XLSX.utils.json_to_sheet(data);
+
+        const workbook =
+            XLSX.utils.book_new();
+
+        XLSX.utils.book_append_sheet(
+            workbook,
+            worksheet,
+            "Leads"
+        );
+
+        const excelBuffer =
+            XLSX.write(workbook,{
+                bookType:"xlsx",
+                type:"array"
+            });
+
+        const blob =
+            new Blob(
+                [excelBuffer],
+                {
+                    type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                }
+            );
+
+        saveAs(blob,"Leads.xlsx");
+
+    } catch(err){
+
+        console.error(err);
+
+    }
+
+};
+
 return (
     <div className="leads-page">
       <div className="leads-page-header">
@@ -269,13 +344,13 @@ return (
       <div className="leads-filter-bar">
         <div className="filter-toprow">
           <span className="filter-heading"><FilterIcon /> Filters</span>
-          <button className="export-btn"><DownloadIcon /> Export</button>
+          <button className="export-btn" onClick={exportToExcel}><DownloadIcon /> Export</button>
         </div>
         <div className="filter-controls">
           {[
             { label: 'Status', key: 'status', opts: ['All Statuses', 'New', 'Qualified', 'Enrolled', 'Lost'] },            { label: 'Source', key: 'source', opts: ['All Sources', 'Website', 'Referral', 'Walk-in', 'Ads'] },
             { label: 'Tag', key: 'tag', opts: ['All Tags'] },
-            { label: 'Counselor', key: 'counselor', opts: ['All Counselors', 'Mrs. Priya Sharma', 'Mr. Amit Patel', 'Mrs. Sunita Kumar'] },
+            { label: 'Counselor', key: 'counselor', opts: ['All Counselors', ...users.map(user => user.name)] },
             { label: 'Date Range', key: 'date', opts: ['All Time', 'This Week', 'This Month'] },
           ].map(f => (
             <div key={f.key} className="filt-group">

@@ -3,7 +3,7 @@
  * Provides reusable functions for all backend API calls with JWT authentication
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL;
-
+console.log("API_URL =", API_BASE_URL);
 // Token management utilities
 export const tokenManager = {
   // Get token from localStorage
