@@ -32,7 +32,7 @@ const msgStatusColor = (s) =>
   ({ delivered: "badge-green", read: "badge-blue", sent: "badge-teal" })[s] ||
   "badge-gray";
 
-axios.defaults.baseURL = import.meta.env.VITE_API_URL;
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || "";
 
 export function Communication() {
   const [tab, setTab] = useState("email");
