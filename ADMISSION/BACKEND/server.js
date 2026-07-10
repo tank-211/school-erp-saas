@@ -9,13 +9,12 @@ dotenv.config();
  */
 
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.HOST || 'localhost';
 
-const server = app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, () => {
   console.log('\n┌─────────────────────────────────────────────────┐');
   console.log('│  School ERP Backend Server Started Successfully │');
   console.log('├─────────────────────────────────────────────────┤');
-  console.log(`│ Server:      http://${HOST}:${PORT}`.padEnd(49) + '│');
+  console.log(`│ Server:      http://0.0.0.0:${PORT}`.padEnd(49) + '│');
   console.log(`│ Environment: ${(process.env.NODE_ENV || 'development').toUpperCase()}`.padEnd(49) + '│');
   console.log(`│ Database:    ${process.env.DB_NAME}@${process.env.DB_HOST}`.padEnd(49) + '│');
   console.log('│ Health Check: GET /api/health                  │');
