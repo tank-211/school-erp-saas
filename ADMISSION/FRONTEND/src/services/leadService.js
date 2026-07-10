@@ -255,7 +255,7 @@ const transformFormToApiPayload = (formData) => {
     follow_up_status: 'pending',
     notes: buildNotesFromForm(formData),
     // FIX: Map the name to the ID before sending to the API
-    assigned_to: formData.counselor ? mapCounselorNameToUserId(formData.counselor) : null,
+    assigned_to: formData.counselor ? Number(formData.counselor) : null,
     
     academic_year_id: null,
     follow_up_date: null,
@@ -279,22 +279,13 @@ const buildNotesFromForm = (formData) => {
   if (formData.priority) notes.push(`Priority: ${formData.priority}`);
   if (formData.notes) notes.push(`Notes: ${formData.notes}`);
 
+  console.log("FORM DATA:", formData);
+  console.log("COUNSELOR VALUE:", formData.counselor);
+
   return notes.join('\n');
 };
 
 /**
  * mapCounselorNameToUserId(counselorName)
  * Maps counselor name from form to user_id for API
- * TODO: Replace with actual API call to fetch users
- */
-export const mapCounselorNameToUserId = (counselorName) => {
-  // Hardcoded mapping for now - should be replaced with API call
-  const counselorMap = {
-    'Priya Sharma': 2,
-    'Amit_Patel': 3,
-    'Neha Kumar': 4,
-    'Rahul Singh': 5,
-    'Anjali Gupta': 6,
-  };
-  return counselorMap[counselorName] || null;
-};
+ * TODO: Replace with actual API call to fetch users */

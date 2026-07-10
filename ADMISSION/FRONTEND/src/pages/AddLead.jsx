@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Save, X, AlertCircle, CheckCircle } from "lucide-react";
 import "../style.css";
@@ -414,16 +414,13 @@ export function AddLead() {
                   value={form.counselor}
                   onChange={(e) => set("counselor", e.target.value)}
                 >
-                  <option value="">Select counselor</option>
-                  {[
-                    "Priya Sharma",
-                    "Amit Patel",
-                    "Neha Kumar",
-                    "Rahul Singh",
-                    "Anjali Gupta",
-                  ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
+                <option value="">Select counselor</option>
+
+                {counselors.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
                 </select>
               </div>
               <div className="form-group">
