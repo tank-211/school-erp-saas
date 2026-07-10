@@ -4,6 +4,8 @@ import { AlertCircle, CheckCircle } from "lucide-react";
 import "../style.css";
 import { useAuth } from "../context/AuthContext.jsx";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 export function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,13 +49,16 @@ export function Login() {
 
     setLoading(true);
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(form),
       });
 
       const data = await response.json();
+
 
       if (data.success) {
         const user = login(data.data.token, data.data.user);
