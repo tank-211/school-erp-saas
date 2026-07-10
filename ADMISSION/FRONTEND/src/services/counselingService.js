@@ -11,7 +11,7 @@ const TOKEN_KEY = 'token';
 class CounselingService {
   constructor() {
     const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-    this.baseURL = API_BASE_URL ? `${API_BASE_URL}/api` : '/api';
+    this.baseURL = API_BASE_URL || '/api';
   }
 
   buildUrl(path, params = {}) {
