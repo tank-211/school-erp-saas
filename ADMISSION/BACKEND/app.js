@@ -41,15 +41,14 @@ const app = express();
 // ============================================================================
 
 // CORS configuration
-app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN || 'http://localhost:3000',
-    'http://localhost:3001',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:3001',
-  ],
-  credentials: true,
-}));
+import cors from "cors";
+
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
 
 // Body parser middleware
 app.use(express.json());
