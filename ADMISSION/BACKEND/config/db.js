@@ -24,7 +24,10 @@ const pool = new Pool({
   // Add query timeout
   statement_timeout: 30000,
   // Add SSL option for compatibility
-  ssl: false,
+  ssl:
+  process.env.NODE_ENV === "production"
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
 // Handle pool connection errors
