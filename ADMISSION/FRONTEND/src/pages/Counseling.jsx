@@ -11,7 +11,7 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
-import CounselingService from "../services/CounselingService.js";
+import counselingService from "../services/counselingService.js";
 import "../style.css";
 
 export function Counseling() {
@@ -70,10 +70,10 @@ export function Counseling() {
 
       // Fetch stats and visits in parallel using updated fetch aliases
       const [statsResponse, futureResponse, missedResponse, leadsResponse] = await Promise.all([
-        CounselingService.getDashboardStats(),
-        CounselingService.fetchFutureVisits(),
-        CounselingService.fetchMissedVisits(),
-        CounselingService.getAssignedLeads(),
+        counselingService.getDashboardStats(),
+        counselingService.fetchFutureVisits(),
+        counselingService.fetchMissedVisits(),
+        counselingService.getAssignedLeads(),
       ]);
 
       if (statsResponse.success) {
@@ -188,7 +188,7 @@ export function Counseling() {
   // ── Action Handlers ────────────────────────────────────────
   const handleMarkVisited = async (visitId) => {
     try {
-      await CounselingService.updateVisitStatus(visitId, "visited");
+      await counselingService.updateVisitStatus(visitId, "visited");
       refreshVisits(false);
     } catch (err) {
       alert("Failed to update status");
@@ -198,7 +198,7 @@ export function Counseling() {
   const handleDeleteVisit = async (visitId) => {
     if (window.confirm("Are you sure you want to delete this visit?")) {
       try {
-        await CounselingService.deleteCampusVisit(visitId);
+        await counselingService.deleteCampusVisit(visitId);
         refreshVisits(false);
       } catch (err) {
         alert("Failed to delete visit");
@@ -273,7 +273,7 @@ export function Counseling() {
     // Set new timeout with 300ms debounce
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const response = await CounselingService.searchLeads(query);
+        const response = await counselingService.searchLeads(query);
 
         if (response.success) {
           const formattedLeads = (response.data || []).map((lead) => ({
