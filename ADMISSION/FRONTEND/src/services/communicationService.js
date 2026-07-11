@@ -132,7 +132,7 @@ export const sendComposeEmail = async (formData) => {
 
   const API_URL = import.meta.env.VITE_API_URL;
 
-  console.log("API_URL =", import.meta.env.VITE_API_URL);
+  console.log("API_URL =", JSON.stringify(import.meta.env.VITE_API_URL));
 
   const response = await fetch(`${API_URL}/communication/send`, {
     method: 'POST',
