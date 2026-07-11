@@ -1,5 +1,7 @@
 import prisma from '../../src/lib/prisma.js';
 
+import { serializeBigInt } from "../utils/bigintSerializer.js";
+
 const recipientQueryMap = {
   lead: `
     SELECT
@@ -90,48 +92,52 @@ export const getRecipientsByType = async (
   const school_id = BigInt(schoolId);
 
   if (recipientType === 'lead') {
-    return await prisma.lead.findMany({
-      where: {
-        school_id,
-        ...(search && {
-          OR: [
-            {
-              first_name: {
-                contains: search,
-                mode: 'insensitive'
-              }
-            },
-            {
-              last_name: {
-                contains: search,
-                mode: 'insensitive'
-              }
-            }
-          ]
-        })
-      },
-      take: 200
-    });
+    const recipients = await prisma.lead.findMany({
+        where: {
+          school_id,
+          ...(search && {
+            OR: [
+              {
+                first_name: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+              {
+                last_name: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            ],
+          }),
+        },
+        take: 200,
+      });
+
+      return serializeBigInt(recipients);
   }
 
   if (recipientType === 'student') {
-    return await prisma.student.findMany({
-      where: {
-        school_id
-      },
-      take: 200
-    });
-  }
+    const recipients = await prisma.student.findMany({
+        where: {
+          school_id,
+        },
+        take: 200,
+      });
 
+      return serializeBigInt(recipients);
+  }
   if (recipientType === 'parent') {
-    return await prisma.parent_detail.findMany({
+    const recipients = await prisma.parent_detail.findMany({
       where: {
-        school_id
+        school_id,
       },
-      take: 200
+      take: 200,
     });
-  }
 
+    return serializeBigInt(recipients);
+  }
   return [];
 };
 
