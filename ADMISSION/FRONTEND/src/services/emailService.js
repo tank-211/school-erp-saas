@@ -21,6 +21,10 @@ const request = async (path, options = {}) => {
     data = null;
   }
 
+  console.log("URL:", `${EMAIL_API_BASE}${path}`);
+  console.log("STATUS:", response.status);
+  console.log("RESPONSE:", data);
+
   if (!response.ok || !data?.success) {
     throw new Error(data?.message || `Request failed with status ${response.status}`);
   }

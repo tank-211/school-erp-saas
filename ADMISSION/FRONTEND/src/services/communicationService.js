@@ -140,6 +140,9 @@ export const sendComposeEmail = async (formData) => {
     data = null;
   }
 
+  console.log("REQUEST:", `${base}${path}`);
+  console.log("STATUS:", response.status);
+  console.log("BODY:", data);
   if (!response.ok || !data?.success) {
     throw new Error(data?.message || `Request failed with status ${response.status}`);
   }
