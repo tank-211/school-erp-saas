@@ -12,11 +12,16 @@ const request = async (base, path, options = {}) => {
     headers,
   });
 
+  const text = await response.text();
+
+  console.log("RAW RESPONSE:", text);
+
   let data = null;
+
   try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error("Invalid JSON");
   }
 
   if (!response.ok || !data?.success) {
@@ -133,16 +138,21 @@ export const sendComposeEmail = async (formData) => {
     body: formData,
   });
 
+  const text = await response.text();
+
+  console.log("RAW RESPONSE:", text);
+
   let data = null;
+
   try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error("Invalid JSON");
   }
 
-  console.log("REQUEST:", `${base}${path}`);
   console.log("STATUS:", response.status);
   console.log("BODY:", data);
+
   if (!response.ok || !data?.success) {
     throw new Error(data?.message || `Request failed with status ${response.status}`);
   }

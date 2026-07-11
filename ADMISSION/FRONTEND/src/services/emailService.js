@@ -14,11 +14,16 @@ const request = async (path, options = {}) => {
     headers,
   });
 
+  const text = await response.text();
+
+  console.log("RAW RESPONSE:", text);
+
   let data = null;
+
   try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
+    data = JSON.parse(text);
+  } catch (e) {
+    console.error("Invalid JSON");
   }
 
   console.log("URL:", `${EMAIL_API_BASE}${path}`);
