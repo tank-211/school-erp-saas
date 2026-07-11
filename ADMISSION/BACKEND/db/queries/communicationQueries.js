@@ -1,6 +1,6 @@
 import prisma from '../../src/lib/prisma.js';
 
-import { serializeBigInt } from "../utils/bigintSerializer.js";
+import { serializeBigInt } from "../../utils/bigintSerializer.js";
 
 const recipientQueryMap = {
   lead: `
