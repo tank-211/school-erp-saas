@@ -2,13 +2,13 @@ const app = require('./app');
 const prisma = require('./config/prisma');
 
 const PORT = process.env.PORT || 5002;
-const HOST = process.env.HOST || '127.0.0.1';
 
 prisma.$connect()
   .then(() => {
     console.log('Database connected successfully');
-    app.listen(PORT, HOST, () => {
-      console.log(`Server running at http://${HOST}:${PORT}`);
+
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`Server running on port ${PORT}`);
     });
   })
   .catch((err) => {
