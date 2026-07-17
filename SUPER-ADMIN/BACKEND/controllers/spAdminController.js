@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const pool = require('../config/db');
+const prisma = require('../config/prisma');
 
 const signup = async (req, res) => {
   try { 
@@ -26,27 +26,39 @@ const signup = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 8 characters long.' });
     }
 
-    const existingStaff = await pool.query(
-      'SELECT id FROM service_provider_staff WHERE email = $1',
-      [trimmedEmail]
-    );
+    const existingStaff = await prisma.service_provider_staff.findUnique({
+      where: {
+        email: trimmedEmail,
+      },
+    });
 
-    if (existingStaff.rows.length > 0) {
-      return res.status(409).json({ error: 'An employee with this email already exists.' });
+    if (existingStaff) {
+      return res.status(409).json({
+        error: 'An employee with this email already exists.',
+      });
     }
 
     const passwordHash = await bcrypt.hash(String(password), 10);
 
-    const result = await pool.query(
-      `INSERT INTO service_provider_staff (full_name, email, password_hash, internal_role)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, full_name, email, internal_role, created_at`,
-      [trimmedName, trimmedEmail, passwordHash, role]
-    );
+    const user = await prisma.service_provider_staff.create({
+      data: {
+        full_name: trimmedName,
+        email: trimmedEmail,
+        password_hash: passwordHash,
+        internal_role: role,
+      },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        internal_role: true,
+        created_at: true,
+      },
+    });
 
     return res.status(201).json({
       message: 'Internal employee registered successfully.',
-      user: result.rows[0],
+      user,
     });
   } catch (err) {
     console.error('SP signup error:', err);

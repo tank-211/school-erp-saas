@@ -1,4 +1,4 @@
-const pool = require('../../config/db');
+const prisma = require('../../config/prisma');
 
 const verifySchoolSubscription = async (req, res, next) => {
   try {
@@ -11,21 +11,24 @@ const verifySchoolSubscription = async (req, res, next) => {
       });
     }
 
-    const result = await pool.query(
-      `SELECT id, name, is_active, expiry_date
-       FROM school
-       WHERE id = $1`,
-      [school_id]
-    );
+    const school = await prisma.school.findUnique({
+      where: {
+        id: BigInt(school_id),
+      },
+      select: {
+        id: true,
+        name: true,
+        is_active: true,
+        expiry_date: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!school) {
       return res.status(404).json({
-        error: 'School not found.',
-        code: 'SCHOOL_NOT_FOUND',
+        error: "School not found.",
+        code: "SCHOOL_NOT_FOUND",
       });
     }
-
-    const school = result.rows[0];
 
     if (!school.is_active) {
       return res.status(403).json({

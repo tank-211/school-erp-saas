@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
+const prisma = require('../config/prisma');
 
 const login = async (req, res) => {
   try {
@@ -10,17 +10,23 @@ const login = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const result = await pool.query(
-      'SELECT id, full_name, email, password_hash, internal_role, is_active FROM service_provider_staff WHERE email = $1',
-      [email]
-    );
+    const staff = await prisma.service_provider_staff.findUnique({
+      where: {
+        email,
+      },
+      select: {
+        id: true,
+        full_name: true,
+        email: true,
+        password_hash: true,
+        internal_role: true,
+        is_active: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!staff) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
-
-    const staff = result.rows[0];
-
     if (!staff.is_active) {
       return res.status(403).json({ error: 'Account deactivated.' });
     } 
@@ -37,10 +43,14 @@ const login = async (req, res) => {
     );
 
     // Update last_login
-    await pool.query(
-      'UPDATE service_provider_staff SET last_login = CURRENT_TIMESTAMP WHERE id = $1',
-      [staff.id]
-    );
+      await prisma.service_provider_staff.update({
+        where: {
+          id: staff.id,
+        },
+        data: {
+          last_login: new Date(),
+        },
+      });
 
     return res.json({
       message: 'Login successful',

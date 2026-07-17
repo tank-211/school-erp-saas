@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../config/db');
+const prisma = require('../config/prisma');
 
 const schoolLogin = async (req, res) => {
   try {
@@ -10,24 +10,31 @@ const schoolLogin = async (req, res) => {
       return res.status(400).json({ error: 'school_id, email and password are required.' });
     }
 
-    const result = await pool.query(
-      `SELECT id, school_id, name, email, password_hash, role, status
-       FROM app_user
-       WHERE school_id = $1 AND email = $2`,
-      [school_id, email]
-    );
+    const user = await prisma.app_user.findFirst({
+      where: {
+        school_id,
+        email,
+      },
+      select: {
+        id: true,
+        school_id: true,
+        name: true,
+        email: true,
+        password_hash: true,
+        role: true,
+        status: true,
+      },
+    });
 
-    if (result.rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
-
-    const user = result.rows[0];
 
     if (user.status !== 'active') {
       return res.status(403).json({ error: 'User account is not active.' });
     }
 
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);$2b$10$ILKvR4yPMD0Do7YCvQbcoO3sfhiVWCqHgwjamdoJPOVVTpUcr22yi
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }

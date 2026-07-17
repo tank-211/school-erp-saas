@@ -1,10 +1,10 @@
 const app = require('./app');
-const pool = require('./config/db');
+const prisma = require('./config/prisma');
 
 const PORT = process.env.PORT || 5002;
 const HOST = process.env.HOST || '127.0.0.1';
 
-pool.query('SELECT NOW()')
+prisma.$connect()
   .then(() => {
     console.log('Database connected successfully');
     app.listen(PORT, HOST, () => {
