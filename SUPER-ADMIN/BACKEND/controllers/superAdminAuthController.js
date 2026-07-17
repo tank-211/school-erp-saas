@@ -4,16 +4,13 @@ const prisma = require('../config/prisma');
 
 const login = async (req, res) => {
   try {
+    console.log("=== LOGIN START ===");
+    console.log("Body:", req.body);
+
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required.' });
-    }
-
     const staff = await prisma.service_provider_staff.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
       select: {
         id: true,
         full_name: true,
@@ -24,36 +21,41 @@ const login = async (req, res) => {
       },
     });
 
+    console.log("Staff:", staff);
+
     if (!staff) {
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      return res.status(401).json({ error: "Invalid credentials." });
     }
-    if (!staff.is_active) {
-      return res.status(403).json({ error: 'Account deactivated.' });
-    } 
 
+    console.log("Comparing password...");
     const isValidPassword = await bcrypt.compare(password, staff.password_hash);
+    console.log("Password valid:", isValidPassword);
+
     if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials.' });
+      return res.status(401).json({ error: "Invalid credentials." });
     }
 
+    console.log("Generating token...");
     const token = jwt.sign(
-      { id: staff.id, email: staff.email, internal_role: staff.internal_role },
+      {
+        id: staff.id,
+        email: staff.email,
+        internal_role: staff.internal_role,
+      },
       process.env.SP_JWT_SECRET,
-      { expiresIn: process.env.SP_JWT_EXPIRY || '8h' }
+      { expiresIn: process.env.SP_JWT_EXPIRY || "8h" }
     );
 
-    // Update last_login
-      await prisma.service_provider_staff.update({
-        where: {
-          id: staff.id,
-        },
-        data: {
-          last_login: new Date(),
-        },
-      });
+    console.log("Updating last_login...");
+    await prisma.service_provider_staff.update({
+      where: { id: staff.id },
+      data: { last_login: new Date() },
+    });
+
+    console.log("Login successful");
 
     return res.json({
-      message: 'Login successful',
+      message: "Login successful",
       token,
       user: {
         id: staff.id,
@@ -63,8 +65,11 @@ const login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Internal server error.' });
+    console.error("LOGIN ERROR");
+    console.error(err);
+    return res.status(500).json({
+      error: err.message,
+    });
   }
 };
 
