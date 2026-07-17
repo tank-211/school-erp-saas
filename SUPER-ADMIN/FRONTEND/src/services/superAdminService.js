@@ -2,7 +2,8 @@ import axios from 'axios'
 
 
 // Localhost chya jagi 127.0.0.1 vapra
-const API_BASE_URL = 'http://127.0.0.1:5002/api/super-admin'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://127.0.0.1:5002/api/super-admin'
 
 const superAdminApi = axios.create({
   baseURL: API_BASE_URL,
