@@ -42,6 +42,11 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.use((req, res, next) => {
+  console.log(req.method, req.originalUrl);
+  next();
+});
+
 // Route registration
 const superAdminRoutes = require('./routes/superAdminRoutes');
 const schoolAuthRoutes = require('./routes/schoolAuthRoutes');
