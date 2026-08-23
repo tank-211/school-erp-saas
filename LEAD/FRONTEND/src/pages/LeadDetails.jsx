@@ -60,32 +60,36 @@ if (!lead) {
   return <div className="lead-details-container">Loading...</div>;
 }
 
-  const createApplication = async () => {
-    try {
-      const token = localStorage.getItem("authToken");
+    const createApplication = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
 
-      const res = await fetch(
-        `${API_URL}/applications/from-lead/${lead.id}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const res = await fetch(
+          `${API_URL}/applications/from-lead/${lead.id}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to create application");
         }
-      );
 
-      const data = await res.json();
+        console.log("APPLICATION CREATED:", data);
 
-      if (!data.success) {
-        alert(data.message);
-        return;
+        // Refresh lead details so the new application appears
+        await fetchLead();
+
+      } catch (error) {
+        console.error("CREATE APPLICATION ERROR:", error);
+        alert(error.message);
       }
-
-      fetchLead();
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    };
 
 
 
@@ -179,7 +183,7 @@ if (!lead) {
 
           <button
             className="btn-secondary"
-            onClick={() => navigate("/applications")}
+            onClick={() => navigate(`/applications/${application[0].id}`)}
             >
             Open Application
           </button>

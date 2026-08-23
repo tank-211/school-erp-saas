@@ -1,29 +1,241 @@
-.application-details-page{
-    padding:30px;
+.application-details-page {
+  padding: 30px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-.application-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:30px;
+.application-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
 }
 
-.application-card{
-    background:white;
-    border-radius:12px;
-    padding:20px;
-    margin-bottom:20px;
-    box-shadow:0 2px 8px rgba(0,0,0,.08);
+.application-header h1 {
+  margin: 0;
+  font-size: 28px;
+  color: #0f172a;
 }
 
-.detail-row{
-    display:flex;
-    justify-content:space-between;
-    padding:12px 0;
-    border-bottom:1px solid #eee;
+.application-subtitle {
+  margin-top: 6px;
+  color: #64748b;
 }
 
-.detail-row:last-child{
-    border-bottom:none;
+.application-card {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.application-card h2 {
+  margin: 0 0 20px;
+  color: #0f172a;
+  font-size: 20px;
+}
+
+.application-status {
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.status-created {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.status-submitted {
+  color: #2563eb;
+  background: #eff6ff;
+}
+
+.status-review {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.status-accepted {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.status-rejected {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.detail-item span {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.detail-item strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-row strong {
+  color: #475569;
+}
+
+.detail-row > span {
+  color: #0f172a;
+}
+
+.status-text {
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+
+.status-timeline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.status-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.4;
+}
+
+.status-step.active {
+  opacity: 1;
+}
+
+.status-step > span {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e2e8f0;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.status-step.active > span {
+  background: #10b981;
+  color: white;
+}
+
+.status-step strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.status-step small {
+  display: block;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.status-line {
+  height: 2px;
+  flex: 1;
+  background: #e2e8f0;
+}
+
+.documents-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.document-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.document-row:last-child {
+  border-bottom: none;
+}
+
+.document-row strong {
+  display: block;
+  color: #0f172a;
+}
+
+.document-row small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+}
+
+.document-status {
+  padding: 5px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.document-status.verified {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.document-status.pending {
+  color: #d97706;
+  background: #fef3c7;
+}
+
+.empty-state {
+  color: #64748b;
+}
+
+@media (max-width: 800px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .status-timeline {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .status-line {
+    width: 2px;
+    height: 20px;
+    margin-left: 15px;
+  }
+
+  .application-header {
+    align-items: flex-start;
+    gap: 15px;
+  }
 }
