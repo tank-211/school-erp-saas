@@ -371,7 +371,9 @@ export function Leads() {
                           type="button"
                           className="btn btn-ghost btn-icon"
                           title="View Lead"
-                          onClick={() => navigate(`/leads/${l.id}`)}
+                          onClick={() => {
+                            navigate(`/leads/${l.id}`);
+                          }}
                         >
                           <Eye size={15} />
                         </button>

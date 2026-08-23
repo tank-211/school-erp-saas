@@ -577,7 +577,44 @@ export const getEligibleLeadsForApplication = async (schoolId) => {
     },
   });
 
-  return leads;
+  return leads.map((lead) => ({
+    ...lead,
+    id: lead.id.toString(),
+    school_id: lead.school_id?.toString(),
+    academic_year_id: lead.academic_year_id?.toString(),
+  }));
+};
+
+export const getApplicationByLeadId = async (leadId, schoolId) => {
+  const application = await prisma.application.findFirst({
+    where: {
+      lead_id: BigInt(leadId),
+      school_id: BigInt(schoolId),
+    },
+    select: {
+      id: true,
+      lead_id: true,
+      application_number: true,
+      status: true,
+      current_step: true,
+      created_at: true,
+      submitted_at: true,
+      updated_at: true,
+    },
+    orderBy: {
+      created_at: "desc",
+    },
+  });
+
+  if (!application) {
+    return null;
+  }
+
+  return {
+    ...application,
+    id: application.id.toString(),
+    lead_id: application.lead_id?.toString(),
+  };
 };
 
 export const resumeApplication = async (schoolId, applicationId) => {
@@ -1052,6 +1089,55 @@ export const submitApplication = async (applicationId) => {
   }
 };
 
+export const moveApplicationToReview = async (applicationId, schoolId) => {
+  try {
+    const id = BigInt(applicationId);
+
+    const application = await prisma.application.findFirst({
+      where: {
+        id,
+        school_id: BigInt(schoolId),
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
+    if (application.status !== "submitted") {
+      throw new Error(
+        `Application cannot move to review from status: ${application.status}`
+      );
+    }
+
+    const updatedApplication = await prisma.application.update({
+      where: {
+        id,
+      },
+      data: {
+        status: "under_review",
+        updated_at: new Date(),
+      },
+      select: {
+        id: true,
+        application_number: true,
+        status: true,
+        updated_at: true,
+      },
+    });
+
+    return updatedApplication;
+  } catch (error) {
+    throw new Error(
+      `Failed to move application to review: ${error.message}`
+    );
+  }
+};
+
 /**
  * Get application details for prefill
  */
@@ -1081,6 +1167,14 @@ export const getApplicationDetails = async (applicationId, schoolId) => {
         academic_year: {
           select: {
             year_name: true,
+          },
+        },
+
+        app_user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
           },
         },
 
@@ -1800,6 +1894,54 @@ export const getAdmissionApplicationById = async (schoolId, admissionId) => {
   }
 };
 
+export const approveApplication = async (applicationId, schoolId) => {
+  try {
+    const id = BigInt(applicationId);
+    const schoolIdBigInt = BigInt(schoolId);
+
+    const application = await prisma.application.findFirst({
+      where: {
+        id,
+        school_id: schoolIdBigInt,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
+    if (application.status !== "under_review") {
+      throw new Error(
+        `Application cannot be approved from status: ${application.status}`
+      );
+    }
+
+    return await prisma.application.update({
+      where: {
+        id,
+      },
+      data: {
+        status: "approved",
+        updated_at: new Date(),
+      },
+      select: {
+        id: true,
+        application_number: true,
+        status: true,
+        updated_at: true,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to approve application: ${error.message}`
+    );
+  }
+};
+
 export const completeAdmissionApplication = async (schoolId, admissionId) => {
   try {
     const schoolIdBigInt = BigInt(schoolId);
@@ -1883,6 +2025,52 @@ export const completeAdmissionApplication = async (schoolId, admissionId) => {
   } catch (error) {
     throw new Error(
       `Failed to complete admission application: ${error.message}`
+    );
+  }
+};
+
+export const markApplicationCompleted = async (schoolId, applicationId) => {
+  try {
+    const application = await prisma.application.findFirst({
+      where: {
+        id: BigInt(applicationId),
+        school_id: BigInt(schoolId),
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!application) {
+      throw new Error("Application not found");
+    }
+
+    if (application.status !== "under_review") {
+      throw new Error(
+        `Application cannot be completed from status: ${application.status}`
+      );
+    }
+
+    return await prisma.application.update({
+      where: {
+        id: application.id,
+      },
+      data: {
+        status: "admission_completed",
+        updated_at: new Date(),
+      },
+      select: {
+        id: true,
+        application_number: true,
+        status: true,
+        current_step: true,
+        updated_at: true,
+      },
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to complete application: ${error.message}`
     );
   }
 };

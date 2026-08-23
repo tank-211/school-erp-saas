@@ -22,6 +22,8 @@ import { Security } from "./pages/Security";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { AdminPortal } from "./pages/AdminPortal";
+import LeadDetails from "./pages/LeadDetails";
+import ApplicationDetails from "./pages/ApplicationDetails";
 
 const adminRouteElement = (
   <ProtectedRoute role="admin">
@@ -47,12 +49,14 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="leads" element={<Leads />} />
+          <Route path="leads/:id" element={<LeadDetails />} />
           <Route path="leads/add" element={<AddLead />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="communication" element={<Communication />} />
           <Route path="counseling" element={<Counseling />} />
           <Route path="counseling/schedule-visit" element={<ScheduleVisit />} />
           <Route path="applications" element={<Applications />} />
+          <Route path="applications/:id/details" element={<ApplicationDetails />} />
           <Route path="applications/create" element={<CreateApplication />} />
           <Route
             path="applications/form/:id"

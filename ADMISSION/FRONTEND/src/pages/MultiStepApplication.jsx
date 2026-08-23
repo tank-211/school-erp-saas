@@ -625,14 +625,35 @@ export function MultiStepApplication() {
     setStep((s) => Math.max(1, s - 1));
   };
 
+  const applicationStatus = String(
+    details?.application?.status || ""
+  ).toLowerCase();
+
+  const isLockedApplication = [
+    "submitted",
+    "under_review",
+    "approved",
+    "admission_completed",
+  ].includes(applicationStatus);
+
+  const isReadOnly = isLockedApplication;
+
   // Handle submission
   const handleSubmit = async () => {
+    if (isLockedApplication) {
+      setMoveError(
+        `This application is already ${applicationStatus.replace("_", " ")} and cannot be submitted again.`
+      );
+      return;
+    }
+
     setMoveError("");
     setSaving(true);
+
     try {
       await handleSubmitApplication();
       sessionStorage.removeItem("activeAdmissionId");
-      // Redirect to applications list
+
       setTimeout(() => {
         navigate("/applications", {
           state: { message: "Application submitted successfully!" },
@@ -945,6 +966,7 @@ export function MultiStepApplication() {
                 <input
                   id="student_first_name"
                   className="form-input"
+                  disabled={isReadOnly}
                   style={
                     invalidFields.student_first_name
                       ? { borderColor: "var(--red)" }
@@ -967,6 +989,7 @@ export function MultiStepApplication() {
                 <input
                   id="student_last_name"
                   className="form-input"
+                  disabled={isReadOnly}
                   style={
                     invalidFields.student_last_name
                       ? { borderColor: "var(--red)" }
@@ -992,6 +1015,7 @@ export function MultiStepApplication() {
                 <input
                   id="student_date_of_birth"
                   className="form-input"
+                  disabled={isReadOnly}
                   type="date"
                   max={
                     new Date(
@@ -1021,6 +1045,7 @@ export function MultiStepApplication() {
                 <select
                   id="student_gender"
                   className="form-select"
+                  disabled={isReadOnly}
                   style={
                     invalidFields.student_gender
                       ? { borderColor: "var(--red)" }
@@ -1796,7 +1821,7 @@ export function MultiStepApplication() {
           <ArrowLeft size={14} /> Previous
         </button>
 
-        {step !== 2 ? (
+        {step !== 2 && !isLockedApplication ? (
           <button
             type="button"
             className="btn btn-primary"

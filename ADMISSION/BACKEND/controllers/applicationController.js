@@ -33,7 +33,7 @@ export const createApplication = async (req, res) => {
     console.log(`✅ Application created: ${result.id}`);
     res.status(201).json({
       success: true,
-      data: result,
+      data: serializeBigInt(result),
       message: 'Application created successfully'
     });
   } catch (error) {
@@ -101,6 +101,43 @@ export const getEligibleLeads = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * Get application linked to a lead
+ * GET /api/applications/by-lead/:leadId
+ */
+export const getApplicationByLeadId = async (req, res) => {
+  try {
+    const { leadId } = req.params;
+    const { school_id } = req.user;
+
+    if (!leadId) {
+      return res.status(400).json({
+        success: false,
+        message: "Lead ID is required",
+      });
+    }
+
+    const application = await applicationService.getApplicationByLeadId(
+      leadId,
+      school_id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: application,
+    });
+  } catch (error) {
+    console.error("Error fetching application by lead:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch application",
+    });
+  }
+};
+
 
 /**
  * Get counts for application dashboard
@@ -483,6 +520,65 @@ export const submitApplication = async (req, res) => {
   }
 };
 
+
+/**
+ * Move submitted application to under review
+ * PATCH /api/applications/:id/review
+ */
+export const moveApplicationToReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { school_id } = req.user;
+
+    const result = await applicationService.moveApplicationToReview(
+      id,
+      school_id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: serializeBigInt(result),
+      message: "Application moved to under review",
+    });
+  } catch (error) {
+    console.error("❌ Error moving application to review:", error);
+
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Failed to move application to review",
+    });
+  }
+};
+
+/**
+ * Approve application
+ * PATCH /api/applications/:id/approve
+ */
+export const approveApplication = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { school_id } = req.user;
+
+    const result = await applicationService.approveApplication(
+      id,
+      school_id
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: serializeBigInt(result),
+      message: "Application approved",
+    });
+  } catch (error) {
+    console.error("❌ Error approving application:", error);
+
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Failed to approve application",
+    });
+  }
+};
+
 /**
  * Get application details
  * GET /api/applications/:id/details
@@ -568,22 +664,32 @@ export const getAdmissionApplication = async (req, res) => {
 
 export const completeAdmission = async (req, res) => {
   try {
-    const { admission_id } = req.body;
+    const { application_id } = req.body;
+    const school_id = req.user.school_id;
 
-    const result = await applicationService.completeAdmissionApplication(
-      req.user.school_id,
-      admission_id,
+    if (!application_id) {
+      return res.status(400).json({
+        success: false,
+        message: "application_id is required",
+      });
+    }
+
+    const result = await applicationService.markApplicationCompleted(
+      school_id,
+      application_id
     );
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: result,
-      message: 'Admission confirmed successfully',
+      message: "Application marked as admission completed",
     });
   } catch (error) {
-    res.status(400).json({
+    console.error("Complete Admission Error:", error);
+
+    return res.status(400).json({
       success: false,
-      message: error.message || 'Failed to complete admission application',
+      message: error.message,
     });
   }
 };

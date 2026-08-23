@@ -22,6 +22,7 @@ router.get('/counts', applicationController.getApplicationCounts);
 router.get('/search', applicationController.searchApplications);
 router.get('/', applicationController.getApplications);
 router.get('/draft', applicationController.getDraftApplications);
+router.get('/by-lead/:leadId',applicationController.getApplicationByLeadId);
 router.get('/:id/resume', applicationController.resumeApplication);
 router.post('/new', applicationController.createApplicationWithoutLead);
 
@@ -77,6 +78,17 @@ router.post(
  * Submit final application (Step 6)
  */
 router.post('/:id/submit', applicationController.submitApplication);
+
+/**
+ * PATCH /api/applications/:id/review
+ * Move submitted application to under review
+ */
+router.patch(
+  '/:id/review',
+  applicationController.moveApplicationToReview
+);
+
+router.patch('/:id/approve', applicationController.approveApplication);
 
 /**
  * DELETE /api/applications/:id

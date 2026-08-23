@@ -92,6 +92,9 @@ export const createLead = async (req, res, next) => {
 export const getAllLeads = async (req, res, next) => {
   try {
     const school_id = req.user.school_id;
+
+    console.log("ADMISSION USER:", req.user);
+    console.log("ADMISSION SCHOOL ID:", school_id);
     const { follow_up_status, desired_class, assigned_to, search, limit } = req.query;
 
     const leads = await leadQueries.getAllLeads(school_id, {
