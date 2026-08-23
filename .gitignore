@@ -67,3 +67,7 @@ Thumbs.db
 # AI development tooling
 SUPER-ADMIN/.agent/
 SUPER-ADMIN/.planning/
+
+# Temporary debug scripts
+ADMISSION/BACKEND/debug-*.js
+ADMISSION/BACKEND/tmp_*.js
