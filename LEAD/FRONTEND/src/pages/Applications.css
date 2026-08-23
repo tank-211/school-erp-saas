@@ -1,0 +1,159 @@
+.apps-page { padding: 28px; display: flex; flex-direction: column; gap: 20px; }
+.apps-header { display: flex; align-items: center; justify-content: space-between; }
+.btn-primary { display: flex; align-items: center; gap: 6px; padding: 9px 18px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; font-family: var(--font-display); cursor: pointer; transition: background 0.15s; }
+.btn-primary:hover { background: var(--primary-dark); }
+
+.apps-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.apps-stat-card { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; }
+.asc-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.asc-value { font-family: var(--font-display); font-size: 26px; font-weight: 700; }
+
+.apps-filter-row { display: flex; gap: 6px; flex-wrap: wrap; background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 16px; }
+.task-tab { padding: 6px 14px; border: 1.5px solid var(--border); border-radius: 8px; background: white; font-size: 12px; font-weight: 500; color: var(--text-secondary); cursor: pointer; transition: all 0.15s; }
+.task-tab:hover { border-color: var(--primary); color: var(--primary); }
+.task-tab.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+.app-list { display: flex; flex-direction: column; gap: 12px; }
+.app-card { background: white; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; }
+
+.app-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.app-name-row { display: flex; align-items: center; gap: 10px; }
+.app-student-name { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.app-status-badge, .app-fee-badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.view-details-btn { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1.5px solid var(--primary); border-radius: 8px; color: var(--primary); background: white; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.view-details-btn:hover { background: var(--primary); color: white; }
+
+.app-meta-row { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; flex-wrap: wrap; }
+.app-meta-row span { display: flex; align-items: center; gap: 5px; }
+.interview-tag { color: var(--primary) !important; font-weight: 600; }
+.app-id-tag { color: var(--text-muted); font-size: 11px; }
+
+.app-docs-section { margin-bottom: 14px; }
+.app-docs-header { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px; }
+.docs-count { margin-left: auto; font-size: 12px; color: var(--text-muted); font-weight: 400; }
+.docs-progress-bar { height: 6px; background: #f1f5f9; border-radius: 99px; overflow: hidden; margin-bottom: 10px; }
+.docs-progress-fill { height: 100%; background: var(--primary); border-radius: 99px; transition: width 0.4s ease; }
+
+.docs-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.doc-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: #fafafa; border-radius: 8px; }
+.doc-name { font-size: 12px; color: var(--text-secondary); }
+.doc-status { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+
+.app-card-footer { display: flex; align-items: center; gap: 24px; padding-top: 14px; border-top: 1px solid #f1f5f9; }
+.app-fee-info { display: flex; flex-direction: column; gap: 4px; }
+.fee-label { font-size: 11px; color: var(--text-muted); }
+.fee-value { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.fee-bar { width: 140px; height: 5px; background: #f1f5f9; border-radius: 99px; overflow: hidden; }
+.fee-bar-fill { height: 100%; background: var(--primary); border-radius: 99px; }
+.app-assigned { display: flex; flex-direction: column; gap: 4px; }
+.assigned-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.app-actions { margin-left: auto; display: flex; gap: 8px; }
+.app-action-btn { width: 34px; height: 34px; border: 1.5px solid var(--border); background: white; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); transition: all 0.15s; }
+.app-action-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.document-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 18px;
+    border:1px solid #e5e7eb;
+    border-radius:8px;
+    margin-bottom:12px;
+    background:#fff;
+}
+
+.document-name{
+    flex:2;
+    font-weight:500;
+}
+
+.document-status{
+    width:130px;
+    text-align:center;
+    font-weight:600;
+    color:#f59e0b;
+}
+
+.document-actions{
+    display:flex;
+    gap:10px;
+    align-items:center;
+}
+.view-btn{
+    background:#2563eb;
+    color:white;
+    border:none;
+    padding:8px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.view-btn:hover{
+    background:#1d4ed8;
+}
+
+.verify-btn{
+    background:#16a34a;
+    color:white;
+    border:none;
+    padding:8px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.verify-btn:hover{
+    background:#15803d;
+}
+
+.delete-btn{
+    background:#dc2626;
+    color:white;
+    border:none;
+    padding:8px 16px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:.2s;
+}
+
+.delete-btn:hover{
+    background:#b91c1c;
+}
+
+.no-file{
+    color:#9ca3af;
+    font-style:italic;
+}
+
+.verify-btn:disabled{
+    background:#9ca3af;
+    cursor:not-allowed;
+}
+
+.status-badge{
+    padding:6px 12px;
+    border-radius:20px;
+    font-size:13px;
+    font-weight:600;
+    text-align:center;
+}
+
+.status-badge.pending{
+    background:#FEF3C7;
+    color:#B45309;
+}
+
+.status-badge.verified{
+    background:#DCFCE7;
+    color:#15803D;
+}
+.document-name{
+    display:flex;
+    flex-direction:column;
+}
+
+.document-name small{
+    color:#6b7280;
+    margin-top:4px;
+}

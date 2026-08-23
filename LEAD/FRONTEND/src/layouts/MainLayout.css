@@ -1,0 +1,25 @@
+.app-shell {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  --sidebar-w: 220px;
+  transition: --sidebar-w 0.25s ease;
+}
+
+.app-shell.sidebar-collapsed {
+  --sidebar-w: 68px;
+}
+
+.app-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  background: #f0f9f4;
+}
