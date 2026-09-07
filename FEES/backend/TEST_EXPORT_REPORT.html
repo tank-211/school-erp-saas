@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fee Report Export Testing</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 700px;
+      width: 100%;
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .button-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    button {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 14px;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-small {
+      padding: 8px 12px;
+      font-size: 12px;
+      background: #667eea;
+      color: white;
+      width: 100%;
+    }
+
+    .export-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 15px;
+    }
+
+    .option-card {
+      padding: 15px;
+      border: 1px solid #eee;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .option-card:hover {
+      border-color: #667eea;
+      background: #f8f9ff;
+    }
+
+    .option-card.active {
+      border-color: #667eea;
+      background: #f0f4ff;
+    }
+
+    .option-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .option-desc {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .status-message {
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .status-message.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+
+    .status-message.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+
+    .status-message.loading {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+      display: block;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-radius: 50%;
+      border-top-color: #667eea;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .info-box {
+      background: #f0f4ff;
+      border-left: 4px solid #667eea;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .endpoint-list {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-size: 12px;
+    }
+
+    .endpoint-list h3 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .endpoint-item {
+      padding: 8px;
+      margin-bottom: 6px;
+      background: white;
+      border-radius: 4px;
+      border-left: 2px solid #667eea;
+      padding-left: 10px;
+    }
+
+    .endpoint-method {
+      color: #667eea;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Fee Report Export Testing</h1>
+    <p class="subtitle">Test the Report Export functionality with different formats</p>
+
+    <div class="info-box">
+      🔐 <strong>Authentication Required:</strong> Enter your JWT token below to test the protected endpoints
+    </div>
+
+    <div id="statusMessage" class="status-message"></div>
+
+    <div class="form-group">
+      <label for="authToken">JWT Authorization Token</label>
+      <input
+        type="text"
+        id="authToken"
+        placeholder="Paste your JWT token here..."
+        value=""
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="apiBase">API Base URL</label>
+      <input
+        type="text"
+        id="apiBase"
+        placeholder="http://localhost:5000"
+        value="http://localhost:5000"
+      />
+    </div>
+
+    <div class="form-group">
+      <label>Select Report Format</label>
+      <div class="export-options">
+        <div class="option-card active" data-format="pdf">
+          <div class="option-title">📄 PDF Report</div>
+          <div class="option-desc">Comprehensive report in PDF</div>
+        </div>
+        <div class="option-card" data-format="stats">
+          <div class="option-title">📈 JSON Stats</div>
+          <div class="option-desc">Dashboard statistics</div>
+        </div>
+        <div class="option-card" data-format="transactions">
+          <div class="option-title">💳 Transactions CSV</div>
+          <div class="option-desc">Recent transactions</div>
+        </div>
+        <div class="option-card" data-format="pending">
+          <div class="option-title">⏳ Pending Payments CSV</div>
+          <div class="option-desc">Pending payments list</div>
+        </div>
+        <div class="option-card" data-format="refunds">
+          <div class="option-title">💰 Refunds CSV</div>
+          <div class="option-desc">Refund requests</div>
+        </div>
+        <div class="option-card" data-format="formats">
+          <div class="option-title">📋 Available Formats</div>
+          <div class="option-desc">List all formats</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="limit">Records Limit (for CSV exports)</label>
+      <input
+        type="number"
+        id="limit"
+        placeholder="50"
+        value="50"
+        min="1"
+        max="500"
+      />
+    </div>
+
+    <div class="button-group">
+      <button class="btn-primary" onclick="exportReport()">
+        ⬇️ Download Report
+      </button>
+      <button class="btn-secondary" onclick="testConnection()">
+        🔌 Test Connection
+      </button>
+    </div>
+
+    <div class="endpoint-list">
+      <h3>Available Endpoints</h3>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/export
+      </div>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/dashboard-stats
+      </div>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/transactions/csv
+      </div>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/pending-payments/csv
+      </div>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/refunds/csv
+      </div>
+      <div class="endpoint-item">
+        <span class="endpoint-method">GET</span> /api/reports/formats
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let selectedFormat = 'pdf';
+
+    // Format selection
+    document.querySelectorAll('.option-card').forEach((card) => {
+      card.addEventListener('click', function () {
+        document.querySelectorAll('.option-card').forEach((c) => {
+          c.classList.remove('active');
+        });
+        this.classList.add('active');
+        selectedFormat = this.dataset.format;
+      });
+    });
+
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.textContent = message;
+      statusDiv.className = `status-message ${type}`;
+    }
+
+    function showLoading(message) {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.innerHTML = `<span class="loading-spinner"></span>${message}`;
+      statusDiv.className = 'status-message loading';
+    }
+
+    async function testConnection() {
+      const token = document.getElementById('authToken').value;
+      const apiBase = document.getElementById('apiBase').value;
+
+      if (!token) {
+        showStatus('⚠️ Please enter your JWT token', 'error');
+        return;
+      }
+
+      showLoading('Testing connection...');
+
+      try {
+        const response = await fetch(`${apiBase}/api/reports/formats`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          showStatus(
+            `✅ Connection successful! Found ${data.data.length} report formats available.`,
+            'success'
+          );
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      } catch (error) {
+        showStatus(
+          `❌ Connection failed: ${error.message}. Check your token and API URL.`,
+          'error'
+        );
+      }
+    }
+
+    async function exportReport() {
+      const token = document.getElementById('authToken').value;
+      const apiBase = document.getElementById('apiBase').value;
+      const limit = document.getElementById('limit').value;
+
+      if (!token) {
+        showStatus('⚠️ Please enter your JWT token', 'error');
+        return;
+      }
+
+      showLoading(`Exporting ${selectedFormat} report...`);
+
+      try {
+        let endpoint = '';
+
+        switch (selectedFormat) {
+          case 'pdf':
+            endpoint = '/api/reports/export';
+            break;
+          case 'stats':
+            endpoint = '/api/reports/dashboard-stats';
+            break;
+          case 'transactions':
+            endpoint = `/api/reports/transactions/csv?limit=${limit}`;
+            break;
+          case 'pending':
+            endpoint = `/api/reports/pending-payments/csv?limit=${limit}`;
+            break;
+          case 'refunds':
+            endpoint = `/api/reports/refunds/csv?limit=${limit}`;
+            break;
+          case 'formats':
+            endpoint = '/api/reports/formats';
+            break;
+        }
+
+        const response = await fetch(`${apiBase}${endpoint}`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        if (selectedFormat === 'stats' || selectedFormat === 'formats') {
+          // For JSON responses, display in alert
+          const data = await response.json();
+          showStatus(
+            `✅ ${selectedFormat === 'stats' ? 'Stats loaded successfully!' : 'Formats loaded!'}`,
+            'success'
+          );
+          console.log('Response Data:', data);
+          alert(`Data loaded successfully!\n\n${JSON.stringify(data, null, 2)}`);
+        } else {
+          // For file downloads
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+
+          // Determine filename
+          let filename = 'report';
+          if (selectedFormat === 'pdf') {
+            filename = `Fee_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+          } else if (selectedFormat === 'transactions') {
+            filename = `Transactions_${new Date().toISOString().split('T')[0]}.csv`;
+          } else if (selectedFormat === 'pending') {
+            filename = `Pending_Payments_${new Date().toISOString().split('T')[0]}.csv`;
+          } else if (selectedFormat === 'refunds') {
+            filename = `Refund_Requests_${new Date().toISOString().split('T')[0]}.csv`;
+          }
+
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+
+          showStatus(
+            `✅ Report exported successfully! File: ${filename}`,
+            'success'
+          );
+        }
+      } catch (error) {
+        showStatus(`❌ Export failed: ${error.message}`, 'error');
+        console.error('Export error:', error);
+      }
+    }
+
+    // Allow Enter key to trigger export
+    document.getElementById('authToken').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        exportReport();
+      }
+    });
+  </script>
+</body>
+</html>
