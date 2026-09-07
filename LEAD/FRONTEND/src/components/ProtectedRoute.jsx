@@ -105,10 +105,14 @@ export const useAuth = () => {
   };
 
   const logout = () => {
-    tokenManager.removeToken();
-    setIsAuthenticated(false);
     setUser(null);
-    navigate('/login');
+    setToken(null);
+    setIsAuthenticated(false);
+
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('user');
+    localStorage.removeItem('role');
   };
 
   return {
