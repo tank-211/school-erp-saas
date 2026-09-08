@@ -68,8 +68,8 @@ export const getDashboardStats = async (schoolId: string) => {
 export const getMonthlyCollectionTrends = async (schoolId: string) => {
   try {
     const payments = await prisma.payment.findMany({
-      where: { school_id: BigInt(schoolId) },
       where: {
+        school_id: BigInt(schoolId),
         created_at: {
           gte: new Date(new Date().getFullYear(), 0, 1),
         },
@@ -82,7 +82,6 @@ export const getMonthlyCollectionTrends = async (schoolId: string) => {
         created_at: 'asc',
       },
     });
-
     // Aggregate by month
     const monthlyData = new Map<
       number,
