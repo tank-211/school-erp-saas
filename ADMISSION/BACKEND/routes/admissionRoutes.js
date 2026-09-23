@@ -33,6 +33,12 @@ router.get('/search', admissionController.searchAdmissions);
  */
 router.get('/', admissionController.getAllAdmissions);
 
+
+router.get(
+  "/enrollment-stats",
+  admissionController.getEnrollmentStats
+);
+
 /**
  * GET /api/admissions/:applicationId
  * Get admission details by application ID

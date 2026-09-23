@@ -740,6 +740,26 @@ export const updateApplicationProgress = async (req, res) => {
   }
 };
 
+export const getEnrollmentStats = async (req, res) => {
+  try {
+    const stats = await admissionService.getEnrollmentStats(
+      req.user.school_id
+    );
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error("Error fetching enrollment stats:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch enrollment statistics"
+    });
+  }
+};
+
 /**
  * Save academic details for an admission
  * POST /api/admissions/save-academic
@@ -752,6 +772,7 @@ export default {
   getAdmissionById,
   createAdmission,
   createFromLead,
+  getEnrollmentStats,
   submitAdmission,
   uploadDocument,
   getApplicationProgress,

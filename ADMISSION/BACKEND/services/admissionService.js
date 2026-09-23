@@ -1141,8 +1141,66 @@ export const createAdmissionFromFormData = async (user, body, files = {}) => {
   }
 };
 
+export const getEnrollmentStats = async (schoolId) => {
+  const schoolIdBigInt = BigInt(schoolId);
+
+  const now = new Date();
+
+  const startOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1
+  );
+
+  const endOfMonth = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1
+  );
+
+  const [
+    totalEnrolled,
+    thisMonth,
+    processing
+  ] = await Promise.all([
+    prisma.admission.count({
+      where: {
+        school_id: schoolIdBigInt,
+        status: "active"
+      }
+    }),
+
+    prisma.admission.count({
+      where: {
+        school_id: schoolIdBigInt,
+        status: "active",
+        admission_date: {
+          gte: startOfMonth,
+          lt: endOfMonth
+        }
+      }
+    }),
+
+    prisma.admission.count({
+      where: {
+        school_id: schoolIdBigInt,
+        status: {
+          notIn: ["active", "admission_completed"]
+        }
+      }
+    })
+  ]);
+
+  return {
+    totalEnrolled,
+    thisMonth,
+    processing
+  };
+};
+
 export default {
   getAdmissionStats,
+  getEnrollmentStats,
   searchAdmissions,
   getAdmissions,
   getAdmissionById,
