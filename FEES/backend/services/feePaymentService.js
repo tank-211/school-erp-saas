@@ -1,7 +1,6 @@
 import FeePayment from '../models/FeePayment.js';
 import Student from '../models/Student.js';
 import {
-  calculateOverdueFee,
   calculatePendingAmount,
   getPaymentStatus
 } from '../utils/feeCalculations.js';
@@ -11,9 +10,20 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export class FeePaymentService {
+
+  /*
+   * ============================================================
+   * LEGACY MONGOOSE METHODS
+   * ============================================================
+   *
+   * These are kept temporarily because existing legacy routes
+   * may still use them.
+   */
+
   static async createFeePayment(paymentData) {
     try {
       const student = await Student.findById(paymentData.student);
+
       if (!student) {
         throw new Error('Student not found');
       }
@@ -34,6 +44,7 @@ export class FeePaymentService {
       await feePayment.populate('student').populate('feeStructure');
 
       logger.info(`Fee payment created: ${feePayment._id}`);
+
       return feePayment;
     } catch (error) {
       logger.error(`Create fee payment error: ${error.message}`);
@@ -55,6 +66,7 @@ export class FeePaymentService {
       });
 
       feePayment.amountPaid += paymentData.amount;
+
       feePayment.amountPending = calculatePendingAmount(
         feePayment.totalAmount,
         feePayment.amountPaid
@@ -69,6 +81,7 @@ export class FeePaymentService {
       await feePayment.save();
 
       logger.info(`Payment recorded for: ${feePaymentId}`);
+
       return feePayment;
     } catch (error) {
       logger.error(`Record payment error: ${error.message}`);
@@ -76,10 +89,12 @@ export class FeePaymentService {
     }
   }
 
-  static async getPendingPayments(filters, skip, limit) {
+  static async getPendingPayments(filters = {}, skip = 0, limit = 10) {
     try {
       const query = {
-        paymentStatus: { $in: ['pending', 'partial', 'overdue'] },
+        paymentStatus: {
+          $in: ['pending', 'partial', 'overdue']
+        },
         ...filters
       };
 
@@ -92,22 +107,35 @@ export class FeePaymentService {
 
       const total = await FeePayment.countDocuments(query);
 
-      return { payments, total };
+      return {
+        payments,
+        total
+      };
     } catch (error) {
       logger.error(`Get pending payments error: ${error.message}`);
       throw error;
     }
   }
 
-  static async getOverduePayments(gracePeriodDays = 0, skip, limit) {
+  static async getOverduePayments(
+    gracePeriodDays = 0,
+    skip = 0,
+    limit = 10
+  ) {
     try {
-      const now = new Date();
       const graceDate = new Date();
-      graceDate.setDate(graceDate.getDate() + gracePeriodDays);
+
+      graceDate.setDate(
+        graceDate.getDate() + gracePeriodDays
+      );
 
       const query = {
-        dueDate: { $lt: graceDate },
-        paymentStatus: { $ne: 'paid' }
+        dueDate: {
+          $lt: graceDate
+        },
+        paymentStatus: {
+          $ne: 'paid'
+        }
       };
 
       const payments = await FeePayment.find(query)
@@ -119,450 +147,498 @@ export class FeePaymentService {
 
       const total = await FeePayment.countDocuments(query);
 
-      return { payments, total };
+      return {
+        payments,
+        total
+      };
     } catch (error) {
       logger.error(`Get overdue payments error: ${error.message}`);
       throw error;
     }
   }
 
-  static async getDashboardStats() {
+  /*
+   * ============================================================
+   * CURRENT PRISMA / POSTGRESQL FEES SYSTEM
+   * ============================================================
+   */
+
+  static async getDashboardStats(schoolId) {
     try {
-      const stats = await FeePayment.aggregate([
-        {
-          $group: {
-            _id: '$paymentStatus',
-            count: { $sum: 1 },
-            totalAmount: { $sum: '$totalAmount' },
-            totalCollected: { $sum: '$amountPaid' }
-          }
-        }
-      ]);
+      if (!schoolId) {
+        throw new Error('School ID is required');
+      }
 
-      const totalCollected = await FeePayment.aggregate([
-        { $match: { paymentStatus: 'paid' } },
-        { $group: { _id: null, total: { $sum: '$amountPaid' } } }
-      ]);
+      const schoolIdBigInt = BigInt(schoolId);
 
-      const paymentByMethod = await FeePayment.aggregate([
-        { $unwind: '$payments' },
-        {
-          $group: {
-            _id: '$payments.paymentMethod',
-            count: { $sum: 1 },
-            total: { $sum: '$payments.amount' }
-          }
+      const stats = await prisma.invoice.aggregate({
+        where: {
+          school_id: schoolIdBigInt
+        },
+        _sum: {
+          total_amount: true,
+          paid_amount: true,
+          pending_amount: true
         }
-      ]);
+      });
 
       return {
-        statsByStatus: stats,
-        totalCollected: totalCollected[0]?.total || 0,
-        paymentByMethod
+        total_amount: Number(
+          stats._sum.total_amount || 0
+        ),
+        paid_amount: Number(
+          stats._sum.paid_amount || 0
+        ),
+        pending_amount: Number(
+          stats._sum.pending_amount || 0
+        )
       };
     } catch (error) {
-      logger.error(`Get dashboard stats error: ${error.message}`);
+      logger.error(
+        `Get dashboard stats error: ${error.message}`
+      );
+
       throw error;
     }
   }
 
-  static async getMonthlyCollectionData(year) {
+  /*
+   * Get recent payments from the CURRENT payment table.
+   */
+  static async getRecentTransactions(
+    limit = 5,
+    schoolId = null
+  ) {
     try {
-      const data = await FeePayment.aggregate([
-        {
-          $unwind: '$payments'
-        },
-        {
-          $match: {
-            'payments.paymentDate': {
-              $gte: new Date(`${year}-01-01`),
-              $lt: new Date(`${year + 1}-01-01`)
-            }
-          }
-        },
-        {
-          $group: {
-            _id: {
-              $month: '$payments.paymentDate'
+      const where = {};
+
+      if (schoolId) {
+        where.school_id = BigInt(schoolId);
+      }
+
+      const transactions =
+        await prisma.payment.findMany({
+          where,
+          take: Number(limit) || 5,
+          orderBy: {
+            created_at: 'desc'
+          },
+          include: {
+            invoice: {
+              select: {
+                id: true,
+                invoice_number: true
+              }
             },
-            total: { $sum: '$payments.amount' },
-            count: { $sum: 1 }
-          }
-        },
-        {
-          $sort: { _id: 1 }
-        }
-      ]);
-
-      return data;
-    } catch (error) {
-      logger.error(`Get monthly collection data error: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Fetches comprehensive financial dashboard data including:
-   * 1. Monthly collection data (amount grouped by month for current year)
-   * 2. Payment method distribution
-   * 3. 5 most recent transactions with student and class details
-   */
-  static async getFinancialDashboardData(year = new Date().getFullYear()) {
-    try {
-      // Query 1: Monthly collection data (sum of amount grouped by month)
-      const monthlyData = await prisma.payment.groupBy({
-        by: ['createdAt'],
-        _sum: {
-          amount: true
-        },
-        where: {
-          createdAt: {
-            gte: new Date(`${year}-01-01`),
-            lt: new Date(`${year + 1}-01-01`)
-          }
-        }
-      });
-
-      // Transform monthly data into monthly buckets
-      const monthlyCollectionMap = new Map();
-      monthlyData.forEach(item => {
-        const month = new Date(item.createdAt).getMonth() + 1;
-        if (!monthlyCollectionMap.has(month)) {
-          monthlyCollectionMap.set(month, 0);
-        }
-        monthlyCollectionMap.set(month, monthlyCollectionMap.get(month) + Number(item._sum.amount || 0));
-      });
-
-      // Format monthly data for bar chart
-      const monthlyCollectionForChart = Array.from({ length: 12 }, (_, index) => ({
-        month: index + 1,
-        monthName: new Date(year, index).toLocaleString('default', { month: 'short' }),
-        amount: monthlyCollectionMap.get(index + 1) || 0
-      }));
-
-      // Query 2: Payment method distribution
-      const paymentMethodDistribution = await prisma.payment.groupBy({
-        by: ['paymentMethod'],
-        _count: {
-          id: true
-        },
-        _sum: {
-          amount: true
-        }
-      });
-
-      // Transform payment method data for pie chart
-      const paymentMethodForChart = paymentMethodDistribution.map(item => ({
-        method: item.paymentMethod,
-        count: item._count.id,
-        totalAmount: Number(item._sum.amount || 0)
-      }));
-
-      // Query 3: 5 most recent transactions with student and class details
-      const recentTransactions = await prisma.payment.findMany({
-        take: 5,
-        orderBy: {
-          createdAt: 'desc'
-        },
-        include: {
-          feePayment: {
-            include: {
-              student: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  studentId: true
-                }
-              },
-              feeStructure: {
-                include: {
-                  class: {
-                    select: {
-                      name: true
-                    }
-                  }
-                }
+            student: {
+              select: {
+                id: true,
+                first_name: true,
+                middle_name: true,
+                last_name: true,
+                admission_number: true
               }
             }
           }
-        }
-      });
+        });
 
-      // Format recent transactions with required fields
-      const formattedTransactions = recentTransactions.map(transaction => {
-        const student = transaction.feePayment?.student;
-        const classInfo = transaction.feePayment?.feeStructure?.class;
-        const feePaymentStatus = transaction.feePayment?.paymentStatus;
+      return transactions.map((transaction) => ({
+        id: transaction.id?.toString(),
 
-        return {
-          id: transaction.id,
-          studentName: student ? `${student.firstName} ${student.lastName}` : 'N/A',
-          studentId: student?.studentId || 'N/A',
-          invoiceNo: transaction.id, // Using transaction ID as invoice number, adjust if you have a different field
-          class: classInfo?.name || 'N/A',
-          amount: Number(transaction.amount),
-          method: transaction.paymentMethod,
-          status: feePaymentStatus || 'UNKNOWN',
-          transactionDate: transaction.createdAt,
-          transactionId: transaction.transactionId
-        };
-      });
+        studentName: [
+          transaction.student?.first_name,
+          transaction.student?.middle_name,
+          transaction.student?.last_name
+        ]
+          .filter(Boolean)
+          .join(' ') || 'N/A',
 
-      // Combine all data into single response object
-      const dashboardData = {
-        year,
-        monthlyCollection: {
-          title: 'Monthly Fee Collection',
-          data: monthlyCollectionForChart,
-          totalCollected: monthlyCollectionForChart.reduce((sum, item) => sum + item.amount, 0)
-        },
-        paymentMethodDistribution: {
-          title: 'Payment Method Distribution',
-          data: paymentMethodForChart,
-          total: paymentMethodForChart.reduce((sum, item) => sum + item.count, 0)
-        },
-        recentTransactions: {
-          title: 'Recent Transactions',
-          data: formattedTransactions,
-          count: formattedTransactions.length
-        },
-        summary: {
-          totalCollected: paymentMethodForChart.reduce((sum, item) => sum + item.totalAmount, 0),
-          totalTransactions: paymentMethodForChart.reduce((sum, item) => sum + item.count, 0),
-          averageTransactionAmount: paymentMethodForChart.length > 0 
-            ? paymentMethodForChart.reduce((sum, item) => sum + item.totalAmount, 0) / 
-              paymentMethodForChart.reduce((sum, item) => sum + item.count, 0)
-            : 0
-        }
-      };
+        studentId:
+          transaction.student?.admission_number ||
+          'N/A',
 
-      logger.info(`Financial dashboard data retrieved for year ${year}`);
-      return dashboardData;
+        invoiceNo:
+          transaction.invoice?.invoice_number ||
+          'N/A',
+
+        amount: Number(
+          transaction.amount || 0
+        ),
+
+        method:
+          transaction.payment_method ||
+          'N/A',
+
+        status:
+          transaction.status ||
+          'N/A',
+
+        transactionDate:
+          transaction.payment_date ||
+          transaction.created_at,
+
+        transactionId:
+          transaction.transaction_id ||
+          null
+      }));
     } catch (error) {
-      logger.error(`Get financial dashboard data error: ${error.message}`);
+      logger.error(
+        `Get recent transactions error: ${error.message}`
+      );
+
       throw error;
     }
   }
 
-  /**
-   * Submit fee payment from frontend
-   * Saves fee payment record to database with validation
-   * @param {Object} paymentData - Fee payment data from frontend
-   * @returns {Promise<Object>} - Created fee payment record
+  /*
+   * Get pending invoices from CURRENT PostgreSQL system.
    */
-  static async submitFeePayment(paymentData) {
-    try {
-      // Validate that amountPaid does not exceed totalAmount
-      if (paymentData.amountPaid > paymentData.totalAmount) {
-        const error = new Error(`Amount paid (₹${paymentData.amountPaid}) cannot exceed total amount (₹${paymentData.totalAmount})`);
-        error.statusCode = 400;
-        throw error;
-      }
-
-      // Calculate amountPending
-      const amountPending = paymentData.totalAmount - paymentData.amountPaid;
-
-      // Determine payment status based on amountPaid and totalAmount
-      let paymentStatus = paymentData.paymentStatus || 'pending';
-      if (paymentData.amountPaid === paymentData.totalAmount) {
-        paymentStatus = 'paid';
-      } else if (paymentData.amountPaid > 0) {
-        paymentStatus = 'partial';
-      }
-
-      // Create fee payment record
-      const feePayment = new FeePayment({
-        totalAmount: paymentData.totalAmount,
-        amountPaid: paymentData.amountPaid,
-        amountPending: amountPending,
-        paymentMethod: paymentData.paymentMethod,
-        paymentStatus: paymentStatus,
-        student: paymentData.student || null,
-        dueDate: paymentData.dueDate || null,
-        payments: paymentData.amountPaid > 0 ? [
-          {
-            amount: paymentData.amountPaid,
-            paymentMethod: paymentData.paymentMethod,
-            paymentDate: new Date()
-          }
-        ] : []
-      });
-
-      // Save to database
-      await feePayment.save();
-      
-      // Populate references if available
-      if (feePayment.student) {
-        await feePayment.populate('student');
-      }
-
-      logger.info(`Fee payment submitted and saved: ${feePayment._id}`);
-      return feePayment;
-    } catch (error) {
-      logger.error(`Submit fee payment error: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-<<<<<<< HEAD
-   * Get a single fee payment by ID with related data
-   */
-  static async getFeePaymentById(id) {
-    try {
-      const feePayment = await prisma.feePayment.findUnique({
-        where: { id },
-        include: {
-          student: {
-            include: {
-              course: true,
-              class: true
-            }
-          },
-          feeStructure: {
-            include: {
-              components: true
-            }
-          },
-          payments: true
-        }
-      });
-
-      return feePayment;
-    } catch (error) {
-      logger.error(`Get fee payment by ID error: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Get pending fees with filters and pagination
-   */
-  static async getPendingFees(filters = {}, skip = 0, limit = 10) {
+  static async getPendingFees(
+    filters = {},
+    skip = 0,
+    limit = 10
+  ) {
     try {
       const where = {
-        paymentStatus: {
-          in: ['PENDING', 'PARTIAL', 'OVERDUE']
+        pending_amount: {
+          gt: 0
+        },
+        status: {
+          in: [
+            'unpaid',
+            'partial',
+            'pending'
+          ]
         }
       };
 
-      if (filters.studentId) {
-        where.studentId = filters.studentId;
+      if (filters.schoolId) {
+        where.school_id = BigInt(
+          filters.schoolId
+        );
       }
-      if (filters.classId) {
-        where.student = {
-          classId: filters.classId
-        };
-      }
-
-      const pendingFees = await prisma.feePayment.findMany({
-        where,
-        include: {
-          student: {
-            include: {
-              course: true,
-              class: true
-            }
-          }
-        },
-        orderBy: { dueDate: 'asc' },
-        skip,
-        take: limit
-      });
-
-      return pendingFees;
-    } catch (error) {
-      logger.error(`Get pending fees error: ${error.message}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Count pending fees matching filters
-   */
-  static async countPendingFees(filters = {}) {
-    try {
-      const where = {
-        paymentStatus: {
-          in: ['PENDING', 'PARTIAL', 'OVERDUE']
-        }
-      };
 
       if (filters.studentId) {
-        where.studentId = filters.studentId;
-      }
-      if (filters.classId) {
-        where.student = {
-          classId: filters.classId
-        };
+        where.student_id = BigInt(
+          filters.studentId
+        );
       }
 
-      const count = await prisma.feePayment.count({ where });
-      return count;
-    } catch (error) {
-      logger.error(`Count pending fees error: ${error.message}`);
-=======
-   * Get recent transactions with customizable limit
-   * @param {number} limit - Number of recent transactions to fetch (default: 5)
-   * @returns {Promise<Array>} - Array of formatted recent transactions
-   */
-  static async getRecentTransactions(limit = 5) {
-    try {
-      // Query recent payments with related data
-      const recentTransactions = await prisma.payment.findMany({
-        take: parseInt(limit) || 5,
-        orderBy: {
-          createdAt: 'desc'
-        },
-        include: {
-          feePayment: {
+      const [invoices, total] =
+        await Promise.all([
+          prisma.invoice.findMany({
+            where,
+
             include: {
               student: {
                 select: {
-                  firstName: true,
-                  lastName: true,
-                  studentId: true
-                }
-              },
-              feeStructure: {
-                include: {
-                  class: {
-                    select: {
-                      name: true
-                    }
-                  }
+                  id: true,
+                  first_name: true,
+                  middle_name: true,
+                  last_name: true,
+                  admission_number: true
                 }
               }
-            }
-          }
-        }
-      });
+            },
 
-      // Format recent transactions with required fields
-      const formattedTransactions = recentTransactions.map(transaction => {
-        const student = transaction.feePayment?.student;
-        const classInfo = transaction.feePayment?.feeStructure?.class;
-        const feePaymentStatus = transaction.feePayment?.paymentStatus;
+            orderBy: {
+              created_at: 'desc'
+            },
 
-        return {
-          id: transaction.id,
-          studentName: student ? `${student.firstName} ${student.lastName}` : 'N/A',
-          studentId: student?.studentId || 'N/A',
-          invoiceNo: transaction.id,
-          class: classInfo?.name || 'N/A',
-          amount: Number(transaction.amount),
-          method: transaction.paymentMethod,
-          status: feePaymentStatus || 'UNKNOWN',
-          transactionDate: transaction.createdAt,
-          transactionId: transaction.transactionId
-        };
-      });
+            skip,
+            take: limit
+          }),
 
-      logger.info(`Retrieved ${formattedTransactions.length} recent transactions`);
-      return formattedTransactions;
+          prisma.invoice.count({
+            where
+          })
+        ]);
+
+      return {
+        payments: invoices,
+        total,
+        page:
+          Math.floor(skip / limit) + 1,
+        limit
+      };
     } catch (error) {
-      logger.error(`Get recent transactions error: ${error.message}`);
->>>>>>> fb830a8cde2f8184c9b1c9a6fa1b5ff18bd74c3f
+      logger.error(
+        `Get pending fees error: ${error.message}`
+      );
+
+      throw error;
+    }
+  }
+
+  /*
+   * Count pending invoices.
+   */
+  static async countPendingFees(
+    filters = {}
+  ) {
+    try {
+      const where = {
+        pending_amount: {
+          gt: 0
+        },
+        status: {
+          in: [
+            'unpaid',
+            'partial',
+            'pending'
+          ]
+        }
+      };
+
+      if (filters.schoolId) {
+        where.school_id = BigInt(
+          filters.schoolId
+        );
+      }
+
+      if (filters.studentId) {
+        where.student_id = BigInt(
+          filters.studentId
+        );
+      }
+
+      return await prisma.invoice.count({
+        where
+      });
+    } catch (error) {
+      logger.error(
+        `Count pending fees error: ${error.message}`
+      );
+
+      throw error;
+    }
+  }
+
+  /*
+   * Get overdue invoices.
+   */
+  static async getOverduePaymentsPrisma(
+    schoolId = null,
+    skip = 0,
+    limit = 10
+  ) {
+    try {
+      const where = {
+        due_date: {
+          lt: new Date()
+        },
+        pending_amount: {
+          gt: 0
+        }
+      };
+
+      if (schoolId) {
+        where.school_id = BigInt(
+          schoolId
+        );
+      }
+
+      const [invoices, total] =
+        await Promise.all([
+          prisma.invoice.findMany({
+            where,
+
+            include: {
+              student: {
+                select: {
+                  id: true,
+                  first_name: true,
+                  middle_name: true,
+                  last_name: true,
+                  admission_number: true
+                }
+              }
+            },
+
+            orderBy: {
+              due_date: 'asc'
+            },
+
+            skip,
+            take: limit
+          }),
+
+          prisma.invoice.count({
+            where
+          })
+        ]);
+
+      return {
+        payments: invoices,
+        total,
+        page:
+          Math.floor(skip / limit) + 1,
+        limit
+      };
+    } catch (error) {
+      logger.error(
+        `Get overdue payments error: ${error.message}`
+      );
+
+      throw error;
+    }
+  }
+
+  /*
+   * Submit a payment against an invoice.
+   *
+   * This is the CURRENT PostgreSQL payment flow.
+   */
+  static async submitInvoicePayment(
+    invoiceId,
+    paymentData,
+    schoolId
+  ) {
+    try {
+      if (!invoiceId) {
+        throw new Error(
+          'Invoice ID is required'
+        );
+      }
+
+      if (!schoolId) {
+        throw new Error(
+          'School ID is required'
+        );
+      }
+
+      const amount = Number(
+        paymentData.amount
+      );
+
+      if (!amount || amount <= 0) {
+        throw new Error(
+          'Payment amount must be greater than zero'
+        );
+      }
+
+      const invoice =
+        await prisma.invoice.findFirst({
+          where: {
+            id: BigInt(invoiceId),
+            school_id: BigInt(schoolId)
+          }
+        });
+
+      if (!invoice) {
+        throw new Error(
+          'Invoice not found'
+        );
+      }
+
+      const totalAmount =
+        Number(invoice.total_amount);
+
+      const currentPaid =
+        Number(invoice.paid_amount || 0);
+
+      const currentPending =
+        Number(invoice.pending_amount || 0);
+
+      if (amount > currentPending) {
+        throw new Error(
+          `Payment amount (₹${amount}) cannot exceed pending amount (₹${currentPending})`
+        );
+      }
+
+      const newPaid =
+        currentPaid + amount;
+
+      const newPending =
+        totalAmount - newPaid;
+
+      const newStatus =
+        newPending <= 0
+          ? 'paid'
+          : newPaid > 0
+            ? 'partial'
+            : 'unpaid';
+
+      const result =
+        await prisma.$transaction(
+          async (tx) => {
+
+            const payment =
+              await tx.payment.create({
+                data: {
+                  school_id:
+                    invoice.school_id,
+
+                  student_id:
+                    invoice.student_id,
+
+                  invoice_id:
+                    invoice.id,
+
+                  payment_number:
+                    `PAY-${Date.now()}`,
+
+                  amount,
+
+                  payment_date:
+                    new Date(),
+
+                  payment_method:
+                    paymentData.paymentMethod ||
+                    'cash',
+
+                  transaction_id:
+                    paymentData.transactionId ||
+                    null,
+
+                  status:
+                    newStatus,
+
+                  remarks:
+                    paymentData.notes ||
+                    null
+                }
+              });
+
+            const updatedInvoice =
+              await tx.invoice.update({
+                where: {
+                  id: invoice.id
+                },
+
+                data: {
+                  paid_amount:
+                    newPaid,
+
+                  pending_amount:
+                    newPending,
+
+                  status:
+                    newStatus,
+
+                  updated_at:
+                    new Date()
+                }
+              });
+
+            return {
+              payment,
+              invoice:
+                updatedInvoice
+            };
+          }
+        );
+
+      return {
+        payment: result.payment,
+        invoice: result.invoice
+      };
+
+    } catch (error) {
+      logger.error(
+        `Submit invoice payment error: ${error.message}`
+      );
+
       throw error;
     }
   }

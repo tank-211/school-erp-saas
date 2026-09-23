@@ -41,131 +41,111 @@ export class DashboardService {
    * Refund requests:
    *   refund_request.amount for this school
    */
-  static async getDashboardMetrics(schoolId: string) {
-    try {
-      const schoolIdBigInt = this.getSchoolId(schoolId);
+static async getDashboardMetrics(schoolId: string) {
+  try {
+    const schoolIdBigInt = this.getSchoolId(schoolId);
 
-      logger.info(
-        `📊 Fetching dashboard metrics for school ${schoolId}`
-      );
+    logger.info(
+      `📊 Fetching dashboard metrics for school ${schoolId}`
+    );
 
-      const twelveMonthsAgo = new Date(
-        Date.now() - 12 * 30 * 24 * 60 * 60 * 1000
-      );
+    const twelveMonthsAgo = new Date(
+      Date.now() - 12 * 30 * 24 * 60 * 60 * 1000
+    );
 
-      const now = new Date();
+    const now = new Date();
 
-      const [
-        totalCollected,
-        invoices,
-        refundRequests
-      ] = await Promise.all([
-        prisma.payment.aggregate({
-          _sum: {
-            amount: true
+    const [totalCollected, invoices] = await Promise.all([
+      prisma.payment.aggregate({
+        _sum: {
+          amount: true,
+        },
+        where: {
+          school_id: schoolIdBigInt,
+          payment_date: {
+            gte: twelveMonthsAgo,
           },
-          where: {
-            school_id: schoolIdBigInt,
-            payment_date: {
-              gte: twelveMonthsAgo
-            },
-            status: {
-              not: 'cancelled'
-            }
-          }
-        }),
-
-        prisma.invoice.findMany({
-          where: {
-            school_id: schoolIdBigInt
+          status: {
+            not: 'cancelled',
           },
-          select: {
-            id: true,
-            total_amount: true,
-            due_date: true,
+        },
+      }),
 
-            payment: {
-              where: {
-                status: {
-                  not: 'cancelled'
-                }
+      prisma.invoice.findMany({
+        where: {
+          school_id: schoolIdBigInt,
+        },
+        select: {
+          id: true,
+          total_amount: true,
+          due_date: true,
+          payment: {
+            where: {
+              status: {
+                not: 'cancelled',
               },
-              select: {
-                amount: true
-              }
-            }
-          }
-        }),
-
-        prisma.refund_request.aggregate({
-          _sum: {
-            amount: true
+            },
+            select: {
+              amount: true,
+            },
           },
-          where: {
-            school_id: schoolIdBigInt
-          }
-        })
-      ]);
+        },
+      }),
+    ]);
 
-      let totalPending = 0;
-      let totalOverdue = 0;
+    let totalPending = 0;
+    let totalOverdue = 0;
 
-      for (const invoice of invoices) {
-        const totalAmount = Number(invoice.total_amount ?? 0);
+    for (const invoice of invoices) {
+      const totalAmount = Number(invoice.total_amount ?? 0);
 
-        const paidAmount = invoice.payment.reduce(
-          (sum, payment) =>
-            sum + Number(payment.amount ?? 0),
-          0
-        );
+      const paidAmount = invoice.payment.reduce(
+        (sum, payment) => sum + Number(payment.amount ?? 0),
+        0
+      );
 
-        const pendingAmount = Math.max(
-          totalAmount - paidAmount,
-          0
-        );
+      const pendingAmount = Math.max(
+        totalAmount - paidAmount,
+        0
+      );
 
-        if (pendingAmount > 0) {
-          totalPending += pendingAmount;
+      if (pendingAmount > 0) {
+        totalPending += pendingAmount;
 
-          if (invoice.due_date < now) {
-            totalOverdue += pendingAmount;
-          }
+        if (invoice.due_date && invoice.due_date < now) {
+          totalOverdue += pendingAmount;
         }
       }
-
-      const metrics = {
-        totalFeesCollected: Number(
-          totalCollected._sum.amount ?? 0
-        ),
-
-        pendingPayments: totalPending,
-
-        overduePayments: totalOverdue,
-
-        refundRequests: Number(
-          refundRequests._sum.amount ?? 0
-        )
-      };
-
-      logger.info(
-        `✅ Dashboard metrics fetched for school ${schoolId}`,
-        metrics
-      );
-
-      return metrics;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : 'Unknown error';
-
-      logger.error(
-        `Error fetching dashboard metrics for school ${schoolId}: ${errorMessage}`
-      );
-
-      throw error;
     }
+
+    const metrics = {
+      totalFeesCollected: Number(
+        totalCollected._sum.amount ?? 0
+      ),
+      pendingPayments: totalPending,
+      overduePayments: totalOverdue,
+      refundRequests: 0,
+    };
+
+    logger.info(
+      `✅ Dashboard metrics fetched for school ${schoolId}`,
+      metrics
+    );
+
+    return metrics;
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : 'Unknown error';
+
+    logger.error(
+      `Error fetching dashboard metrics for school ${schoolId}: ${errorMessage}`
+    );
+
+    throw error;
   }
+}
 
   /**
    * Get monthly collection trend.
@@ -194,49 +174,20 @@ export class DashboardService {
         }>
       >`
         SELECT
-          DATE_TRUNC(
-            'month',
-            p.payment_date
-          )::DATE AS collection_month,
-
-          TO_CHAR(
-            DATE_TRUNC(
-              'month',
-              p.payment_date
-            ),
-            'Mon'
-          ) AS month_name,
-
-          EXTRACT(
-            MONTH FROM p.payment_date
-          )::INT AS month_number,
-
-          COALESCE(
-            SUM(p.amount),
-            0
-          )::FLOAT AS collected_amount,
-
+          DATE_TRUNC('month', p.payment_date)::DATE AS collection_month,
+          TO_CHAR(DATE_TRUNC('month', p.payment_date), 'Mon') AS month_name,
+          EXTRACT(MONTH FROM p.payment_date)::INT AS month_number,
+          COALESCE(SUM(p.amount), 0)::FLOAT AS collected_amount,
           COUNT(p.id)::INT AS transaction_count
-
         FROM payment p
-
         WHERE p.school_id = ${schoolIdBigInt}
-          AND EXTRACT(
-            YEAR FROM p.payment_date
-          ) = ${year}
+          AND EXTRACT(YEAR FROM p.payment_date) = ${year}
           AND p.status <> 'cancelled'
-
         GROUP BY
-          DATE_TRUNC(
-            'month',
-            p.payment_date
-          )
-
+          DATE_TRUNC('month', p.payment_date),
+          EXTRACT(MONTH FROM p.payment_date)
         ORDER BY
-          DATE_TRUNC(
-            'month',
-            p.payment_date
-          ) ASC
+          DATE_TRUNC('month', p.payment_date) ASC
       `;
 
       logger.info(

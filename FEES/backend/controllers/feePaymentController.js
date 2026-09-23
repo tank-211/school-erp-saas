@@ -109,11 +109,28 @@ export const getOverduePayments = async (req, res, next) => {
 
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const stats = await FeePaymentService.getDashboardStats();
-    return sendSuccessResponse(res, 'Dashboard stats retrieved successfully', stats);
+    const schoolId = req.user.school_id;
+
+    const stats =
+      await FeePaymentService.getDashboardStats(
+        schoolId
+      );
+
+    return sendSuccessResponse(
+      res,
+      'Dashboard stats retrieved successfully',
+      stats
+    );
   } catch (error) {
-    logger.error(`Get dashboard stats error: ${error.message}`);
-    return sendErrorResponse(res, error.message, 400);
+    logger.error(
+      `Get dashboard stats error: ${error.message}`
+    );
+
+    return sendErrorResponse(
+      res,
+      error.message,
+      400
+    );
   }
 };
 
