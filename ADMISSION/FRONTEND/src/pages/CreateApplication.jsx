@@ -27,7 +27,7 @@ export function CreateApplication() {
 
   // State for application configuration
   const [form, setForm] = useState({
-    year: "1", // Academic year ID
+    year: "6", // Academic year ID
     type: "new",
   });
 
@@ -62,7 +62,7 @@ export function CreateApplication() {
 
       console.log("✅ Application created with ID:", result.id);
 
-      sessionStorage.setItem("activeAdmissionId", String(result.id));
+      sessionStorage.setItem("activeApplicationId", String(result.id));
 
       // Navigate to multi-step form
       navigate(`/applications/form/${result.id}`, {
@@ -285,9 +285,7 @@ export function CreateApplication() {
                   }
                 >
                   <option value="">Select academic year</option>
-                  <option value="1">2024-25</option>
-                  <option value="2">2025-26</option>
-                  <option value="3">2026-27</option>
+                  <option value="6">2026-27</option>
                 </select>
               </div>
 

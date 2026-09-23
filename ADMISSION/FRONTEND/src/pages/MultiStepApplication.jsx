@@ -385,7 +385,7 @@ export function MultiStepApplication() {
 
   useEffect(() => {
     if (applicationId) {
-      sessionStorage.setItem("activeAdmissionId", String(applicationId));
+      sessionStorage.setItem("activeApplicationId", String(applicationId));
     }
   }, [applicationId]);
 

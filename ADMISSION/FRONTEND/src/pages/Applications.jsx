@@ -127,13 +127,13 @@ export function Applications() {
 
   // Handle view application
   const handleViewApplication = (appId) => {
-    navigate(`/application/${appId}`);
+    navigate(`/applications/${appId}/details`);
   };
 
   const handleResumeDraft = async (appId) => {
     try {
       await resumeDraftApplication(appId);
-      navigate(`/application/${appId}`);
+      navigate(`/applications/form/${appId}`);
     } catch (err) {
       setError(err.message || "Unable to resume draft application");
     }

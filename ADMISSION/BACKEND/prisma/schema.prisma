@@ -42,6 +42,8 @@ model admission {
   section_id             BigInt
   admission_date         DateTime                 @db.Date
   status                 String?                  @default("active") @db.VarChar(50)
+  current_step           String?                  @default("student") @db.VarChar(30)
+  is_completed           Boolean
   admission_type         String?                  @db.VarChar(50)
   registration_number    String?                  @unique @db.VarChar(50)
   previous_school        String?                  @db.VarChar(255)

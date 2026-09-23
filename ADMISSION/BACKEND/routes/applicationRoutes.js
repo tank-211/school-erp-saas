@@ -6,6 +6,15 @@ import { validateApplicationDocumentTypes } from '../middleware/validateApplicat
 
 const router = express.Router();
 
+console.log('✅ APPLICATION ROUTES LOADED');
+
+router.get('/__test', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Application routes are working',
+  });
+});
+
 // Apply auth middleware to all application routes
 router.use(authMiddleware);
 
@@ -13,18 +22,36 @@ router.use(authMiddleware);
  * New admission workflow routes
  */
 router.post('/start', applicationController.startAdmission);
-router.post('/save-step', applicationController.saveAdmissionStep);
+
+// Start admission from an approved application
+router.post(
+  '/start-from-approved',
+  applicationController.startAdmissionFromApprovedApplication
+);
+
+router.post( '/save-step', upload.any(), applicationController.saveAdmissionStep );
 router.get('/resume/:id', applicationController.getAdmissionApplication);
 router.post('/complete', applicationController.completeAdmission);
+/**
+ * POST /api/applications/admission-document
+ * Upload or replace a document during admission
+ */
 
 router.get('/eligible-leads', applicationController.getEligibleLeads);
 router.get('/counts', applicationController.getApplicationCounts);
 router.get('/search', applicationController.searchApplications);
-router.get('/', applicationController.getApplications);
 router.get('/draft', applicationController.getDraftApplications);
-router.get('/by-lead/:leadId',applicationController.getApplicationByLeadId);
-router.get('/:id/resume', applicationController.resumeApplication);
+router.get('/by-lead/:leadId', applicationController.getApplicationByLeadId);
+
 router.post('/new', applicationController.createApplicationWithoutLead);
+
+router.get('/:id/resume', applicationController.resumeApplication);
+
+/**
+ * GET /api/applications
+ * Get all applications for the logged-in school
+ */
+router.get('/', applicationController.getApplications);
 
 /**
  * POST /api/applications

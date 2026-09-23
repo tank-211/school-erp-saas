@@ -646,11 +646,20 @@ export const resumeApplication = async (schoolId, applicationId) => {
  * Get application progress
  * GET /api/applications/:id/progress
  */
-export const getApplicationProgress = async (applicationId) => {
+export const getApplicationProgress = async (applicationId, schoolId) => {
   try {
-    const application = await prisma.application.findUnique({
+    if (!applicationId) {
+      throw new Error('Application ID is required');
+    }
+
+    if (!schoolId) {
+      throw new Error('School ID is required');
+    }
+
+    const application = await prisma.application.findFirst({
       where: {
         id: BigInt(applicationId),
+        school_id: BigInt(schoolId),
       },
       select: {
         id: true,
@@ -677,7 +686,8 @@ export const getApplicationProgress = async (applicationId) => {
         photos: currentStep > 4 ? 'completed' : 'pending',
         documents: currentStep > 5 ? 'completed' : 'pending',
         review:
-          application.status === 'submitted'
+          ['submitted', 'under_review', 'approved', 'admission_completed']
+            .includes(application.status)
             ? 'completed'
             : 'pending',
       },
@@ -1419,6 +1429,354 @@ export const startAdmissionApplication = async (schoolId, payload = {}) => {
   }
 };
 
+export const startAdmissionFromApprovedApplication = async (
+  applicationId,
+  schoolId,
+  createdBy = null
+) => {
+  try {
+    const applicationIdBigInt = BigInt(applicationId);
+    const schoolIdBigInt = BigInt(schoolId);
+
+    return await prisma.$transaction(async (tx) => {
+      // 1. Find the approved application
+      const application = await tx.application.findFirst({
+        where: {
+          id: applicationIdBigInt,
+          school_id: schoolIdBigInt,
+        },
+        include: {
+          application_student_info: true,
+          application_parent_info: true,
+          application_academic_info: true,
+          application_documents: true,
+          lead: true,
+          academic_year: true,
+        },
+      });
+
+      if (!application) {
+        throw new Error('Application not found');
+      }
+
+      // 2. Application must be approved
+      if (application.status !== 'approved') {
+        throw new Error(
+          `Admission can only be started for an approved application. Current status: ${application.status}`
+        );
+      }
+
+      // 3. Prevent duplicate admission
+      const existingAdmission = await tx.admission.findFirst({
+        where: {
+          application_id: applicationIdBigInt,
+          school_id: schoolIdBigInt,
+        },
+        select: {
+          id: true,
+          student_id: true,
+          status: true,
+        },
+      });
+
+      if (existingAdmission) {
+        // Existing admission may have been created before
+        // application documents were copied into admission documents.
+        // Sync any missing application documents now.
+
+        const applicationDocuments =
+          application.application_documents || [];
+
+        for (const document of applicationDocuments) {
+          if (!document?.document_type) continue;
+
+          const normalizedType =
+            normalizeApplicationDocumentType(
+              document.document_type
+            ).normalized;
+
+          const existingDocument =
+            await tx.documents.findFirst({
+              where: {
+                admission_id: existingAdmission.id,
+                document_type: normalizedType,
+              },
+            });
+
+          if (!existingDocument) {
+            await tx.documents.create({
+              data: {
+                admission_id: existingAdmission.id,
+                document_type: normalizedType,
+                file_name: document.file_name || 'document',
+                file_path: document.file_path || '',
+                document_number:
+                  document.document_number || null,
+                file_size:
+                  document.file_size !== null &&
+                  document.file_size !== undefined
+                    ? Number(document.file_size)
+                    : null,
+                mime_type: document.mime_type || null,
+                uploaded_by:
+                  document.uploaded_by !== null &&
+                  document.uploaded_by !== undefined
+                    ? String(document.uploaded_by)
+                    : null,
+                upload_date: new Date(),
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            });
+          }
+        }
+
+        return {
+          application_id: application.id.toString(),
+          admission_id: existingAdmission.id.toString(),
+          student_id: existingAdmission.student_id.toString(),
+          status: 'admission_started',
+          resumed: true,
+        };
+      }
+
+      // 4. Get student information from the application
+      const studentInfo = application.application_student_info;
+
+      if (!studentInfo) {
+        throw new Error(
+          'Student information is missing from the application'
+        );
+      }
+
+      if (!studentInfo.first_name) {
+        throw new Error('Student first name is required');
+      }
+
+      // 5. Get academic information
+      const academicInfo = application.application_academic_info;
+
+      if (!academicInfo?.desired_class) {
+        throw new Error(
+          'Desired class is required before starting admission'
+        );
+      }
+
+      // 6. Find the class
+      const desiredClassValue = String(
+        academicInfo.desired_class ?? ""
+      ).trim();
+
+      const numericClassValue = Number(desiredClassValue);
+
+      const classConditions = [
+        {
+          class_name: desiredClassValue,
+        },
+      ];
+
+      if (Number.isFinite(numericClassValue)) {
+        classConditions.push({
+          class_numeric_value: numericClassValue,
+        });
+      }
+
+      const schoolClass = await tx.school_class.findFirst({
+        where: {
+          school_id: schoolIdBigInt,
+          OR: classConditions,
+        },
+        orderBy: {
+          class_numeric_value: 'asc',
+        },
+      });
+
+      if (!schoolClass) {
+        throw new Error(
+          `Class "${academicInfo.desired_class}" not found for this school`
+        );
+      }
+
+      // 7. Find a section for that class
+      const section = await tx.section.findFirst({
+        where: {
+          school_id: schoolIdBigInt,
+          class_id: schoolClass.id,
+        },
+        orderBy: {
+          section_name: 'asc',
+        },
+      });
+
+      if (!section) {
+        throw new Error(
+          `No section configured for class "${schoolClass.class_name}"`
+        );
+      }
+
+      // 8. Generate a unique student admission number
+      const admissionNumber =
+        `STU-${new Date().getFullYear()}-${Date.now()}`;
+
+      // 9. Create the student
+      const student = await tx.student.create({
+        data: {
+          school_id: schoolIdBigInt,
+          admission_number: admissionNumber,
+          first_name: studentInfo.first_name,
+          middle_name: studentInfo.middle_name || null,
+          last_name: studentInfo.last_name || null,
+          date_of_birth: studentInfo.date_of_birth
+            ? new Date(studentInfo.date_of_birth)
+            : null,
+          gender: studentInfo.gender || null,
+          blood_group: studentInfo.blood_group || null,
+          aadhar_number: studentInfo.aadhar_number || null,
+          phone: studentInfo.phone || null,
+          email: studentInfo.email || null,
+          status: 'active',
+        },
+      });
+
+      // 10. Create parent record if parent information exists
+      const parentInfo = application.application_parent_info;
+
+      if (parentInfo) {
+        await tx.parent_detail.create({
+          data: {
+            school_id: schoolIdBigInt,
+            student_id: student.id,
+            relation:
+              parentInfo.primary_contact_relation ||
+              'Father',
+            first_name:
+              parentInfo.father_name ||
+              parentInfo.primary_contact_person ||
+              'Parent',
+            last_name: null,
+            phone:
+              parentInfo.primary_contact_phone ||
+              parentInfo.father_phone ||
+              null,
+            email:
+              parentInfo.father_email || null,
+            occupation:
+              parentInfo.father_occupation || null,
+            address: parentInfo.address || null,
+            city: parentInfo.city || null,
+            income_range:
+              parentInfo.income_range || null,
+          },
+        });
+      }
+
+      // 11. Create admission linked to the application
+      const admission = await tx.admission.create({
+        data: {
+          school_id: schoolIdBigInt,
+          student_id: student.id,
+          lead_id: application.lead_id || null,
+          academic_year_id: application.academic_year_id,
+          class_id: schoolClass.id,
+          section_id: section.id,
+          admission_date: new Date(),
+          status: 'in_progress',
+          admission_type: 'new',
+          previous_school:
+            academicInfo.previous_school || null,
+          created_by:
+            createdBy !== null && createdBy !== undefined
+              ? String(createdBy)
+              : null,
+          application_id: application.id.toString(),
+        },
+      });
+
+      // Copy application documents into the admission documents table.
+      // Admission completion validates documents using admission_id.
+      const applicationDocuments = application.application_documents || [];
+
+      for (const document of applicationDocuments) {
+        if (!document?.document_type) continue;
+
+        const normalizedType =
+          normalizeApplicationDocumentType(
+            document.document_type
+          ).normalized;
+
+        await tx.documents.create({
+          data: {
+            admission_id: admission.id,
+            document_type: normalizedType,
+            file_name: document.file_name || 'document',
+            file_path: document.file_path || '',
+            document_number: document.document_number || null,
+            file_size:
+              document.file_size !== null &&
+              document.file_size !== undefined
+                ? Number(document.file_size)
+                : null,
+            mime_type: document.mime_type || null,
+            uploaded_by:
+              document.uploaded_by !== null &&
+              document.uploaded_by !== undefined
+                ? String(document.uploaded_by)
+                : null,
+            upload_date: new Date(),
+            created_at: new Date(),
+            updated_at: new Date(),
+          },
+        });
+      }
+
+      // 12. Create admission progress
+      await tx.application_progress.create({
+        data: {
+          admission_id: admission.id,
+          student_info_status: 'completed',
+          parent_info_status: parentInfo
+            ? 'completed'
+            : 'pending',
+          academic_details_status: academicInfo
+            ? 'completed'
+            : 'pending',
+          photos_status: 'pending',
+          documents_status: 'pending',
+          review_status: 'pending',
+        },
+      });
+
+      // 13. Update application status
+      await tx.application.update({
+        where: {
+          id: application.id,
+        },
+        data: {
+          status: 'admission_started',
+          updated_at: new Date(),
+        },
+      });
+
+            return {
+                application_id: application.id.toString(),
+                admission_id: admission.id.toString(),
+                student_id: student.id.toString(),
+                status: 'admission_started',
+                resumed: false,
+              };
+            },
+            {
+              maxWait: 10000,
+              timeout: 120000,
+            }
+          );
+  } catch (error) {
+    throw new Error(
+      `Failed to start admission from approved application: ${error.message}`
+    );
+  }
+};
+
 export const saveAdmissionStep = async (schoolId, payload = {}) => {
   const rawAdmissionId = payload.admission_id ?? payload.application_id;
   const admissionId = BigInt(rawAdmissionId);
@@ -1439,7 +1797,7 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
 
     const schoolIdBigInt = BigInt(schoolId);
 
-    return await prisma.$transaction(async (tx) => {
+    return await prisma.$transaction( async (tx) => {
       const admission = await tx.admission.findFirst({
         where: {
           id: admissionId,
@@ -1470,7 +1828,6 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
             id: studentId,
           },
           data: {
-            admission_id: admissionId,
             first_name: data.first_name || undefined,
             last_name: data.last_name || undefined,
             date_of_birth:
@@ -1486,80 +1843,78 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
           },
         });
       }
-
-      // STEP 2 — Parent
+        // STEP 2 — Parent
       if (step === 'parent') {
         if (!studentId) {
           throw new Error('Student not found for admission');
         }
 
-        await tx.parent_detail.upsert({
+        const parentData = {
+          relation:
+            data.primary_contact_relation || 'Father',
+
+          first_name:
+            data.father_name ||
+            data.fatherName ||
+            data.primary_contact_person ||
+            'Parent',
+
+          last_name: null,
+
+          phone:
+            data.primary_contact_phone ||
+            data.father_phone ||
+            data.fatherPhone ||
+            null,
+
+          email:
+            data.father_email ||
+            data.fatherEmail ||
+            null,
+
+          occupation:
+            data.father_occupation ||
+            data.fatherOccupation ||
+            null,
+
+          address: data.address || null,
+          city: data.city || null,
+
+          income_range:
+            data.income_range ||
+            data.incomeRange ||
+            null,
+
+          updated_at: new Date(),
+        };
+
+        // parent_detail is linked to student, not admission.
+        // student_id is not unique, so find the existing record first.
+        const existingParent = await tx.parent_detail.findFirst({
           where: {
-            admission_id: admissionId,
-          },
-          create: {
-            school_id: schoolIdBigInt,
             student_id: studentId,
-            admission_id: admissionId,
-            relation:
-              data.primary_contact_relation || 'Father',
-            first_name:
-              data.father_name ||
-              data.fatherName ||
-              data.primary_contact_person ||
-              'Parent',
-            last_name: null,
-            phone:
-              data.primary_contact_phone ||
-              data.father_phone ||
-              data.fatherPhone ||
-              null,
-            email:
-              data.father_email ||
-              data.fatherEmail ||
-              null,
-            occupation:
-              data.father_occupation ||
-              data.fatherOccupation ||
-              null,
-            address: data.address || null,
-            city: data.city || null,
-            income_range:
-              data.income_range ||
-              data.incomeRange ||
-              null,
+            school_id: schoolIdBigInt,
           },
-          update: {
-            relation:
-              data.primary_contact_relation || 'Father',
-            first_name:
-              data.father_name ||
-              data.fatherName ||
-              data.primary_contact_person ||
-              'Parent',
-            last_name: null,
-            phone:
-              data.primary_contact_phone ||
-              data.father_phone ||
-              data.fatherPhone ||
-              null,
-            email:
-              data.father_email ||
-              data.fatherEmail ||
-              null,
-            occupation:
-              data.father_occupation ||
-              data.fatherOccupation ||
-              null,
-            address: data.address || null,
-            city: data.city || null,
-            income_range:
-              data.income_range ||
-              data.incomeRange ||
-              null,
-            updated_at: new Date(),
+          orderBy: {
+            id: 'asc',
           },
         });
+        if (existingParent) {
+          await tx.parent_detail.update({
+            where: {
+              id: existingParent.id,
+            },
+            data: parentData,
+          });
+        } else {
+          await tx.parent_detail.create({
+            data: {
+              school_id: schoolIdBigInt,
+              student_id: studentId,
+              ...parentData,
+            },
+          });
+        }
       }
 
       // STEP 3 — Academic
@@ -1650,131 +2005,149 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
         const photos = data.photos || {};
         const docs = data.documents || {};
 
-        if (studentId) {
-          await tx.student_photos.upsert({
+        const documentRecords = [];
+
+        const addDocument = (documentType, value) => {
+          if (!value) return;
+
+          const record = normalizeFileRecord(value);
+
+          if (!record) return;
+
+          const normalizedType =
+            normalizeApplicationDocumentType(documentType).normalized;
+
+          if (!record.file_path && !record.file_name) {
+            return;
+          }
+
+          documentRecords.push({
+            document_type: normalizedType,
+            file_name:
+              record.file_name ||
+              path.basename(String(record.file_path || 'document')),
+            file_path:
+              record.file_path ||
+              toPublicFilePath(record.file_name),
+            document_number: record.document_number || null,
+            file_size:
+              record.file_size !== undefined &&
+              record.file_size !== null
+                ? Number(record.file_size)
+                : null,
+            mime_type: record.mime_type || null,
+            uploaded_by: null,
+          });
+        };
+
+        // Student photo
+        addDocument(
+          'student_photo',
+          photos.student_photo || photos.studentPhoto
+        );
+
+        // Passport photos
+        addDocument(
+          'passport_photos',
+          photos.passport_photos || photos.passportPhotos
+        );
+
+        // Other documents
+        for (const [documentType, value] of Object.entries(docs)) {
+          addDocument(documentType, value);
+        }
+
+        // Save documents against the ADMISSION.
+        // The real Prisma model is `documents`.
+        for (const record of documentRecords) {
+          const existingDocument = await tx.documents.findFirst({
             where: {
               admission_id: admissionId,
+              document_type: record.document_type,
             },
-            create: {
-              school_id: schoolIdBigInt,
-              admission_id: admissionId,
-              student_photo:
-                photos.student_photo ||
-                photos.studentPhoto ||
-                null,
-              passport_photos:
-                photos.passport_photos ||
-                photos.passportPhotos ||
-                null,
-            },
-            update: {
-              ...(photos.student_photo || photos.studentPhoto
-                ? {
-                    student_photo:
-                      photos.student_photo ||
-                      photos.studentPhoto,
-                  }
-                : {}),
-              ...(photos.passport_photos ||
-              photos.passportPhotos
-                ? {
-                    passport_photos:
-                      photos.passport_photos ||
-                      photos.passportPhotos,
-                  }
-                : {}),
-              updated_at: new Date(),
+            orderBy: {
+              id: 'asc',
             },
           });
 
-          await tx.student_documents.upsert({
-            where: {
-              admission_id: admissionId,
-            },
-            create: {
-              school_id: schoolIdBigInt,
-              admission_id: admissionId,
-              birth_certificate:
-                docs.birth_certificate || null,
-              aadhaar_card:
-                docs.aadhaar_card ||
-                docs.aadhaarCard ||
-                null,
-              passport_photos:
-                docs.passport_photos ||
-                docs.passportPhotos ||
-                null,
-              transfer_certificate:
-                docs.transfer_certificate || null,
-              previous_report_card:
-                docs.previous_report_card ||
-                docs.previousReportCard ||
-                null,
-              address_proof:
-                docs.address_proof || null,
-              parent_id_proof:
-                docs.parent_id_proof ||
-                docs.parentIdProof ||
-                null,
-            },
-            update: {
-              ...(docs.birth_certificate
-                ? {
-                    birth_certificate:
-                      docs.birth_certificate,
-                  }
-                : {}),
-              ...(docs.aadhaar_card ||
-              docs.aadhaarCard
-                ? {
-                    aadhaar_card:
-                      docs.aadhaar_card ||
-                      docs.aadhaarCard,
-                  }
-                : {}),
-              ...(docs.passport_photos ||
-              docs.passportPhotos
-                ? {
-                    passport_photos:
-                      docs.passport_photos ||
-                      docs.passportPhotos,
-                  }
-                : {}),
-              ...(docs.transfer_certificate
-                ? {
-                    transfer_certificate:
-                      docs.transfer_certificate,
-                  }
-                : {}),
-              ...(docs.previous_report_card ||
-              docs.previousReportCard
-                ? {
-                    previous_report_card:
-                      docs.previous_report_card ||
-                      docs.previousReportCard,
-                  }
-                : {}),
-              ...(docs.address_proof
-                ? {
-                    address_proof:
-                      docs.address_proof,
-                  }
-                : {}),
-              ...(docs.parent_id_proof ||
-              docs.parentIdProof
-                ? {
-                    parent_id_proof:
-                      docs.parent_id_proof ||
-                      docs.parentIdProof,
-                  }
-                : {}),
-              updated_at: new Date(),
-            },
-          });
+          if (existingDocument) {
+            await tx.documents.update({
+              where: {
+                id: existingDocument.id,
+              },
+              data: {
+                file_name: record.file_name,
+                file_path: record.file_path,
+                document_number: record.document_number,
+                file_size: record.file_size,
+                mime_type: record.mime_type,
+                uploaded_by: record.uploaded_by,
+                updated_at: new Date(),
+              },
+            });
+          } else {
+            await tx.documents.create({
+              data: {
+                admission_id: admissionId,
+                document_type: record.document_type,
+                file_name: record.file_name,
+                file_path: record.file_path,
+                document_number: record.document_number,
+                file_size: record.file_size,
+                mime_type: record.mime_type,
+                uploaded_by: record.uploaded_by,
+              },
+            });
+          }
         }
       }
 
-      // Move to next step
+      // Update admission progress
+      const progressUpdate = {};
+
+      if (step === 'student') {
+        progressUpdate.student_info_status = 'completed';
+      }
+
+      if (step === 'parent') {
+        progressUpdate.parent_info_status = 'completed';
+      }
+
+      if (step === 'academic') {
+        progressUpdate.academic_details_status = 'completed';
+      }
+
+      if (step === 'documents') {
+        progressUpdate.photos_status = 'completed';
+        progressUpdate.documents_status = 'completed';
+      }
+
+      if (step === 'review') {
+        progressUpdate.review_status = 'completed';
+      }
+
+      await tx.application_progress.upsert({
+        where: {
+          admission_id: admissionId,
+        },
+        create: {
+          admission_id: admissionId,
+          student_info_status:
+            step === 'student' ? 'completed' : 'pending',
+          parent_info_status:
+            step === 'parent' ? 'completed' : 'pending',
+          academic_details_status:
+            step === 'academic' ? 'completed' : 'pending',
+          photos_status:
+            step === 'documents' ? 'completed' : 'pending',
+          documents_status:
+            step === 'documents' ? 'completed' : 'pending',
+          review_status:
+            step === 'review' ? 'completed' : 'pending',
+        },
+        update: progressUpdate,
+      });
+
       const currentIndex = STEP_ORDER.indexOf(step);
 
       const nextStep =
@@ -1783,24 +2156,17 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
           ? STEP_ORDER[currentIndex + 1]
           : step;
 
-      await tx.admission.update({
-        where: {
-          id: admissionId,
-        },
-        data: {
-          current_step: nextStep,
-          status: 'draft',
-          is_completed: false,
-          updated_at: new Date(),
-        },
-      });
-
-      return {
-        admission_id: admissionId,
-        current_step: nextStep,
-        status: 'draft',
-      };
-    });
+            return {
+                  admission_id: admissionId.toString(),
+                  current_step: nextStep,
+                  status: 'in_progress',
+                };
+              },
+              {
+                maxWait: 10000,
+                timeout: 30000,
+              }
+            );
   } catch (error) {
     throw new Error(`Failed to save step: ${error.message}`);
   }
@@ -1826,29 +2192,24 @@ export const getAdmissionApplicationById = async (schoolId, admissionId) => {
         class_id: true,
         section_id: true,
         status: true,
-        current_step: true,
-        is_completed: true,
         created_at: true,
         updated_at: true,
+        application_progress: true,
+        documents: true,
 
-        student: true,
-
-        parent_detail: {
-          take: 1,
+        student: {
+          include: {
+            parent_detail: {
+              take: 1,
+            },
+          },
         },
 
         application: {
           select: {
             application_academic_info: true,
+            application_documents: true,
           },
-        },
-
-        student_photos: {
-          take: 1,
-        },
-
-        student_documents: {
-          take: 1,
         },
       },
     });
@@ -1857,35 +2218,99 @@ export const getAdmissionApplicationById = async (schoolId, admissionId) => {
       throw new Error('Admission not found');
     }
 
+    const admissionDocuments = admission.documents || [];
+
+    const applicationDocuments =
+      admission.application?.application_documents || [];
+
+    const allDocuments = [
+      ...applicationDocuments,
+      ...admissionDocuments,
+    ];
+
+    const photos = {};
+    const documents = {};
+
+    for (const document of allDocuments) {
+      if (!document) continue;
+
+      const record = normalizeFileRecord(document);
+      if (!record) continue;
+
+      if (APPLICATION_PHOTO_TYPES.includes(document.document_type)) {
+        photos[document.document_type] = record;
+      } else {
+        documents[document.document_type] = record;
+      }
+    }
+
     return {
       admission: {
-        id: admission.id,
-        school_id: admission.school_id,
-        lead_id: admission.lead_id,
-        application_id: admission.application_id,
-        student_id: admission.student_id,
-        academic_year_id: admission.academic_year_id,
-        class_id: admission.class_id,
-        section_id: admission.section_id,
+        id: admission.id?.toString(),
+        school_id: admission.school_id?.toString(),
+        lead_id: admission.lead_id?.toString(),
+        application_id: admission.application_id?.toString(),
+        student_id: admission.student_id?.toString(),
+        academic_year_id: admission.academic_year_id?.toString(),
+        class_id: admission.class_id?.toString(),
+        section_id: admission.section_id?.toString(),
         status: admission.status,
-        current_step: admission.current_step,
-        is_completed: admission.is_completed,
         created_at: admission.created_at,
         updated_at: admission.updated_at,
       },
 
-      student: admission.student || null,
+      student: admission.student
+        ? {
+            ...admission.student,
+            id: admission.student.id?.toString(),
+            school_id: admission.student.school_id?.toString(),
+            admission_id:
+              admission.student.admission_id?.toString() || null,
+          }
+        : null,
 
-      parent: admission.parent_detail?.[0] || null,
+      parent: admission.student?.parent_detail?.[0]
+        ? {
+            ...admission.student.parent_detail[0],
+            id: admission.student.parent_detail[0].id?.toString(),
+            school_id:
+              admission.student.parent_detail[0].school_id?.toString(),
+            student_id:
+              admission.student.parent_detail[0].student_id?.toString(),
+          }
+        : null,
 
       academic:
         admission.application?.application_academic_info || null,
 
-      photos: admission.student_photos?.[0] || null,
+      photos,
 
-      documents: admission.student_documents?.[0] || null,
+      documents,
 
-      current_step: admission.current_step || 'student',
+      current_step: (() => {
+        const progress = admission.application_progress;
+
+        if (!progress) return 'student';
+
+        if (progress.review_status === 'completed') return 'review';
+        if (
+          progress.photos_status === 'completed' ||
+          progress.documents_status === 'completed'
+        ) {
+          return 'review';
+        }
+        if (progress.academic_details_status === 'completed') {
+          return 'documents';
+        }
+        if (progress.parent_info_status === 'completed') {
+          return 'academic';
+        }
+        if (progress.student_info_status === 'completed') {
+          return 'parent';
+        }
+
+        return 'student';
+      })(),
     };
   } catch (error) {
     throw new Error(
@@ -1955,8 +2380,8 @@ export const completeAdmissionApplication = async (schoolId, admissionId) => {
         },
         select: {
           id: true,
+          application_id: true,
           status: true,
-          is_completed: true,
         },
       });
 
@@ -1964,17 +2389,99 @@ export const completeAdmissionApplication = async (schoolId, admissionId) => {
         throw new Error('Admission not found');
       }
 
-      const documents = await tx.student_documents.findFirst({
+      if (!['draft', 'in_progress', 'submitted'].includes(admission.status)) {
+        throw new Error(
+          `Admission cannot be completed from status: ${admission.status}`
+        );
+      }
+
+      // Sync documents from the linked application into admission documents.
+      // This repairs admissions that were created before application documents
+      // were copied into the admission documents table.
+      if (admission.application_id) {
+        const applicationDocuments = await tx.application_documents.findMany({
+          where: {
+            application_id: BigInt(admission.application_id),
+          },
+        });
+
+        console.log(
+          "🔎 APPLICATION DOCUMENT TYPES:",
+          applicationDocuments.map(doc => ({
+            id: doc.id?.toString(),
+            document_type: doc.document_type,
+            file_name: doc.file_name,
+            file_path: doc.file_path,
+          }))
+        );
+
+        for (const document of applicationDocuments) {
+          if (!document?.document_type) continue;
+
+          const normalizedType =
+            normalizeApplicationDocumentType(
+              document.document_type
+            ).normalized;
+
+          const existingDocument = await tx.documents.findFirst({
+            where: {
+              admission_id: admissionIdBigInt,
+              document_type: normalizedType,
+            },
+          });
+
+          if (!existingDocument) {
+            await tx.documents.create({
+              data: {
+                admission_id: admissionIdBigInt,
+                document_type: normalizedType,
+                file_name: document.file_name || 'document',
+                file_path: document.file_path || '',
+                document_number: document.document_number || null,
+                file_size:
+                  document.file_size !== null &&
+                  document.file_size !== undefined
+                    ? Number(document.file_size)
+                    : null,
+                mime_type: document.mime_type || null,
+                uploaded_by:
+                  document.uploaded_by !== null &&
+                  document.uploaded_by !== undefined
+                    ? String(document.uploaded_by)
+                    : null,
+                upload_date: new Date(),
+                created_at: new Date(),
+                updated_at: new Date(),
+              },
+            });
+          }
+        }
+      }
+
+      // Now get all documents belonging to this admission.
+      const admissionDocuments = await tx.documents.findMany({
         where: {
           admission_id: admissionIdBigInt,
         },
       });
 
-      const photos = await tx.student_photos.findFirst({
-        where: {
-          admission_id: admissionIdBigInt,
-        },
-      });
+      console.log(
+        "🔎 ADMISSION DOCUMENT TYPES:",
+        admissionDocuments.map(doc => ({
+          id: doc.id?.toString(),
+          document_type: doc.document_type,
+          file_name: doc.file_name,
+          file_path: doc.file_path,
+        }))
+      );
+
+      const documentTypes = new Set(
+        admissionDocuments.map((document) =>
+          normalizeApplicationDocumentType(
+            document.document_type
+          ).normalized
+        )
+      );
 
       const mandatoryDocuments = [
         'birth_certificate',
@@ -1987,40 +2494,91 @@ export const completeAdmissionApplication = async (schoolId, admissionId) => {
       ];
 
       const missingDocs = mandatoryDocuments.filter(
-        (key) => !documents?.[key]
+        (documentType) => !documentTypes.has(documentType)
       );
 
-      if (!photos?.student_photo) {
-        throw new Error(
-          'Student photo is mandatory before confirmation'
-        );
-      }
-
-      if (missingDocs.length) {
+      if (missingDocs.length > 0) {
         throw new Error(
           `Missing required documents: ${missingDocs.join(', ')}`
         );
       }
 
+      // Make sure the student photo exists.
+      const hasStudentPhoto = documentTypes.has('student_photo');
+
+      if (!hasStudentPhoto) {
+        throw new Error(
+          'Student photo is mandatory before confirmation'
+        );
+      }
+
+      // Mark all admission steps as completed.
+      await tx.application_progress.upsert({
+        where: {
+          admission_id: admissionIdBigInt,
+        },
+        create: {
+          admission_id: admissionIdBigInt,
+          student_info_status: 'completed',
+          parent_info_status: 'completed',
+          academic_details_status: 'completed',
+          photos_status: 'completed',
+          documents_status: 'completed',
+          review_status: 'completed',
+        },
+        update: {
+          student_info_status: 'completed',
+          parent_info_status: 'completed',
+          academic_details_status: 'completed',
+          photos_status: 'completed',
+          documents_status: 'completed',
+          review_status: 'completed',
+          updated_at: new Date(),
+        },
+      });
+
+      // Complete the admission.
       const updatedAdmission = await tx.admission.update({
         where: {
           id: admissionIdBigInt,
         },
         data: {
-          status: 'submitted',
+          status: 'active',
           is_completed: true,
-          current_step: 'review',
           updated_at: new Date(),
         },
         select: {
           id: true,
+          application_id: true,
           status: true,
-          is_completed: true,
-          current_step: true,
+          created_at: true,
+          updated_at: true,
         },
       });
 
-      return updatedAdmission;
+      // Update the linked application as well.
+      if (admission.application_id) {
+        await tx.application.update({
+          where: {
+            id: BigInt(admission.application_id),
+          },
+          data: {
+            status: 'admission_completed',
+            updated_at: new Date(),
+          },
+        });
+      }
+
+      return {
+        admission_id: updatedAdmission.id.toString(),
+        application_id:
+          updatedAdmission.application_id?.toString() || null,
+        status: updatedAdmission.status,
+        current_step: 'review',
+        is_completed: true,
+        created_at: updatedAdmission.created_at,
+        updated_at: updatedAdmission.updated_at,
+      };
     });
   } catch (error) {
     throw new Error(

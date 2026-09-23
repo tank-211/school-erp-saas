@@ -177,7 +177,7 @@ export const searchAdmissions = async (schoolId, query) => {
       const parent = student?.parent_detail?.[0];
 
       return {
-        application_id: admission.id,
+        application_id: admission.id.toString(),
         student_name: [
           student?.first_name,
           student?.last_name,
@@ -228,30 +228,47 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
           school_id: schoolIdBigInt,
         },
 
-        include: {
-          student: {
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
+       include: {
+        student: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
 
-              parent_detail: {
-                select: {
-                  phone: true,
-                },
-                take: 1,
+            parent_detail: {
+              select: {
+                phone: true,
               },
-            },
-          },
-
-          school_class: {
-            select: {
-              class_name: true,
+              take: 1,
             },
           },
         },
 
-        orderBy: {
+        school_class: {
+          select: {
+            class_name: true,
+          },
+        },
+
+        section: {
+          select: {
+            section_name: true,
+          },
+        },
+
+            application_progress: {
+              select: {
+                student_info_status: true,
+                parent_info_status: true,
+                academic_details_status: true,
+                photos_status: true,
+                documents_status: true,
+                review_status: true,
+              },
+            },
+          },
+
+          orderBy: {
           created_at: 'desc',
         },
 
@@ -259,32 +276,69 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
         skip: safeOffset,
       }),
     ]);
-
     return {
       data: admissions.map((admission) => {
         const student = admission.student;
         const parent = student?.parent_detail?.[0];
 
-        return {
-          application_id: admission.id,
-          student_name: [
-            student?.first_name,
-            student?.last_name,
-          ]
-            .filter(Boolean)
-            .join(' '),
+        const progress = admission.application_progress;
 
-          grade: admission.school_class?.class_name || null,
+    let currentStep = 'student';
 
-          parent_contact: parent?.phone || 'N/A',
+    if (progress?.review_status === 'completed') {
+      currentStep = 'review';
+    } else if (
+      progress?.documents_status === 'completed' ||
+      progress?.photos_status === 'completed'
+    ) {
+      currentStep = 'review';
+    } else if (progress?.academic_details_status === 'completed') {
+      currentStep = 'documents';
+    } else if (progress?.parent_info_status === 'completed') {
+      currentStep = 'academic';
+    } else if (progress?.student_info_status === 'completed') {
+      currentStep = 'parent';
+    }
 
-          submitted_date: admission.created_at
-            ? admission.created_at.toISOString().split('T')[0]
-            : 'N/A',
+    const isCompleted =
+      admission.status === 'submitted' ||
+      admission.status === 'admission_completed';
 
-          status: admission.status,
-        };
-      }),
+    return {
+      admission_id: admission.id.toString(),
+      application_id: admission.application_id
+        ? admission.application_id.toString()
+        : null,
+      student_id: student?.id
+        ? student.id.toString()
+        : null,
+
+      current_step: currentStep,
+      is_completed: isCompleted,
+      student_id: student?.id
+        ? student.id.toString()
+        : null,
+
+      student_name: [
+        student?.first_name,
+        student?.last_name,
+      ]
+        .filter(Boolean)
+        .join(' '),
+
+      grade: admission.school_class?.class_name || null,
+
+      section: admission.section?.section_name || null,
+
+      parent_contact: parent?.phone || 'N/A',
+
+      submitted_date: admission.created_at
+        ? admission.created_at.toISOString().split('T')[0]
+        : 'N/A',
+
+      status: admission.status,
+    };
+  }),
 
       total,
       limit: safeLimit,
@@ -344,12 +398,27 @@ export const getAdmissionById = async (schoolId, applicationId) => {
     const parent = student?.parent_detail?.[0];
 
     return {
-      application_id: admission.id,
-      school_id: admission.school_id,
-      student_id: admission.student_id,
-      academic_year_id: admission.academic_year_id,
-      class_id: admission.class_id,
-      section_id: admission.section_id,
+      application_id: admission.id.toString(),
+
+      school_id: admission.school_id
+        ? admission.school_id.toString()
+        : null,
+
+      student_id: admission.student_id
+        ? admission.student_id.toString()
+        : null,
+
+      academic_year_id: admission.academic_year_id
+        ? admission.academic_year_id.toString()
+        : null,
+
+      class_id: admission.class_id
+        ? admission.class_id.toString()
+        : null,
+
+      section_id: admission.section_id
+        ? admission.section_id.toString()
+        : null,
 
       admission_date: admission.admission_date,
       status: admission.status,
@@ -357,8 +426,10 @@ export const getAdmissionById = async (schoolId, applicationId) => {
       registration_number: admission.registration_number,
       previous_school: admission.previous_school,
 
-      id: student?.id,
-      first_name: student?.first_name,
+      id: student?.id
+        ? student.id.toString()
+        : null,      
+        first_name: student?.first_name,
       last_name: student?.last_name,
       date_of_birth: student?.date_of_birth,
       gender: student?.gender,

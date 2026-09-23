@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+ import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getToken } from "../utils/authToken.js";
 
@@ -37,6 +37,11 @@ const statusConfig = {
     className: "status-approved",
     },
 
+  admission_started: {
+    label: "Admission Started",
+    className: "status-review",
+    },
+
   admission_completed: {
     label: "Admission Completed",
     className: "status-completed",
@@ -45,6 +50,7 @@ const statusConfig = {
 
 export default function ApplicationDetails() {
   const { id } = useParams();
+const navigate = useNavigate();
 
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -128,6 +134,50 @@ export default function ApplicationDetails() {
         alert(error.message);
     }
     };
+
+  const startAdmission = async () => {
+    try {
+      const token = getToken();
+
+      const res = await fetch(
+        `${API_URL}/api/applications/start-from-approved`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            application_id: application.id,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to start admission");
+      }
+
+      const admissionId = data.data?.admission_id;
+
+      if (!admissionId) {
+        throw new Error("Admission ID was not returned by the server");
+      }
+
+      sessionStorage.setItem(
+        "activeAdmissionId",
+        String(admissionId)
+      );
+
+      alert("Admission started successfully");
+
+      navigate("/enrollment");
+    } catch (error) {
+      console.error("Start admission error:", error);
+      alert(error.message || "Failed to start admission");
+    }
+  };
 
   const moveToReview = async () => {
     try {
@@ -267,6 +317,14 @@ export default function ApplicationDetails() {
               Move to Under Review
             </button>
           )}
+          {application.status === "approved" && (
+            <button
+              className="btn-primary"
+              onClick={startAdmission}
+            >
+              Start Admission
+            </button>
+          )}
         </div>
 
       </div>
@@ -287,6 +345,7 @@ export default function ApplicationDetails() {
                 "submitted",
                 "under_review",
                 "approved",
+                "admission_started",
                 "admission_completed",
               ].includes(application.status)
                 ? "active"
@@ -297,9 +356,7 @@ export default function ApplicationDetails() {
 
             <div>
               <strong>Created</strong>
-              <small>
-                Application created
-              </small>
+              <small>Application created</small>
             </div>
           </div>
 
@@ -312,6 +369,7 @@ export default function ApplicationDetails() {
                 "submitted",
                 "under_review",
                 "approved",
+                "admission_started",
                 "admission_completed",
               ].includes(application.status)
                 ? "active"
@@ -322,9 +380,7 @@ export default function ApplicationDetails() {
 
             <div>
               <strong>Submitted</strong>
-              <small>
-                Application submitted
-              </small>
+              <small>Application submitted</small>
             </div>
           </div>
 
@@ -336,6 +392,7 @@ export default function ApplicationDetails() {
               [
                 "under_review",
                 "approved",
+                "admission_started",
                 "admission_completed",
               ].includes(application.status)
                 ? "active"
@@ -346,9 +403,50 @@ export default function ApplicationDetails() {
 
             <div>
               <strong>Under Review</strong>
-              <small>
-                Application under review
-              </small>
+              <small>Application under review</small>
+            </div>
+          </div>
+
+          <div className="status-line" />
+
+          {/* Approved */}
+          <div
+            className={`status-step ${
+              [
+                "approved",
+                "admission_started",
+                "admission_completed",
+              ].includes(application.status)
+                ? "active"
+                : ""
+            }`}
+          >
+            <span>4</span>
+
+            <div>
+              <strong>Approved</strong>
+              <small>Application approved</small>
+            </div>
+          </div>
+
+          <div className="status-line" />
+
+          {/* Admission Started */}
+          <div
+            className={`status-step ${
+              [
+                "admission_started",
+                "admission_completed",
+              ].includes(application.status)
+                ? "active"
+                : ""
+            }`}
+          >
+            <span>5</span>
+
+            <div>
+              <strong>Admission Started</strong>
+              <small>Student admission process started</small>
             </div>
           </div>
 
@@ -357,22 +455,16 @@ export default function ApplicationDetails() {
           {/* Admission Completed */}
           <div
             className={`status-step ${
-              application.status ===
-              "admission_completed"
+              application.status === "admission_completed"
                 ? "active"
                 : ""
             }`}
           >
-            <span>4</span>
+            <span>6</span>
 
             <div>
-              <strong>
-                Admission Completed
-              </strong>
-
-              <small>
-                Admission process completed
-              </small>
+              <strong>Admission Completed</strong>
+              <small>Admission process completed</small>
             </div>
           </div>
 

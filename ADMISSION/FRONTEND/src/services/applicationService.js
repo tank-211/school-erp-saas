@@ -11,12 +11,17 @@ const NUMBER_TO_STEP = {
   6: 'review',
 };
 
-const resolveAdmissionId = (candidateId) => {
-  if (candidateId !== undefined && candidateId !== null && String(candidateId).trim() !== '') {
+const resolveApplicationId = (candidateId) => {
+  if (
+    candidateId !== undefined &&
+    candidateId !== null &&
+    String(candidateId).trim() !== ''
+  ) {
     return Number(candidateId);
   }
 
   const storedId = sessionStorage.getItem('activeAdmissionId');
+
   if (storedId && storedId.trim() !== '') {
     return Number(storedId);
   }
@@ -77,7 +82,7 @@ export async function createApplicationFromLead(leadId, academicYearId) {
 
   return {
     id: data.data.id,
-    admission_id: data.data.id,
+    application_id: data.data.id,
     current_step: Number(data.data.current_step || 1),
     status: data.data.status,
     resumed: false,
@@ -92,7 +97,7 @@ export async function createApplicationWithoutLead(academicYearId) {
 
   return {
     id: data.data.id,
-    admission_id: data.data.id,
+    application_id: data.data.id,
     current_step: Number(data.data.current_step || 1),
     status: data.data.status,
     resumed: false,
@@ -199,45 +204,53 @@ export async function getApplicationProgress(applicationId) {
  * Get application details for prefill
  */
 export async function getApplicationDetails(applicationId) {
-  try {
-    const data = await request(`${BASE_URL}/${applicationId}/details`, {
-      method: 'GET',
-    });
+  const data = await request(`${BASE_URL}/${applicationId}/details`, {
+    method: 'GET',
+  });
 
-    return {
-      application: data.data.application || data.data.admission,
-      student_info: data.data.student_info || data.data.student || {},
-      parent_info: data.data.parent_info || data.data.parent || {},
-      academic_info: data.data.academic_info || data.data.academic || {},
-      photos: data.data.photos || {},
-      documents: data.data.documents || {},
-      current_step: data.data.application?.current_step,
-    };
-  } catch (error) {
-    console.warn('Falling back to empty application details:', error.message);
+  const application =
+    data?.data?.application ||
+    data?.data?.admission;
 
-    return {
-      application: { id: Number(applicationId) || applicationId, current_step: 1 },
-      student_info: {},
-      parent_info: {},
-      academic_info: {},
-      photos: {},
-      documents: {},
-      current_step: 1,
-    };
+  if (!application) {
+    throw new Error('Application details were not returned by the server.');
   }
+
+  return {
+    application,
+    student_info:
+      data.data.student_info ||
+      data.data.student ||
+      {},
+    parent_info:
+      data.data.parent_info ||
+      data.data.parent ||
+      {},
+    academic_info:
+      data.data.academic_info ||
+      data.data.academic ||
+      {},
+    photos: data.data.photos || {},
+    documents: data.data.documents || {},
+    current_step: Number(
+      application.current_step || data.data.current_step || 1
+    ),
+  };
 }
 
 /**
  * Save student info (Step 1)
  */
 export async function saveStudentInfo(applicationId, studentData) {
-  const admissionId = resolveAdmissionId(applicationId);
-  if (!admissionId || Number.isNaN(admissionId)) {
-    throw new Error('Admission ID is missing. Please restart the application flow from Create Application.');
+  const resolvedApplicationId = resolveApplicationId(applicationId);
+
+  if (!resolvedApplicationId || Number.isNaN(resolvedApplicationId)) {
+    throw new Error(
+      'Application ID is missing. Please restart the application flow from Create Application.'
+    );
   }
 
-  return request(`${BASE_URL}/${admissionId}/student-info`, {
+  return request(`${BASE_URL}/${resolvedApplicationId}/student-info`, {
     method: 'POST',
     body: JSON.stringify(studentData),
   });
@@ -247,12 +260,15 @@ export async function saveStudentInfo(applicationId, studentData) {
  * Save parent info (Step 2)
  */
 export async function saveParentInfo(applicationId, parentData) {
-  const admissionId = resolveAdmissionId(applicationId);
-  if (!admissionId || Number.isNaN(admissionId)) {
-    throw new Error('Admission ID is missing. Please restart the application flow from Create Application.');
+  const resolvedApplicationId = resolveApplicationId(applicationId);
+
+  if (!resolvedApplicationId || Number.isNaN(resolvedApplicationId)) {
+    throw new Error(
+      'Application ID is missing. Please restart the application flow from Create Application.'
+    );
   }
 
-  return request(`${BASE_URL}/${admissionId}/parent-info`, {
+  return request(`${BASE_URL}/${resolvedApplicationId}/parent-info`, {
     method: 'POST',
     body: JSON.stringify(parentData),
   });
@@ -262,7 +278,9 @@ export async function saveParentInfo(applicationId, parentData) {
  * Save academic info (Step 3)
  */
 export async function saveAcademicInfo(applicationId, academicData) {
-  const resolvedApplicationId = Number(academicData?.application_id ?? resolveAdmissionId(applicationId));
+  const resolvedApplicationId = Number(
+    academicData?.application_id ?? resolveApplicationId(applicationId)
+  );
   if (!resolvedApplicationId || Number.isNaN(resolvedApplicationId)) {
     throw new Error('Application ID is missing. Please restart the application flow from Create Application.');
   }
@@ -297,9 +315,12 @@ export async function saveAcademicInfo(applicationId, academicData) {
  * Save documents (Step 5)
  */
 export async function saveDocuments(applicationId, documents) {
-  const admissionId = resolveAdmissionId(applicationId);
-  if (!admissionId || Number.isNaN(admissionId)) {
-    throw new Error('Admission ID is missing. Please restart the application flow from Create Application.');
+  const resolvedApplicationId = resolveApplicationId(applicationId);
+
+  if (!resolvedApplicationId || Number.isNaN(resolvedApplicationId)) {
+    throw new Error(
+      'Application ID is missing. Please restart the application flow from Create Application.'
+    );
   }
 
   const payload = documents || {};
@@ -316,7 +337,7 @@ export async function saveDocuments(applicationId, documents) {
   Object.entries(payload.photos || {}).forEach(([type, entry]) => appendFile('photo', type, entry));
   Object.entries(payload.documents || {}).forEach(([type, entry]) => appendFile('document', type, entry));
 
-  return request(`${BASE_URL}/${admissionId}/documents`, {
+  return request(`${BASE_URL}/${resolvedApplicationId}/documents`, {
     method: 'POST',
     body: formData,
   });
@@ -326,13 +347,21 @@ export async function saveDocuments(applicationId, documents) {
  * Submit application (Step 6 - Final)
  */
 export async function submitApplication(applicationId) {
-  return request(`${BASE_URL}/${applicationId}/submit`, {
+  const resolvedApplicationId = resolveApplicationId(applicationId);
+
+  if (!resolvedApplicationId || Number.isNaN(resolvedApplicationId)) {
+    throw new Error(
+      'Application ID is missing. Please restart the application flow from Create Application.'
+    );
+  }
+
+  return request(`${BASE_URL}/${resolvedApplicationId}/submit`, {
     method: 'POST',
   });
 }
 
 export async function deleteApplication(applicationId) {
-  return fetchWithAuth(`/api/applications/${applicationId}`, {
+  return request(`${BASE_URL}/${applicationId}`, {
     method: 'DELETE',
   });
 }

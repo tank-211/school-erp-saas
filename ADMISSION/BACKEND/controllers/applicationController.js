@@ -249,7 +249,7 @@ export const resumeApplication = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: result,
+      data: serializeBigInt(result),
     });
   } catch (error) {
     return res.status(404).json({
@@ -266,16 +266,23 @@ export const resumeApplication = async (req, res) => {
 export const getApplicationProgress = async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await applicationService.getApplicationProgress(id);
-    res.json({
+    const { school_id } = req.user;
+
+    const result = await applicationService.getApplicationProgress(
+      id,
+      school_id
+    );
+
+    return res.json({
       success: true,
-      data: result
+      data: serializeBigInt(result),
     });
   } catch (error) {
     console.error('Error fetching application progress:', error);
-    res.status(404).json({
+
+    return res.status(404).json({
       success: false,
-      message: error.message || 'Application not found'
+      message: error.message || 'Application not found',
     });
   }
 };
@@ -466,34 +473,161 @@ export const saveAcademicInfo = async (req, res) => {
 export const saveDocuments = async (req, res) => {
   try {
     const { id } = req.params;
-    const rawPayload = req.body?.payload ?? req.body;
-    const payload = req.validatedPayload
-      || (typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload || {});
 
-    await applicationService.saveDocuments(
+    const rawPayload = req.body?.payload ?? req.body;
+
+    let payload =
+      req.validatedPayload ||
+      (typeof rawPayload === 'string'
+        ? JSON.parse(rawPayload)
+        : rawPayload || {});
+
+    // Make sure the expected objects exist
+    payload = {
+      ...payload,
+      photos: {
+        ...(payload.photos || {}),
+      },
+      documents: {
+        ...(payload.documents || {}),
+      },
+    };
+
+    /**
+     * IMPORTANT:
+     * Frontend sends actual files separately through FormData.
+     * Multer puts those files in req.files.
+     *
+     * Example:
+     * document_birth_certificate
+     * document_aadhaar_card
+     * document_transfer_certificate
+     * photo_student_photo
+     * etc.
+     */
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    console.log('📂 Uploaded files:', files.map((file) => ({
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      filename: file.filename,
+      path: file.path,
+      mimetype: file.mimetype,
+      size: file.size,
+    })));
+
+    /**
+     * Convert uploaded Multer files into the structure expected
+     * by applicationService.saveDocuments()
+     */
+    for (const file of files) {
+      if (!file?.fieldname) continue;
+
+      const fieldName = file.fieldname;
+
+      let documentType = null;
+      let targetCollection = null;
+
+      if (fieldName.startsWith('document_')) {
+        documentType = fieldName.substring('document_'.length);
+        targetCollection = payload.documents;
+      } else if (fieldName.startsWith('photo_')) {
+        documentType = fieldName.substring('photo_'.length);
+        targetCollection = payload.photos;
+      }
+
+      if (!documentType || !targetCollection) {
+        console.warn(
+          `⚠️ Ignoring unknown upload field: ${fieldName}`
+        );
+        continue;
+      }
+
+      /**
+       * Multer normally provides either file.path or
+       * destination + filename.
+       */
+      const filePath =
+        file.path ||
+        (file.filename
+          ? `/uploads/${file.filename}`
+          : null);
+
+      if (!filePath) {
+        console.warn(
+          `⚠️ No file path available for ${fieldName}`
+        );
+        continue;
+      }
+
+      targetCollection[documentType] = {
+        file_name:
+          file.filename ||
+          file.originalname ||
+          'document',
+
+        file_path: filePath,
+
+        file_url: filePath,
+
+        file_size:
+          file.size !== undefined && file.size !== null
+            ? Number(file.size)
+            : null,
+
+        mime_type:
+          file.mimetype || null,
+
+        // Preserve document number entered in Step 5
+        document_number:
+          targetCollection[documentType]?.document_number ||
+          targetCollection[documentType]?.documentNumber ||
+          null,
+      };
+    }
+
+    console.log('📄 Final document payload:', {
+      photos: Object.keys(payload.photos || {}),
+      documents: Object.keys(payload.documents || {}),
+    });
+
+    const result = await applicationService.saveDocuments(
       id,
       payload,
       req.user?.id || req.user?.user_id || null
     );
 
-    const invalidTypes = req.documentTypeValidation?.invalidTypes || [];
-    const mappedTypes = req.documentTypeValidation?.mappedTypes || [];
+    const invalidTypes =
+      req.documentTypeValidation?.invalidTypes || [];
 
-    res.json({
+    const mappedTypes =
+      req.documentTypeValidation?.mappedTypes || [];
+
+    return res.json({
       success: true,
       message: 'Documents saved successfully',
-      warnings: invalidTypes.length > 0
-        ? [
-          `Invalid document_type values normalized to other: ${invalidTypes.join(', ')}`,
-        ]
-        : undefined,
-      mapped_types: mappedTypes.length > 0 ? mappedTypes : undefined,
+
+      warnings:
+        invalidTypes.length > 0
+          ? [
+              `Invalid document_type values normalized to other: ${invalidTypes.join(', ')}`,
+            ]
+          : undefined,
+
+      mapped_types:
+        mappedTypes.length > 0
+          ? mappedTypes
+          : undefined,
+
+      data: serializeBigInt(result),
     });
+
   } catch (error) {
-    console.error('Error saving documents:', error);
-    res.status(500).json({
+    console.error('❌ Error saving documents:', error);
+
+    return res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || 'Failed to save documents',
     });
   }
 };
@@ -610,7 +744,7 @@ export const startAdmission = async (req, res) => {
 
     res.status(result.resumed ? 200 : 201).json({
       success: true,
-      data: result,
+      data: serializeBigInt(result),
       message: result.resumed
         ? 'Existing draft resumed successfully'
         : 'Admission application started successfully',
@@ -623,22 +757,147 @@ export const startAdmission = async (req, res) => {
   }
 };
 
-export const saveAdmissionStep = async (req, res) => {
+export const startAdmissionFromApprovedApplication = async (req, res) => {
   try {
-    const result = await applicationService.saveAdmissionStep(
-      req.user.school_id,
-      req.body,
-    );
+    const { application_id } = req.body;
 
-    res.status(200).json({
+    if (!application_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'application_id is required',
+      });
+    }
+
+    const result =
+      await applicationService.startAdmissionFromApprovedApplication(
+        application_id,
+        req.user.school_id,
+        req.user.id
+      );
+
+    return res.status(result.resumed ? 200 : 201).json({
       success: true,
-      data: result,
-      message: 'Step data saved successfully',
+      message: result.resumed
+        ? 'Admission resumed successfully'
+        : 'Admission started successfully',
+      data: serializeBigInt(result),
     });
   } catch (error) {
-    res.status(400).json({
+    console.error(
+      'Error starting admission from approved application:',
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: error.message || 'Failed to save step data',
+      message: error.message,
+    });
+  }
+};
+
+export const saveAdmissionStep = async (req, res) => {
+  try {
+    // FormData sends "data" as a JSON string
+    const rawData = req.body?.data ?? {};
+
+    const parsedData =
+      typeof rawData === 'string'
+        ? JSON.parse(rawData)
+        : rawData || {};
+
+    const payload = {
+      admission_id: req.body?.admission_id,
+      step: req.body?.step,
+      data: {
+        ...parsedData,
+        photos: {
+          ...(parsedData.photos || {}),
+        },
+        documents: {
+          ...(parsedData.documents || {}),
+        },
+        documentNumbers: {
+          ...(parsedData.documentNumbers || {}),
+        },
+      },
+    };
+
+    const files = Array.isArray(req.files) ? req.files : [];
+
+    console.log('📥 SAVE ADMISSION STEP');
+    console.log('Admission ID:', payload.admission_id);
+    console.log('Step:', payload.step);
+    console.log('Uploaded files:', files.length);
+
+    // Merge actual uploaded files into payload
+    for (const file of files) {
+      const fieldName = file.fieldname || '';
+
+      let collection = null;
+      let documentType = null;
+
+      if (fieldName.startsWith('document_')) {
+        collection = payload.data.documents;
+        documentType = fieldName.replace('document_', '');
+      } else if (fieldName.startsWith('photo_')) {
+        collection = payload.data.photos;
+        documentType = fieldName.replace('photo_', '');
+      }
+
+      if (!collection || !documentType) {
+        continue;
+      }
+
+      const filePath =
+        file.path ||
+        (file.filename
+          ? `/uploads/${file.filename}`
+          : file.originalname
+            ? `/uploads/${file.originalname}`
+            : '');
+
+      collection[documentType] = {
+        type: documentType,
+        name: file.originalname || file.filename || 'document',
+        file_name: file.filename || file.originalname || 'document',
+        file_path: filePath,
+        file_url: filePath,
+        file_size: file.size || null,
+        mime_type: file.mimetype || null,
+
+        document_number:
+          payload.data.documentNumbers?.[documentType] ||
+          collection[documentType]?.document_number ||
+          collection[documentType]?.documentNumber ||
+          null,
+      };
+
+      console.log(
+        `📄 File mapped: ${documentType} → ${filePath}`
+      );
+    }
+
+    console.log(
+      '📦 Final document types:',
+      Object.keys(payload.data.documents || {})
+    );
+
+    const result = await applicationService.saveAdmissionStep(
+      req.user.school_id,
+      payload
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: `${payload.step} step saved successfully`,
+      data: serializeBigInt(result),
+    });
+  } catch (error) {
+    console.error('❌ Error saving admission step:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -652,7 +911,7 @@ export const getAdmissionApplication = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: result,
+      data: serializeBigInt(result),
     });
   } catch (error) {
     res.status(404).json({
@@ -664,32 +923,31 @@ export const getAdmissionApplication = async (req, res) => {
 
 export const completeAdmission = async (req, res) => {
   try {
-    const { application_id } = req.body;
-    const school_id = req.user.school_id;
+    const { admission_id } = req.body;
 
-    if (!application_id) {
+    if (!admission_id) {
       return res.status(400).json({
         success: false,
-        message: "application_id is required",
+        message: "admission_id is required",
       });
     }
 
-    const result = await applicationService.markApplicationCompleted(
-      school_id,
-      application_id
+    const result = await applicationService.completeAdmissionApplication(
+      req.user.school_id,
+      admission_id
     );
 
     return res.status(200).json({
       success: true,
-      data: result,
-      message: "Application marked as admission completed",
+      data: serializeBigInt(result),
+      message: "Admission confirmed successfully",
     });
   } catch (error) {
     console.error("Complete Admission Error:", error);
 
     return res.status(400).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to complete admission",
     });
   }
 };

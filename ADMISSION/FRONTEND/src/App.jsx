@@ -24,6 +24,7 @@ import { Login } from "./pages/Login";
 import { AdminPortal } from "./pages/AdminPortal";
 import LeadDetails from "./pages/LeadDetails";
 import ApplicationDetails from "./pages/ApplicationDetails";
+import { AdmissionResume } from "./pages/AdmissionResume";
 
 const adminRouteElement = (
   <ProtectedRoute role="admin">
@@ -58,17 +59,15 @@ export default function App() {
           <Route path="applications" element={<Applications />} />
           <Route path="applications/:id/details" element={<ApplicationDetails />} />
           <Route path="applications/create" element={<CreateApplication />} />
-          <Route
-            path="applications/form/:id"
-            element={<MultiStepApplication />}
-          />
-          <Route path="application/:id" element={<MultiStepApplication />} />
+          <Route path="applications/form/:id"element={<MultiStepApplication />} />
+           
           <Route path="applications/new" element={<NewApplication />} />
           <Route path="screening" element={<Screening />} />
           <Route path="offers-seats" element={<OffersSeats />} />
           <Route path="fees-payments" element={<FeesPayments />} />
           <Route path="fees/invoice/:id" element={<InvoiceDetail />} />
           <Route path="enrollment" element={<Enrollment />} />
+          <Route path="admission/resume/:id"element={<AdmissionResume />}/>
           <Route path="reports" element={<Reports />} />
           <Route path="security" element={<Security />} />
           <Route path="settings" element={<Settings />} />
