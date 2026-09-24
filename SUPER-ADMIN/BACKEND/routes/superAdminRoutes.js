@@ -5,6 +5,13 @@ const { login } = require('../controllers/superAdminAuthController');
 const { getAllSchools, getStats, createSchool, updateSchool } = require('../controllers/superAdminSchoolController');
 const { getAllStaff, createStaff } = require('../controllers/superAdminStaffController');
 const { renewSchoolSubscription, getSchoolRenewals } = require('../controllers/superAdminBillingController');
+const {
+  getAllUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  resetUserPassword,
+} = require('../controllers/superAdminUserController');
 
 // Auth (no middleware needed)
 router.options('/login', (req, res) => res.sendStatus(204));
@@ -22,5 +29,18 @@ router.get('/staff', verifyInternalStaff, getAllStaff);
 router.post('/staff', verifyInternalStaff, createStaff);
 router.post('/schools/:id/renew', verifyInternalStaff, renewSchoolSubscription);
 router.get('/schools/:id/renewals', verifyInternalStaff, getSchoolRenewals);
+router.get('/users', verifyInternalStaff, getAllUsers);
+
+router.post('/users', verifyInternalStaff, createUser);
+
+router.patch('/users/:id', verifyInternalStaff, updateUser);
+
+router.delete('/users/:id', verifyInternalStaff, deleteUser);
+
+router.post(
+  '/users/:id/reset-password',
+  verifyInternalStaff,
+  resetUserPassword
+);
 
 module.exports = router;

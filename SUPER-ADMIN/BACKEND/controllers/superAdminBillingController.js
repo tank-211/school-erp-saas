@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { Prisma } = require("@prisma/client");
+const { serializeBigInt } = require("../utils/bigintSerializer");
 
 
 const renewSchoolSubscription = async (req, res) => {
