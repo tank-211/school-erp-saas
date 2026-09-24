@@ -235,6 +235,7 @@ function UserManagement() {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
+                autocomplete="off"
                 required
               />
             </label>
@@ -248,6 +249,7 @@ function UserManagement() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
+                autocomplete="new-password"
                 required
               />
             </label>

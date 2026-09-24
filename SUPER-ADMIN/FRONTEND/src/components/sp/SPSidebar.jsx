@@ -18,13 +18,32 @@ function SPSidebar() {
       <h2 className="sp-title">Control Portal</h2>
 
       <nav className="sp-sidebar-nav">
-        <NavLink className={linkClass} to="/sp-control-portal/dashboard">
+        <NavLink
+          className={linkClass}
+          to="/sp-control-portal/dashboard"
+        >
           Dashboard
         </NavLink>
-        <NavLink className={linkClass} to="/sp-control-portal/schools">
+
+        <NavLink
+          className={linkClass}
+          to="/sp-control-portal/schools"
+        >
           School Management
         </NavLink>
-        <NavLink className={linkClass} to="/sp-control-portal/staff">
+
+        {/* User Management */}
+        <NavLink
+          className={linkClass}
+          to="/sp-control-portal/users"
+        >
+          User Management
+        </NavLink>
+
+        <NavLink
+          className={linkClass}
+          to="/sp-control-portal/staff"
+        >
           Staff Manager
         </NavLink>
       </nav>
