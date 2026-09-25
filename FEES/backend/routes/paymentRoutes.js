@@ -15,29 +15,29 @@ const router = express.Router();
  * Public route (frontend needs to call this)
  * Body: { amount, studentName, studentId, invoiceId, totalAmount }
  */
-router.post('/create-order', paymentController.createOrder);
+router.post(
+  '/create-order',
+  authenticateToken,
+  paymentController.createOrder
+);
 
-/**
- * POST /api/payments/verify
- * Verify payment signature and update fee payment record (MAIN VERIFICATION ENDPOINT)
- * Body: { orderId, paymentId, signature, studentId, amount }
- */
-router.post('/verify', paymentController.verifyPayment);
+router.post(
+  '/verify',
+  authenticateToken,
+  paymentController.verifyPayment
+);
 
-/**
- * POST /api/payments/verify-payment
- * DEPRECATED: Use /verify instead
- * Verify payment signature and update fee payment record
- * Body: { orderId, paymentId, signature, studentId, amount }
- */
-router.post('/verify-payment', paymentController.verifyPayment);
+router.post(
+  '/verify-payment',
+  authenticateToken,
+  paymentController.verifyPayment
+);
 
-/**
- * POST /api/payments/webhook
- * Razorpay webhook endpoint
- * This is called by Razorpay's servers (not authenticated)
- */
-router.post('/webhook', paymentController.handlePaymentWebhook);
+// DO NOT add authenticateToken to webhook
+router.post(
+  '/webhook',
+  paymentController.handlePaymentWebhook
+);
 
 /**
  * GET /api/payments/status/:paymentId
