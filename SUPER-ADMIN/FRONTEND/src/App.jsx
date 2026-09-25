@@ -13,6 +13,7 @@ import RenewalManager from "./pages/sp/RenewalManager";
 import SchoolManagement from "./pages/sp/SchoolManagement";
 import StaffManager from "./pages/sp/StaffManager";
 import UserManagement from "./pages/sp/UserManagement";
+import PaymentGateway from "./pages/sp/PaymentGateway";
 
 import "./styles/sp-theme.css";
 
@@ -63,6 +64,11 @@ function App() {
             <Route
               path="staff"
               element={<StaffManager />}
+            />
+
+            <Route
+              path="payments"
+              element={<PaymentGateway />}
             />
           </Route>
         </Route>

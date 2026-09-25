@@ -42,6 +42,13 @@ function SPSidebar() {
 
         <NavLink
           className={linkClass}
+          to="/sp-control-portal/payments"
+        >
+          Payment Gateway
+        </NavLink>
+
+        <NavLink
+          className={linkClass}
           to="/sp-control-portal/staff"
         >
           Staff Manager

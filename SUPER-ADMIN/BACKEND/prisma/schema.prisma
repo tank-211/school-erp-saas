@@ -616,6 +616,7 @@ model school {
   message_template            message_template[]
   parent_detail               parent_detail[]
   payment                     payment[]
+  school_payment_gateway      school_payment_gateway?
   school_class                school_class[]
   school_subscription_renewal school_subscription_renewal[]
   section                     section[]
@@ -625,6 +626,30 @@ model school {
 
   @@index([name], map: "idx_school_name")
   @@index([status], map: "idx_school_status")
+}
+
+model school_payment_gateway {
+  id        BigInt @id @default(autoincrement())
+  school_id BigInt @unique
+
+  provider String @default("razorpay") @db.VarChar(50)
+  status   String @default("not_connected") @db.VarChar(50)
+
+  razorpay_account_id String? @db.VarChar(100)
+
+  access_token  String? @db.Text
+  refresh_token String? @db.Text
+
+  connected_at    DateTime? @db.Timestamp(6)
+  disconnected_at DateTime? @db.Timestamp(6)
+
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  updated_at DateTime @updatedAt @db.Timestamp(6)
+
+  school school @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([provider])
+  @@index([status])
 }
 
 model school_class {
@@ -769,6 +794,23 @@ model super_admin {
   is_active     Boolean   @default(true)
   created_at    DateTime? @default(now())
   updated_at    DateTime? @default(now())
+}
+
+model platform_payment_gateway {
+  id          BigInt @id @default(autoincrement())
+  provider    String @unique @db.VarChar(50)
+  environment String @default("test") @db.VarChar(20)
+
+  client_id     String? @db.VarChar(255)
+  client_secret String? @db.Text
+
+  status String @default("not_configured") @db.VarChar(50)
+
+  connected_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+
+  @@index([status])
 }
 
 model Notification {

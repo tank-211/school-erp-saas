@@ -155,4 +155,53 @@ export const superAdminService = {
     }
   },
 
+  // Payment Gateway
+  async getPaymentGateway() {
+    try {
+      const response = await superAdminApi.get('/payment-gateway')
+      return response.data
+    } catch (error) {
+      throw createServiceError(
+        error,
+        'Failed to load payment gateway configuration.'
+      )
+    }
+  },
+
+  async createPaymentGateway(data) {
+    try {
+      const response = await superAdminApi.post('/payment-gateway', data)
+      return response.data
+    } catch (error) {
+      throw createServiceError(
+        error,
+        'Failed to configure payment gateway.'
+      )
+    }
+  },
+
+  async updatePaymentGateway(data) {
+    try {
+      const response = await superAdminApi.patch('/payment-gateway', data)
+      return response.data
+    } catch (error) {
+      throw createServiceError(
+        error,
+        'Failed to update payment gateway.'
+      )
+    }
+  },
+
+  async testPaymentGateway() {
+    try {
+      const response = await superAdminApi.post('/payment-gateway/test')
+      return response.data
+    } catch (error) {
+      throw createServiceError(
+        error,
+        'Failed to test payment gateway.'
+      )
+    }
+  },
+
 }

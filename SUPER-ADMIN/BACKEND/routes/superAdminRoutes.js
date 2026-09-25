@@ -13,6 +13,13 @@ const {
   resetUserPassword,
 } = require('../controllers/superAdminUserController');
 
+const {
+  getPaymentGateway,
+  createPaymentGateway,
+  updatePaymentGateway,
+  testPaymentGateway,
+} = require("../controllers/superAdminPaymentGatewayController");
+
 // Auth (no middleware needed)
 router.options('/login', (req, res) => res.sendStatus(204));
 router.post('/login', login);
@@ -41,6 +48,31 @@ router.post(
   '/users/:id/reset-password',
   verifyInternalStaff,
   resetUserPassword
+);
+
+// Payment Gateway
+router.get(
+  "/payment-gateway",
+  verifyInternalStaff,
+  getPaymentGateway
+);
+
+router.post(
+  "/payment-gateway",
+  verifyInternalStaff,
+  createPaymentGateway
+);
+
+router.patch(
+  "/payment-gateway",
+  verifyInternalStaff,
+  updatePaymentGateway
+);
+
+router.post(
+  "/payment-gateway/test",
+  verifyInternalStaff,
+  testPaymentGateway
 );
 
 module.exports = router;
