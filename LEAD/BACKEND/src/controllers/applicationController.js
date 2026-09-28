@@ -134,15 +134,23 @@ export const verifyDocument = async (
   res
 ) => {
 
-  const data =
-    await verifyDocumentService(
-      req.params.documentId
-    );
+  try {
+    const data =
+      await verifyDocumentService(
+        req.params.documentId
+      );
 
-  res.json({
-    success: true,
-    data: serializeBigInt(data)
-  });
+    res.json({
+      success: true,
+      data: serializeBigInt(data)
+    });
+  } catch (error) {
+    console.error("APPLICATION ERROR:", error.message);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
 
 };
 
@@ -196,8 +204,6 @@ export const deleteDocument = async (req, res) => {
 export const updateStudentInfo = async (req, res) => {
   try {
 
-    console.log("APPLICATION ID:", req.params.id);
-    console.log("REQUEST BODY:", req.body);
 
     const data = await updateStudentInfoService(
       req.params.id,
@@ -225,7 +231,6 @@ export const updateStudentInfo = async (req, res) => {
 export const updateParentInfo = async (req, res) => {
   try {
 
-    console.log("PARENT BODY:", req.body);
 
     const data = await updateParentInfoService(
       req.params.id,

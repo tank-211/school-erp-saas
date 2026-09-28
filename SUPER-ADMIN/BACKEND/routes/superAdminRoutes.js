@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const verifyInternalStaff = require('../src/middleware/verifyInternalStaff');
+const verifySuperAdmin = require('../src/middleware/verifySuperAdmin');
 const { login } = require('../controllers/superAdminAuthController');
 const { getAllSchools, getStats, createSchool, updateSchool } = require('../controllers/superAdminSchoolController');
 const { getAllStaff, createStaff } = require('../controllers/superAdminStaffController');
@@ -33,7 +34,8 @@ router.post('/schools', verifyInternalStaff, createSchool);
 router.patch('/schools/:id', verifyInternalStaff, updateSchool);
 router.get('/stats', verifyInternalStaff, getStats);
 router.get('/staff', verifyInternalStaff, getAllStaff);
-router.post('/staff', verifyInternalStaff, createStaff);
+// Only a super_admin may create platform staff (any role, incl. super_admin)
+router.post('/staff', verifySuperAdmin, createStaff);
 router.post('/schools/:id/renew', verifyInternalStaff, renewSchoolSubscription);
 router.get('/schools/:id/renewals', verifyInternalStaff, getSchoolRenewals);
 router.get('/users', verifyInternalStaff, getAllUsers);
@@ -57,15 +59,16 @@ router.get(
   getPaymentGateway
 );
 
+// Platform payment credentials: super_admin only
 router.post(
   "/payment-gateway",
-  verifyInternalStaff,
+  verifySuperAdmin,
   createPaymentGateway
 );
 
 router.patch(
   "/payment-gateway",
-  verifyInternalStaff,
+  verifySuperAdmin,
   updatePaymentGateway
 );
 

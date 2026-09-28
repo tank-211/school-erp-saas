@@ -5,6 +5,7 @@
  */
 
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../utils/jwtSecret.js';
 import * as authQueries from '../db/queries/authQueries.js';
 
 /**
@@ -32,7 +33,7 @@ export const authMiddleware = (req, res, next) => {
     }
 
     // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    const decoded = jwt.verify(token, getJwtSecret());
     
     // Set req.user with decoded token data
     // Expected payload: { id, school_id, role }

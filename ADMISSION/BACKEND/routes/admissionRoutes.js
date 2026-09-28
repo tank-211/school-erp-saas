@@ -1,11 +1,13 @@
 import express from 'express';
 import * as admissionController from '../controllers/admissionController.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, requireSchool } from '../middleware/auth.js';
+import { requireOwnedAdmission, requireOwnedLeadFromBody } from '../middleware/tenantGuards.js';
 import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
-router.use(authMiddleware);
+// Every route is school-scoped: requireSchool sets req.schoolId from the token.
+router.use(authMiddleware, requireSchool);
 
 /**
  * GET /api/admissions/stats
@@ -49,36 +51,36 @@ router.get('/:applicationId', admissionController.getAdmissionById);
  * POST /api/admissions/create-from-lead
  * Create an application from a lead
  */
-router.post('/create-from-lead', admissionController.createFromLead);
+router.post('/create-from-lead', requireOwnedLeadFromBody, admissionController.createFromLead);
 
 /**
  * POST /api/admissions/submit
  * Submit a complete admission form
  */
-router.post('/submit', admissionController.submitAdmission);
+router.post('/submit', requireOwnedAdmission, admissionController.submitAdmission);
 
 /**
  * POST /api/documents/upload
  * Upload a document for an admission
  */
-router.post('/documents/upload', admissionController.uploadDocument);
+router.post('/documents/upload', requireOwnedAdmission, admissionController.uploadDocument);
 
 /**
  * GET /api/applications/:applicationId/progress
  * Get application progress
  */
-router.get('/:applicationId/progress', admissionController.getApplicationProgress);
+router.get('/:applicationId/progress', requireOwnedAdmission, admissionController.getApplicationProgress);
 
 /**
  * PUT /api/applications/:applicationId/progress
  * Update application progress step
  */
-router.put('/:applicationId/progress', admissionController.updateApplicationProgress);
+router.put('/:applicationId/progress', requireOwnedAdmission, admissionController.updateApplicationProgress);
 
 /**
  * POST /api/admissions/save-academic
  * Save academic details for an admission
  */
-router.post('/save-academic', admissionController.saveAcademicDetails);
+router.post('/save-academic', requireOwnedAdmission, admissionController.saveAcademicDetails);
 
 export default router;

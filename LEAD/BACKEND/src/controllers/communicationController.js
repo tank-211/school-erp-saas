@@ -78,15 +78,14 @@ export const deleteCommunication = async (req, res) => {
 
 export const sendEmail = async (req, res) => {
   try {
-    console.log("EMAIL BODY:", req.body);
-    console.log("USER:", req.user);
 
     const communication = await sendEmailService(
       {
         ...req.body,
         leadId: parseInt(req.body.leadId),
       },
-      req.user.id
+      req.user.id,
+      req.user.schoolId
     );
 
     res.status(201).json(

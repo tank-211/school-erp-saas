@@ -51,7 +51,8 @@ app.use(helmet());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// /uploads is no longer served publicly: it holds application documents and
+// bulk-import CSVs (lead phone numbers). No LEAD screen links to these files.
 app.use("/api/tasks", taskRoutes);
 app.use("/api/applications", applicationRoutes);
 app.use("/api/pipeline", pipelineRoutes);
