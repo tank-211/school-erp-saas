@@ -3,7 +3,6 @@ import { errorResponse } from "../utils/response.js";
 export const validate = (schema) => {
   return (req, res, next) => {
 
-        console.log("🔥 VALIDATION INPUT:", req.body);
 
     const result = schema.safeParse(req.body);
 

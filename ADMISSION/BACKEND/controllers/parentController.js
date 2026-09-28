@@ -1,13 +1,25 @@
 import prisma from '../src/lib/prisma.js';
+import { serializeBigInt } from '../utils/bigintSerializer.js';
 
-// Get parent by ID
+// Every route runs after authMiddleware + requireSchool (routes/parentRoutes.js),
+// so req.schoolId is the caller's school (BigInt) from the token. A school_id in
+// the request body is ignored.
+
+const isId = (value) => /^\d+$/.test(String(value ?? ''));
+
+// Get parent by ID (own school only)
 export const getParentById = async (req, res) => {
   const { id } = req.params;
 
+  if (!isId(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid parent id' });
+  }
+
   try {
-    const parent = await prisma.parent_detail.findUnique({
+    const parent = await prisma.parent_detail.findFirst({
       where: {
-        id: BigInt(id)
+        id: BigInt(id),
+        school_id: req.schoolId
       }
     });
 
@@ -20,10 +32,10 @@ export const getParentById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: parent
+      data: serializeBigInt(parent)
     });
   } catch (error) {
-    console.error('Error fetching parent:', error);
+    console.error('Error fetching parent:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error fetching parent',
@@ -32,10 +44,9 @@ export const getParentById = async (req, res) => {
   }
 };
 
-// Save parent information
+// Save parent information for a student of the caller's school
 export const saveParent = async (req, res) => {
   const {
-    school_id,
     student_id,
     relation,
     first_name,
@@ -45,11 +56,26 @@ export const saveParent = async (req, res) => {
     occupation
   } = req.body;
 
+  if (!isId(student_id)) {
+    return res.status(400).json({ success: false, message: 'Valid student_id is required' });
+  }
+
   try {
+    // The student must belong to the caller's school
+    const student = await prisma.student.findFirst({
+      where: { id: BigInt(student_id), school_id: req.schoolId },
+      select: { id: true }
+    });
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
     const existingParent =
       await prisma.parent_detail.findFirst({
         where: {
-          student_id: BigInt(student_id),
+          student_id: student.id,
+          school_id: req.schoolId,
           relation: relation || 'Father'
         }
       });
@@ -75,8 +101,8 @@ export const saveParent = async (req, res) => {
       parent =
         await prisma.parent_detail.create({
           data: {
-            school_id: BigInt(school_id),
-            student_id: BigInt(student_id),
+            school_id: req.schoolId,
+            student_id: student.id,
             relation: relation || 'Father',
             first_name,
             last_name,
@@ -90,10 +116,10 @@ export const saveParent = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Parent information saved successfully',
-      data: parent
+      data: serializeBigInt(parent)
     });
   } catch (error) {
-    console.error('Error saving parent:', error);
+    console.error('Error saving parent:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error saving parent',

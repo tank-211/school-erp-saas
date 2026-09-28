@@ -1,46 +1,56 @@
 import prisma from '../src/lib/prisma.js';
+import { serializeBigInt } from '../utils/bigintSerializer.js';
 
 /**
  * Student Controller
- * Handles all student-related endpoints
+ * Handles all student-related endpoints.
+ *
+ * Every route runs after authMiddleware + requireSchool (routes/studentRoutes.js),
+ * so req.schoolId is the caller's school (BigInt) from the token. All queries are
+ * scoped to it; a school_id sent in the request body is ignored.
  */
 
-// Get all students with pagination
+const isId = (value) => /^\d+$/.test(String(value ?? ''));
+
+// Get all students of the caller's school, with pagination
 const getAllStudents = async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
   const offset = (page - 1) * limit;
+  const where = { school_id: req.schoolId };
 
   try {
-    // Get total count
-        const totalStudents = await prisma.student.count();
+    const totalStudents = await prisma.student.count({ where });
 
-        const students = await prisma.student.findMany({
-          skip: Number(offset),
-          take: Number(limit),
-          orderBy: {
-            created_at: 'desc'
-          },
-          include: {
-            school: {
-              select: {
-                name: true
-              }
-            }
+    const students = await prisma.student.findMany({
+      where,
+      skip: offset,
+      take: limit,
+      orderBy: {
+        created_at: 'desc'
+      },
+      include: {
+        school: {
+          select: {
+            name: true
           }
-        });
+        }
+      }
+    });
+
     res.status(200).json({
       success: true,
       message: 'Students retrieved successfully',
-      data: students,
+      data: serializeBigInt(students),
       pagination: {
         total: totalStudents,
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         pages: Math.ceil(totalStudents / limit),
       },
     });
   } catch (error) {
-    console.error('Error fetching students:', error);
+    console.error('Error fetching students:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error fetching students',
@@ -49,15 +59,19 @@ const getAllStudents = async (req, res) => {
   }
 };
 
-// Get student by ID with details
+// Get student by ID with details (own school only)
 const getStudentById = async (req, res) => {
   const { id } = req.params;
 
+  if (!isId(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid student id' });
+  }
+
   try {
-    // Get student details
-    const student = await prisma.student.findUnique({
+    const student = await prisma.student.findFirst({
       where: {
-        id: BigInt(id)
+        id: BigInt(id),
+        school_id: req.schoolId
       },
       include: {
         school: true,
@@ -72,23 +86,24 @@ const getStudentById = async (req, res) => {
       }
     });
 
-          if (!student) {
-            return res.status(404).json({
-              success: false,
-              message: 'Student not found',
-            });
-          }    
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found',
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: 'Student details retrieved successfully',
-      data: {
+      data: serializeBigInt({
         student: student,
         parents: student.parent_detail,
         admissions: student.admission,
-      },
+      }),
     });
   } catch (error) {
-    console.error('Error fetching student:', error);
+    console.error('Error fetching student:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error fetching student',
@@ -97,10 +112,9 @@ const getStudentById = async (req, res) => {
   }
 };
 
-// Create new student
+// Create new student in the caller's school
 const createStudent = async (req, res) => {
   const {
-    school_id,
     admission_number,
     first_name,
     last_name,
@@ -117,17 +131,17 @@ const createStudent = async (req, res) => {
   } = req.body;
 
   // Validation
-  if (!first_name || !admission_number || !school_id) {
+  if (!first_name || !admission_number) {
     return res.status(400).json({
       success: false,
-      message: 'Missing required fields: first_name, admission_number, school_id',
+      message: 'Missing required fields: first_name, admission_number',
     });
   }
 
   try {
     const student = await prisma.student.create({
       data: {
-        school_id: BigInt(school_id),
+        school_id: req.schoolId,
         admission_number,
         first_name,
         last_name,
@@ -142,17 +156,17 @@ const createStudent = async (req, res) => {
         country,
         blood_group,
         status: 'active',
-        created_by: 'admin'
+        created_by: String(req.user.id)
       }
     });
 
     res.status(201).json({
       success: true,
       message: 'Student created successfully',
-      data: student,
+      data: serializeBigInt(student),
     });
   } catch (error) {
-    console.error('Error creating student:', error);
+    console.error('Error creating student:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error creating student',
@@ -161,9 +175,9 @@ const createStudent = async (req, res) => {
   }
 };
 
+// Update a student of the caller's school (when id is given) or create one
 const saveStudent = async (req, res) => {
   const {
-    school_id,
     first_name,
     last_name,
     date_of_birth,
@@ -178,9 +192,22 @@ const saveStudent = async (req, res) => {
     let student;
 
     if (id) {
+      if (!isId(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid student id' });
+      }
+
+      const existing = await prisma.student.findFirst({
+        where: { id: BigInt(id), school_id: req.schoolId },
+        select: { id: true }
+      });
+
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+
       student = await prisma.student.update({
         where: {
-          id: BigInt(id)
+          id: existing.id
         },
         data: {
           first_name,
@@ -198,7 +225,7 @@ const saveStudent = async (req, res) => {
 
       student = await prisma.student.create({
         data: {
-          school_id: BigInt(school_id),
+          school_id: req.schoolId,
           admission_number,
           first_name,
           last_name,
@@ -208,7 +235,7 @@ const saveStudent = async (req, res) => {
           email,
           phone,
           status: 'active',
-          created_by: 'admin'
+          created_by: String(req.user.id)
         }
       });
     }
@@ -216,10 +243,10 @@ const saveStudent = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Student saved successfully',
-      data: student,
+      data: serializeBigInt(student),
     });
   } catch (error) {
-    console.error('Error saving student:', error);
+    console.error('Error saving student:', error.message);
     res.status(500).json({
       success: false,
       message: 'Error saving student',
