@@ -259,6 +259,11 @@ export const getLeadStats = async (req, res) => {
 export const getActivities = async (req, res) => {
   try {
     const activities = await prisma.activity.findMany({
+      where: {
+        lead: {
+          school_id: BigInt(req.user.schoolId),
+        },
+      },
       orderBy: {
         created_at: "desc"
       },

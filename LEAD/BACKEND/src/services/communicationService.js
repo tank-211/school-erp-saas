@@ -5,11 +5,17 @@ const prisma = new PrismaClient();
 
 
 
-export const sendEmailService = async (data, userId) => {
+export const sendEmailService = async (data, userId, schoolId) => {
   
-  const lead = await prisma.lead.findUnique({
+  if (!Number.isInteger(data.leadId) || data.leadId <= 0) {
+    throw new Error("Lead not found");
+  }
+
+  // Only leads of the sender's school can be emailed
+  const lead = await prisma.lead.findFirst({
     where: {
-      id: data.leadId,
+      id: BigInt(data.leadId),
+      school_id: BigInt(schoolId),
     },
     select: {
       email: true,
@@ -36,6 +42,7 @@ export const sendEmailService = async (data, userId) => {
 
   const communication = await prisma.communication.create({
       data: {
+        school_id: BigInt(schoolId),
         recipient_type: "lead",
         recipient_id: BigInt(data.leadId),
         channel: "email",
@@ -121,7 +128,7 @@ export const getCommunicationHistoryService = async (leadId, filters = {}) => {
 
 export const updateCommunicationService = async (id, data) => {
   const communication = await prisma.communication.update({
-    where: { id },
+    where: { id: BigInt(id) },
     data: {
       ...(data.content && { content: data.content }),
       ...(data.status && { status: data.status }),
@@ -138,7 +145,7 @@ export const updateCommunicationService = async (id, data) => {
 
 export const deleteCommunicationService = async (id) => {
   await prisma.communication.delete({
-    where: { id },
+    where: { id: BigInt(id) },
   });
 
   return { message: "Communication record deleted successfully" };

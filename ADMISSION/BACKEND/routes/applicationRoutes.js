@@ -1,22 +1,15 @@
 import express from 'express';
 import * as applicationController from '../controllers/applicationController.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, requireSchool } from '../middleware/auth.js';
+import { requireOwnedApplication } from '../middleware/tenantGuards.js';
 import upload from '../middleware/upload.js';
 import { validateApplicationDocumentTypes } from '../middleware/validateApplicationDocumentTypes.js';
 
 const router = express.Router();
 
-console.log('✅ APPLICATION ROUTES LOADED');
-
-router.get('/__test', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Application routes are working',
-  });
-});
-
-// Apply auth middleware to all application routes
-router.use(authMiddleware);
+// Apply auth middleware to all application routes. Every route is school-scoped:
+// requireSchool sets req.schoolId from the token.
+router.use(authMiddleware, requireSchool);
 
 /**
  * New admission workflow routes
@@ -75,13 +68,13 @@ router.get('/:id/details', applicationController.getApplicationDetails);
  * POST /api/applications/:id/student-info
  * Save student information (Step 1)
  */
-router.post('/:id/student-info', applicationController.saveStudentInfo);
+router.post('/:id/student-info', requireOwnedApplication, applicationController.saveStudentInfo);
 
 /**
  * POST /api/applications/:id/parent-info
  * Save parent information (Step 2)
  */
-router.post('/:id/parent-info', applicationController.saveParentInfo);
+router.post('/:id/parent-info', requireOwnedApplication, applicationController.saveParentInfo);
 
 /**
  * POST /api/applications/:id/academic-info
@@ -95,6 +88,7 @@ router.post('/:id/academic-info', applicationController.saveAcademicInfo);
  */
 router.post(
 	'/:id/documents',
+	requireOwnedApplication, // before multer so no file is stored for another school's application
 	upload.any(),
 	validateApplicationDocumentTypes,
 	applicationController.saveDocuments,
@@ -104,7 +98,7 @@ router.post(
  * POST /api/applications/:id/submit
  * Submit final application (Step 6)
  */
-router.post('/:id/submit', applicationController.submitApplication);
+router.post('/:id/submit', requireOwnedApplication, applicationController.submitApplication);
 
 /**
  * PATCH /api/applications/:id/review

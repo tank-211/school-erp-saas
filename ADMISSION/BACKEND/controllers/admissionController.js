@@ -1,5 +1,6 @@
 import * as admissionService from '../services/admissionService.js';
 import prisma from '../src/lib/prisma.js';
+import { serializeBigInt } from '../utils/bigintSerializer.js';
 
 /**
  * Get admission statistics
@@ -155,13 +156,39 @@ export const createAdmission = async (req, res) => {
         });
       }
 
-      admission_id = await admissionService.createAdmission(student, parent, admission);
+      // The school always comes from the token. Every referenced record
+      // (lead, academic year, class, section) must belong to that school.
+      const refChecks = [
+        ['lead', admission.lead_id, 'Lead'],
+        ['academic_year', admission.academic_year_id, 'Academic year'],
+        ['school_class', admission.class_id, 'Class'],
+        ['section', admission.section_id, 'Section'],
+      ];
+      for (const [model, value, label] of refChecks) {
+        if (value === undefined || value === null || value === '') continue;
+        if (!/^\d+$/.test(String(value))) {
+          return res.status(400).json({ success: false, message: `Invalid ${label.toLowerCase()} id` });
+        }
+        const found = await prisma[model].findFirst({
+          where: { id: BigInt(value), school_id: req.schoolId },
+          select: { id: true },
+        });
+        if (!found) {
+          return res.status(400).json({ success: false, message: `${label} not found for this school` });
+        }
+      }
+
+      admission_id = await admissionService.createAdmission(student, parent, {
+        ...admission,
+        school_id: req.schoolId,
+        created_by: String(req.user.id),
+      });
     }
     
     res.status(201).json({
       success: true,
       message: 'Admission created successfully',
-      admission_id
+      admission_id: typeof admission_id === 'bigint' ? admission_id.toString() : admission_id
     });
   } catch (error) {
     console.error('Error creating admission:', error);
@@ -487,9 +514,10 @@ export const saveAcademicDetails = async (req, res) => {
   try {
     const admissionId = BigInt(admission_id);
 
-    const admission = await prisma.admission.findUnique({
+    const admission = await prisma.admission.findFirst({
       where: {
         id: admissionId,
+        school_id: req.schoolId,
       },
     });
 
@@ -500,15 +528,43 @@ export const saveAcademicDetails = async (req, res) => {
       });
     }
 
+    // Class and section must belong to the caller's school
+    const hasClass = class_id !== undefined && class_id !== null;
+    const hasSection = section_id !== undefined && section_id !== null;
+
+    if (hasClass) {
+      const classRecord = await prisma.school_class.findFirst({
+        where: { id: BigInt(class_id), school_id: req.schoolId },
+        select: { id: true },
+      });
+      if (!classRecord) {
+        return res.status(400).json({ success: false, message: 'Class not found for this school' });
+      }
+    }
+
+    if (hasSection) {
+      const sectionRecord = await prisma.section.findFirst({
+        where: {
+          id: BigInt(section_id),
+          school_id: req.schoolId,
+          class_id: hasClass ? BigInt(class_id) : admission.class_id,
+        },
+        select: { id: true },
+      });
+      if (!sectionRecord) {
+        return res.status(400).json({ success: false, message: 'Section not found for this class' });
+      }
+    }
+
     const updatedAdmission = await prisma.admission.update({
       where: {
         id: admissionId,
       },
       data: {
-        ...(class_id !== undefined && class_id !== null
+        ...(hasClass
           ? { class_id: BigInt(class_id) }
           : {}),
-        ...(section_id !== undefined && section_id !== null
+        ...(hasSection
           ? { section_id: BigInt(section_id) }
           : {}),
         ...(previous_school !== undefined
@@ -524,7 +580,7 @@ export const saveAcademicDetails = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: 'Academic details saved successfully',
-      data: updatedAdmission,
+      data: serializeBigInt(updatedAdmission),
     });
   } catch (error) {
     console.error('Error saving academic details:', error);
@@ -668,7 +724,7 @@ export const getApplicationProgress = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: progress
+      data: serializeBigInt(progress)
     });
   } catch (error) {
     console.error('Error fetching progress:', error);

@@ -279,13 +279,19 @@ export const updateStudentInfoService = async (
   data
 ) => {
 
-  const payload = {
-    ...data,
-
-    date_of_birth: data.date_of_birth
-      ? new Date(data.date_of_birth)
-      : null
-  };
+  // Only known student fields; never let the body set application_id or ids
+  const STUDENT_FIELDS = [
+    "first_name", "middle_name", "last_name", "gender", "email", "phone",
+    "address", "city", "state", "postal_code", "country", "blood_group",
+    "aadhar_number"
+  ];
+  const payload = {};
+  for (const field of STUDENT_FIELDS) {
+    if (data[field] !== undefined) payload[field] = data[field];
+  }
+  payload.date_of_birth = data.date_of_birth
+    ? new Date(data.date_of_birth)
+    : null;
 
   return await prisma.application_student_info.upsert({
     where: {

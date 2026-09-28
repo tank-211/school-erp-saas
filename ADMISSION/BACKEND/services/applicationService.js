@@ -17,7 +17,8 @@ const APPLICATION_DOCUMENT_TYPES_SQL = VALID_APPLICATION_DOCUMENT_TYPES
       return null;
     }
 
-    const filePath = String(filePathOrName);
+    // Never store a signed link: drop any ?exp=&sig= query string
+    const filePath = String(filePathOrName).split('?')[0];
     if (filePath.startsWith('/uploads/')) {
       return filePath;
     }

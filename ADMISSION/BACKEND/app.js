@@ -24,6 +24,7 @@ import counselingRoutes from './routes/counselingRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import feesRoutes from './routes/feesRoutes.js';
+import { signUploadUrlsInResponse, verifySignedUpload } from './utils/signedUploads.js';
 
 dotenv.config();
 
@@ -49,7 +50,10 @@ app.use(
 // Body parser middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.resolve(__dirname, process.env.UPLOAD_DIR || './uploads')));
+// Uploaded documents are served only through short-lived signed links
+// (see utils/signedUploads.js). JSON responses get their /uploads links signed.
+app.use('/uploads', verifySignedUpload, express.static(path.resolve(__dirname, process.env.UPLOAD_DIR || './uploads')));
+app.use(signUploadUrlsInResponse);
 
 // Request logging middleware
 app.use((req, res, next) => {

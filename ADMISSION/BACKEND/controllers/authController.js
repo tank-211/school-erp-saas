@@ -4,6 +4,7 @@
  */
 import prisma from '../src/lib/prisma.js';
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../utils/jwtSecret.js';
 import bcrypt from 'bcryptjs';
 import * as authQueries from '../db/queries/authQueries.js';
 
@@ -47,7 +48,7 @@ export const superAdminLogin = async (req, res, next) => {
         role: 'super_admin',
         email: admin.email
       },
-      process.env.JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: '24h' }
     );
 
@@ -111,7 +112,7 @@ export const login = async (req, res, next) => {
         role: user.role,
         email: user.email
       },
-      process.env.JWT_SECRET || 'your-secret-key',
+      getJwtSecret(),
       { expiresIn: '24h' }
     );
 

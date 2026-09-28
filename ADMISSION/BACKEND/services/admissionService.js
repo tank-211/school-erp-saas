@@ -1,4 +1,5 @@
 import prisma from '../src/lib/prisma.js';
+import { stripUploadSignature } from '../utils/signedUploads.js';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -851,11 +852,14 @@ async function insertUploadedDocuments(tx, admissionId, uploadedDocuments, userI
       document.filename ||
       null;
 
+    // Never store a signed link: drop any ?exp=&sig= query string
     const filePath =
-      document.file_path ||
-      document.path ||
-      document.file_url ||
-      null;
+      stripUploadSignature(
+        document.file_path ||
+        document.path ||
+        document.file_url ||
+        null
+      );
 
     if (!documentType || !fileName) {
       continue;
