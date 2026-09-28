@@ -5,13 +5,18 @@ import { validateRequest, loginValidator, registerValidator } from '../middlewar
 
 const router = Router();
 
-// Public routes
+// Admin-only: create a user in the caller's own school.
+// Public self-registration is closed because it let anyone create an account
+// (with any role) in any school. The school always comes from the token.
 router.post(
   '/register',
+  authenticate,
+  authorize('admin', 'ADMIN'),
   validateRequest(registerValidator),
   authController.register
 );
 
+// Public routes
 router.post(
   '/login',
   validateRequest(loginValidator),

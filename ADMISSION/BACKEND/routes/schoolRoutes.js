@@ -1,22 +1,23 @@
 import express from 'express';
 import { getAllSchools, getSchoolById, createSchool, getSchoolCounselors } from '../controllers/schoolController.js';
+import { authMiddleware, requireSchool } from '../middleware/auth.js';
 
 const router = express.Router();
-/**
- * School Routes
- * Base path: /api/schools
- */
 
-// GET all schools
+// A school user may only see their own school. Creating schools is a platform
+// action done in the Super Admin portal (POST /api/super-admin/schools).
+router.use(authMiddleware, requireSchool);
+
+// Get the caller's own school (kept as a list for response compatibility)
 router.get('/', getAllSchools);
 
-// GET school by ID
+// Get school by ID (own school only)
 router.get('/:id', getSchoolById);
 
-// GET school counselors by ID
+// Get counselors for a school (own school only)
 router.get('/:schoolId/counselors', getSchoolCounselors);
 
-// POST create new school
+// Create new school: disabled here, returns 403
 router.post('/', createSchool);
 
 export default router;

@@ -1,12 +1,8 @@
 import { hashPassword, comparePassword } from "../utils/bcrypt.js";
 import { generateToken } from "../utils/jwt.js";
 import prisma from '../prisma/index.js';
-console.log("🔥 AUTH SERVICE FILE LOADED 🔥");
-console.log("prisma.app_user =", prisma.app_user);
-console.log("prisma.app_user =", prisma.app_user);
-console.log(Object.keys(prisma));
-console.log("prisma.app_user =", prisma.app_user);
-console.log("prisma.app_user =", prisma.app_user);
+import AppError from "../utils/AppError.js";
+
 export const registerService = async (data) => {
   const existingUser = await prisma.user.findFirst({
     where: { email: data.email },
@@ -18,34 +14,32 @@ export const registerService = async (data) => {
 
   const hashedPassword = await hashPassword(data.password);
 
-  // 🔥 STEP 1: normalize input
+  // Normalize input
   const schoolName = data.schoolName.trim().toLowerCase();
 
-  // 🔥 STEP 2: check if school already exists
-  let school = await prisma.school.findFirst({
+  // Self-registration may only create a NEW school. Joining an existing school
+  // is not allowed here: it let anyone who knew a school's name become a user
+  // of that school and read its data. Staff of an existing school are added by
+  // that school's admin (user invite) or by Super Admin.
+  const existingSchool = await prisma.school.findFirst({
     where: {
+      name: { equals: schoolName, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+
+  if (existingSchool) {
+    throw new AppError(
+      "A school with this name is already registered. Ask your school admin to add you.",
+      409
+    );
+  }
+
+  const school = await prisma.school.create({
+    data: {
       name: schoolName,
     },
   });
-
-  // 🔥 STEP 3: create only if not exists
-  if (!school) {
-    school = await prisma.school.create({
-      data: {
-        name: schoolName,
-      },
-    });
-  }
-  
-  console.log({
-    name: data.name,
-    email: data.email,
-    password_hash: hashedPassword,
-    school_id: school.id,
-    role: "counselor",
-    status: "active",
-  });
-
 
   const user = await prisma.user.create({
     data: {
@@ -57,12 +51,7 @@ export const registerService = async (data) => {
       status: "active",
     },
   });
-  console.log("USER CREATED:", user);
-  
-  console.log("BEFORE TOKEN");
   const token = generateToken({userId: Number(user.id),schoolId: Number(user.school_id), role: user.role,});
-  console.log("AFTER TOKEN");
-  console.log("BEFORE RETURN");
   return {
     user: {
           id: Number(user.id),
@@ -76,11 +65,9 @@ export const registerService = async (data) => {
     };
 
 export const loginService = async (email, password) => {
-  console.log("LOGIN EMAIL:", email);
   const user = await prisma.user.findFirst({
     where: { email },
   });
-  console.log("FOUND USER:", user);
 
   if (!user) {
     throw new Error("Invalid credentials");
@@ -90,9 +77,6 @@ export const loginService = async (email, password) => {
     throw new Error("Account deactivated. Contact administrator.");
   }
     
-  console.log("INPUT PASSWORD:", password);
-  console.log("DB HASH:", user.password_hash);
-
   const passwordMatch = await comparePassword(
     password,
     user.password_hash
@@ -167,7 +151,7 @@ export const changePasswordService = async (userId, currentPassword, newPassword
     throw new Error("User not found");
   }
 
-  const passwordMatch = await comparePassword(currentPassword, user.password_hash); console.log("PASSWORD MATCH:", passwordMatch);
+  const passwordMatch = await comparePassword(currentPassword, user.password_hash);
   if (!passwordMatch) {
     throw new Error("Current password is incorrect");
   }

@@ -1,9 +1,16 @@
 import { Request, Response } from 'express';
 import authService from '../services/authService';
+import prisma from '../config/database';
 import { sendSuccess, sendError } from '../utils/responseHelper';
 import { asyncHandler } from '../middleware/errorHandler';
 import logger from '../config/logger';
 
+// Roles a school admin may assign (values stored in app_user.role).
+const ASSIGNABLE_ROLES = ['admin', 'counselor', 'accountant'];
+
+// POST /api/auth/register (authenticate + authorize admin)
+// Creates a user in the calling admin's school. schoolId in the body is ignored;
+// the school comes from the token. No tokens are returned for the new user.
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const {
     firstName,
@@ -12,8 +19,31 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     phone,
     password,
     role,
-    schoolId,
   } = req.body;
+
+  const schoolId = req.user?.schoolId;
+  if (!schoolId || !/^\d+$/.test(String(schoolId)) || !/^\d+$/.test(String(req.user?.id ?? ''))) {
+    return sendError(res, 'This action requires a school admin account', [], 403);
+  }
+
+  // Re-check the caller in the database: active admin of the token's school.
+  const caller = await prisma.app_user.findUnique({
+    where: { id: BigInt(String(req.user!.id)) },
+    select: { status: true, role: true, school_id: true },
+  });
+  if (
+    !caller ||
+    caller.status !== 'active' ||
+    String(caller.role).toLowerCase() !== 'admin' ||
+    caller.school_id !== BigInt(String(schoolId))
+  ) {
+    return sendError(res, 'This action requires a school admin account', [], 403);
+  }
+
+  const assignedRole = role ? String(role).toLowerCase() : 'counselor';
+  if (!ASSIGNABLE_ROLES.includes(assignedRole)) {
+    return sendError(res, `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`, [], 400);
+  }
 
   const result = await authService.register(
     firstName,
@@ -21,16 +51,16 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     email,
     phone,
     password,
-    role || 'counselor',
-    schoolId
+    assignedRole,
+    String(schoolId)
   );
 
   logger.info('User registered', {
-    email,
     userId: result.user.id,
+    createdBy: req.user!.id,
   });
 
-  sendSuccess(res, 'User registered successfully', result, 201);
+  sendSuccess(res, 'User registered successfully', { user: result.user }, 201);
 });
 
 export const login = asyncHandler(async (req: Request, res: Response) => {

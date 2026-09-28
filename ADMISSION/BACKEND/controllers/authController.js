@@ -96,11 +96,6 @@ export const login = async (req, res, next) => {
       user.password_hash
     );
 
-    console.log("LOGIN EMAIL:", email);
-    console.log("DB USER:", user);
-    console.log("DB HASH:", user?.password_hash);
-    console.log("PASSWORD MATCH:", isValidPassword);
-
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -142,19 +137,28 @@ export const login = async (req, res, next) => {
 };
 
 /**
+ * Roles a school admin may assign. super_admin is a platform role and is never
+ * assignable from a school-level endpoint.
+ */
+export const ASSIGNABLE_ROLES = ['admin', 'counselor', 'accountant'];
+
+/**
  * signup(req, res, next)
- * POST /api/auth/signup
- * Creates new user and returns JWT token
+ * POST /api/auth/signup  (authMiddleware + requireSchool + isAdmin)
+ * Creates a user in the calling admin's school. The school comes from the
+ * token (req.schoolId); any school_id in the body is ignored. No token is
+ * returned for the new user.
  */
 export const signup = async (req, res, next) => {
   try {
-    const { name, email, password, confirmPassword, school_id, role } = req.body;
+    const { name, email, password, confirmPassword, role } = req.body;
+    const schoolId = req.schoolId;
 
     // Validation
-    if (!name || !email || !password || !school_id) {
+    if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Name, email, password, and school_id are required'
+        message: 'Name, email and password are required'
       });
     }
 
@@ -172,8 +176,19 @@ export const signup = async (req, res, next) => {
       });
     }
 
-    // Check if user exists
-    const existingUser = await authQueries.getUserByEmail(email);
+    const assignedRole = role || 'counselor';
+    if (!ASSIGNABLE_ROLES.includes(assignedRole)) {
+      return res.status(400).json({
+        success: false,
+        message: `Role must be one of: ${ASSIGNABLE_ROLES.join(', ')}`
+      });
+    }
+
+    // Check if user exists (any status: email is unique across the table)
+    const existingUser = await prisma.app_user.findUnique({
+      where: { email },
+      select: { id: true }
+    });
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -185,32 +200,19 @@ export const signup = async (req, res, next) => {
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
 
-    // Create user
+    // Create user in the admin's own school
     const newUser = await authQueries.createUser({
       name,
       email,
       password_hash,
-      school_id,
-      role: role || 'counselor'
+      school_id: schoolId,
+      role: assignedRole
     });
-
-    // Generate token
-    const token = jwt.sign(
-      {
-        userId: Number(newUser.id),
-        schoolId: Number(newUser.school_id),
-        role: newUser.role,
-        email: newUser.email
-      },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
-    );
 
     res.status(201).json({
       success: true,
       message: 'Account created successfully',
       data: {
-        token,
         user: {
           id: Number(newUser.id),
           name: newUser.name,
@@ -221,7 +223,7 @@ export const signup = async (req, res, next) => {
       }
     });
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('Signup error:', error.message);
     next(error);
   }
 };
@@ -234,7 +236,7 @@ export const signup = async (req, res, next) => {
 export const me = async (req, res, next) => {
   try {
     const user = await authQueries.getUserById(req.user.id);
-    
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -242,10 +244,13 @@ export const me = async (req, res, next) => {
       });
     }
 
+  // Never return the password hash
+  const { password_hash, ...safeUser } = user;
+
   res.status(200).json({
     success: true,
     data: {
-      ...user,
+      ...safeUser,
       id: Number(user.id),
       school_id: Number(user.school_id)
     }

@@ -71,9 +71,21 @@ export const isAdmin = (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Not authenticated' });
     }
 
+    // Only school-user tokens can pass. A token without a school (e.g. one issued
+    // from the separate super_admin table) must not be matched against app_user by id.
+    const tokenSchoolId = parseSchoolId(req.user.school_id);
+    if (!tokenSchoolId || !isPositiveIntegerId(req.user.id)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
+    }
+
     const freshUser = await authQueries.getUserById(req.user.id);
 
     if (!freshUser || freshUser.status !== 'active') {
+      return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
+    }
+
+    // The account must still belong to the school named in the token.
+    if (BigInt(freshUser.school_id) !== tokenSchoolId) {
       return res.status(403).json({ success: false, message: 'Access denied. Admin privileges required.' });
     }
 
@@ -90,6 +102,40 @@ export const isAdmin = (req, res, next) => {
   })().catch((error) => {
     next(error);
   });
+};
+
+/**
+ * Parse a school id from a token claim. Returns a BigInt, or null when the
+ * value is missing or not a positive integer.
+ */
+export const parseSchoolId = (value) => {
+  if (value === undefined || value === null || value === '') return null;
+  const text = String(value);
+  if (!/^\d+$/.test(text)) return null;
+  const id = BigInt(text);
+  return id > 0n ? id : null;
+};
+
+export const isPositiveIntegerId = (value) =>
+  value !== undefined && value !== null && /^\d+$/.test(String(value)) && BigInt(String(value)) > 0n;
+
+/**
+ * requireSchool
+ * Use after authMiddleware on routes that operate on school-owned data.
+ * Rejects tokens that carry no school (for example super-admin tokens) and
+ * exposes the caller's school as req.schoolId (BigInt). Handlers must scope
+ * every query with req.schoolId and never read a school id from the request.
+ */
+export const requireSchool = (req, res, next) => {
+  const schoolId = parseSchoolId(req.user?.school_id);
+  if (!schoolId) {
+    return res.status(403).json({
+      success: false,
+      message: 'This action requires a school user account.',
+    });
+  }
+  req.schoolId = schoolId;
+  next();
 };
 
 export default authMiddleware;
