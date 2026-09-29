@@ -107,13 +107,15 @@ export const loginService = async (email, password) => {
 
 export const getCurrentUserService = async (userId) => {
   const user = await prisma.user.findFirst({
-    where: { id: userId },
+    where: { id: BigInt(userId) },
     select: {
       id: true,
+      school_id: true,
       name: true,
       email: true,
       role: true,
-      createdAt: true,
+      status: true,
+      created_at: true,
     },
   });
 
@@ -121,12 +123,20 @@ export const getCurrentUserService = async (userId) => {
     throw new Error("User not found");
   }
 
-  return user;
+  return {
+    id: Number(user.id),
+    schoolId: Number(user.school_id),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    status: user.status,
+    createdAt: user.created_at,
+  };
 };
 
 export const updateProfileService = async (userId, data) => {
   const updatedUser = await prisma.user.update({
-    where: { id: userId },
+    where: { id: BigInt(userId) },
     data: {
       ...(data.name && { name: data.name }),
       ...(data.email && { email: data.email }),
@@ -139,12 +149,12 @@ export const updateProfileService = async (userId, data) => {
     },
   });
 
-  return updatedUser;
+  return { ...updatedUser, id: Number(updatedUser.id) };
 };
 
 export const changePasswordService = async (userId, currentPassword, newPassword) => {
   const user = await prisma.user.findFirst({
-    where: { id: userId },
+    where: { id: BigInt(userId) },
   });
 
   if (!user) {
@@ -159,7 +169,7 @@ export const changePasswordService = async (userId, currentPassword, newPassword
   const hashedPassword = await hashPassword(newPassword);
 
   await prisma.user.update({
-    where: { id: userId },
+    where: { id: BigInt(userId) },
     data: { password_hash : hashedPassword },
   });
 

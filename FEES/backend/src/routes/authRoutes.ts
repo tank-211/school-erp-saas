@@ -11,7 +11,7 @@ const router = Router();
 router.post(
   '/register',
   authenticate,
-  authorize('admin', 'ADMIN'),
+  authorize('admin'),
   validateRequest(registerValidator),
   authController.register
 );

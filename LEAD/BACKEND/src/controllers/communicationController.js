@@ -13,17 +13,15 @@ import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const logCall = async (req, res) => {
   try {
-    const communication = await logCallService(req.body, req.user.id);
+    const communication = await logCallService(req.body, req.user.id, req.user.schoolId);
     res.status(201).json(
-    serializeBigInt(
-    successResponse(communication, "Call logged successfully")
-  )
-);
+      serializeBigInt(
+        successResponse(communication, "Call logged successfully")
+      )
+    );
   } catch (error) {
-    res.status(400).json(errorResponse(error.message));
+    res.status(error.statusCode || 400).json(errorResponse(error.message));
   }
-  console.log("USER:", req.user);
-  console.log("USERID:", req.user.id);
 };
 
 export const getCommunicationHistory = async (req, res) => {
@@ -96,10 +94,9 @@ export const sendEmail = async (req, res) => {
     );
 
   } catch (error) {
-    console.error("FULL EMAIL ERROR:");
-    console.error(error);
+    console.error("EMAIL ERROR:", error.message);
 
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message,
     });
@@ -107,10 +104,10 @@ export const sendEmail = async (req, res) => {
 };
 export const logWhatsApp = async (req, res) => {
   try {
-    console.log("WHATSAPP BODY:", req.body);
     const result = await logWhatsAppService(
       req.body,
-      req.user.id
+      req.user.id,
+      req.user.schoolId
     );
 
     res.status(201).json(
@@ -122,8 +119,7 @@ export const logWhatsApp = async (req, res) => {
     );
 
   } catch (error) {
-     console.log("WHATSAPP ERROR:", error);
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message,
     });
@@ -133,7 +129,8 @@ export const logSMS = async (req, res) => {
   try {
     const result = await logSMSService(
       req.body,
-      req.user.id
+      req.user.id,
+      req.user.schoolId
     );
 
     res.status(201).json(
@@ -145,7 +142,7 @@ export const logSMS = async (req, res) => {
     );
 
   } catch (error) {
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message,
     });

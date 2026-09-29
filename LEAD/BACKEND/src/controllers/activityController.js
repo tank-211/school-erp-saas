@@ -6,13 +6,19 @@ import {
   getRecentActivitiesService,
 } from "../services/activityService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
+import { serializeBigInt } from "../utils/bigintSerializer.js";
+
+// All activity queries are limited to the caller's school (see activityService.js).
+
+const fail = (res, error, fallback = 500) =>
+  res.status(error.statusCode || fallback).json(errorResponse(error.message));
 
 export const createActivity = async (req, res) => {
   try {
-    const activity = await createActivityService(req.body, req.userId);
-    res.status(201).json(successResponse(activity, "Activity created successfully"));
+    const activity = await createActivityService(req.body, req.user.id, req.user.schoolId);
+    res.status(201).json(successResponse(serializeBigInt(activity), "Activity created successfully"));
   } catch (error) {
-    res.status(400).json(errorResponse(error.message));
+    fail(res, error, 400);
   }
 };
 
@@ -23,38 +29,36 @@ export const getActivities = async (req, res) => {
       limit: parseInt(req.query.limit) || 20,
       type: req.query.type,
     };
-
-    const result = await getActivitiesByLeadService(req.query.leadId, filters);
-    res.status(200).json(successResponse(result, "Activities retrieved successfully"));
+    const result = await getActivitiesByLeadService(req.query.leadId, req.user.schoolId, filters);
+    res.status(200).json(successResponse(serializeBigInt(result), "Activities retrieved successfully"));
   } catch (error) {
-    res.status(500).json(errorResponse(error.message));
+    fail(res, error);
   }
 };
 
 export const updateActivity = async (req, res) => {
   try {
-    const activity = await updateActivityService(req.params.id, req.body);
-    res.status(200).json(successResponse(activity, "Activity updated successfully"));
+    const activity = await updateActivityService(req.params.id, req.body, req.user.schoolId);
+    res.status(200).json(successResponse(serializeBigInt(activity), "Activity updated successfully"));
   } catch (error) {
-    res.status(400).json(errorResponse(error.message));
+    fail(res, error, 400);
   }
 };
 
 export const deleteActivity = async (req, res) => {
   try {
-    const result = await deleteActivityService(req.params.id);
+    const result = await deleteActivityService(req.params.id, req.user.schoolId);
     res.status(200).json(successResponse(result, "Activity deleted successfully"));
   } catch (error) {
-    res.status(404).json(errorResponse(error.message));
+    fail(res, error, 404);
   }
 };
 
 export const getRecentActivities = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10;
-    const activities = await getRecentActivitiesService(limit);
-    res.status(200).json(successResponse(activities, "Recent activities retrieved successfully"));
+    const activities = await getRecentActivitiesService(req.user.schoolId, req.query.limit);
+    res.status(200).json(successResponse(serializeBigInt(activities), "Recent activities retrieved successfully"));
   } catch (error) {
-    res.status(500).json(errorResponse(error.message));
+    fail(res, error);
   }
 };

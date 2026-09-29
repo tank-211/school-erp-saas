@@ -47,7 +47,11 @@ export const authorize = (...allowedRoles: string[]) => {
         throw new AuthenticationError('User not authenticated');
       }
 
-      if (!allowedRoles.includes(req.user.role)) {
+      // Roles are stored lowercase in app_user (admin, counselor, accountant),
+      // while routes were written with uppercase names: compare case-insensitively.
+      const userRole = String(req.user.role || '').toLowerCase();
+      const allowed = allowedRoles.map((role) => role.toLowerCase());
+      if (!allowed.includes(userRole)) {
         logger.warn('Unauthorized access attempt', {
           userId: req.user.id,
           userRole: req.user.role,

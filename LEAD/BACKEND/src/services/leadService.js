@@ -3,7 +3,24 @@ import AppError from "../utils/AppError.js";
 
 const prisma = new PrismaClient();
 
-const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
+// Lead statuses the LEAD backend and UI use. The database does not constrain
+// lead.follow_up_status (verified in Neon), so this list is the only guard.
+// Covers the backend's words and the UI's filter words (new/qualified/converted/lost).
+export const LEAD_STATUSES = [
+  "new", "pending", "contacted", "interested", "qualified",
+  "converted", "admitted", "inactive", "lost"
+];
+const allowedStatus = LEAD_STATUSES;
+
+// Status words that mean the same stage (the UI and backend grew different
+// vocabularies). Stats and the pipeline count them together.
+export const STATUS_GROUPS = {
+  new: ["new", "pending"],
+  contacted: ["contacted"],
+  qualified: ["interested", "qualified"],
+  admitted: ["admitted", "converted"],
+  lost: ["inactive", "lost", "not-interested"],
+};
 
 /* =========================
    CREATE LEAD
@@ -105,7 +122,11 @@ const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
 
   const where = { school_id: BigInt(schoolId) };
 
-  if (status) where.follow_up_status = status;
+  if (status) {
+    // Filter by the whole stage, e.g. "lost" also finds "inactive" leads
+    const group = Object.values(STATUS_GROUPS).find((g) => g.includes(status));
+    where.follow_up_status = group ? { in: group } : status;
+  }
   if (source) where.source = source;
   if (counselor) where.assigned_to = counselor;
   if (date === "This Week") where.created_at = { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
@@ -238,18 +259,44 @@ const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
 /* =========================
    BULK CREATE
 ========================= */
-     const bulkCreateLeadsService = async (leads) => {
-      if (!leads.length) {
-        return { count: 0 };
-      }
+/* =========================
+   BULK CREATE
+   rows: [{ studentFirstName, studentLastName, fatherPhone, fatherEmail,
+            grade, source, status }]
+   Everything is created in the caller's school and its active academic year.
+========================= */
+const bulkCreateLeadsService = async (rows, schoolId, actorId) => {
+  if (!rows.length) {
+    return { count: 0 };
+  }
 
-      const result = await prisma.lead.createMany({
-        data: leads,
-        skipDuplicates: true, // 🔥 important
-      });
+  const sid = BigInt(schoolId);
+  const academicYear = await prisma.academic_year.findFirst({
+    where: { school_id: sid, status: "active" },
+    select: { id: true },
+  });
 
-      return result; // { count: number }
-    };
+  if (!academicYear) {
+    throw new AppError("No active academic year found for this school", 400);
+  }
+
+  const data = rows.map((row) => ({
+    school_id: sid,
+    academic_year_id: academicYear.id,
+    first_name: row.studentFirstName,
+    last_name: row.studentLastName || null,
+    phone: row.fatherPhone,
+    email: row.fatherEmail || null,
+    desired_class: row.grade || null,
+    source: row.source || "bulk_upload",
+    follow_up_status: allowedStatus.includes(row.status) ? row.status : "new",
+    assigned_to: String(actorId),
+    created_by: String(actorId),
+  }));
+
+  return prisma.lead.createMany({ data });
+};
+
  const getLeadStatsService = async (schoolId) => {
     const sid = BigInt(schoolId);
 
@@ -264,28 +311,28 @@ const allowedStatus = ["new", "pending", "contacted", "inactive", "admitted"];
         prisma.lead.count({
           where: {
             school_id: sid,
-            follow_up_status: "pending"
+            follow_up_status: { in: STATUS_GROUPS.new }
           }
         }),
 
         prisma.lead.count({
           where: {
             school_id: sid,
-            follow_up_status: "contacted"
+            follow_up_status: { in: STATUS_GROUPS.contacted }
           }
         }),
 
         prisma.lead.count({
           where: {
             school_id: sid,
-            follow_up_status: "admitted"
+            follow_up_status: { in: STATUS_GROUPS.admitted }
           }
         }),
 
         prisma.lead.count({
           where: {
             school_id: sid,
-            follow_up_status: "inactive"
+            follow_up_status: { in: STATUS_GROUPS.lost }
           }
         })
       ]);
@@ -315,9 +362,14 @@ export const getLeadDetailsService = async (leadId, schoolId) => {
 
 export const assignLeadService = async (
   leadId,
-  userId,
-  schoolId
+  assigneeId,
+  schoolId,
+  actorId
 ) => {
+  const isId = (v) => /^\d+$/.test(String(v ?? ""));
+  if (!isId(leadId) || !isId(assigneeId)) {
+    throw new AppError("Valid lead and assignee are required", 400);
+  }
 
   const lead = await prisma.lead.findFirst({
     where: {
@@ -330,10 +382,12 @@ export const assignLeadService = async (
     throw new AppError("Lead not found", 404);
   }
 
+  // Assignee must be an active user of the same school
   const user = await prisma.user.findFirst({
     where: {
-      id: BigInt(userId),
-      school_id: BigInt(schoolId)
+      id: BigInt(assigneeId),
+      school_id: BigInt(schoolId),
+      status: "active"
     }
   });
 
@@ -341,28 +395,26 @@ export const assignLeadService = async (
     throw new AppError("User not found", 404);
   }
 
-const updatedLead = await prisma.lead.update({
-  where: {
-    id: BigInt(leadId)
-  },
-  data: {
-    assigned_to: String(data.assignedTo || userId),
-  }
-});
+  const updatedLead = await prisma.lead.update({
+    where: {
+      id: lead.id
+    },
+    data: {
+      assigned_to: String(user.id),
+      updated_at: new Date()
+    }
+  });
 
-console.log("🔥 CREATING LEAD_ASSIGNED ACTIVITY");
+  await prisma.activity.create({
+    data: {
+      lead_id: updatedLead.id,
+      activity_type: "LEAD_ASSIGNED",
+      notes: `Assigned to ${user.name}`,
+      created_by: BigInt(actorId)
+    }
+  });
 
-await prisma.activity.create({
-  data: {
-    lead_id: updatedLead.id,
-    activity_type: "LEAD_ASSIGNED",
-    created_by: BigInt(userId)
-  }
-});
-
-console.log("✅ ACTIVITY CREATED");
-
-return updatedLead;
+  return updatedLead;
 };
 
 export {
