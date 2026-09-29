@@ -41,6 +41,23 @@ export const registerService = async (data) => {
     },
   });
 
+  // A school needs an active academic year before it can add leads. Create the
+  // current Indian school year (1 April - 31 March); the admin can change it in
+  // ADMISSION -> School Setup.
+  const now = new Date();
+  const startYear = now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+  await prisma.academic_year.create({
+    data: {
+      school_id: school.id,
+      year_name: `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`,
+      start_date: new Date(Date.UTC(startYear, 3, 1)),
+      end_date: new Date(Date.UTC(startYear + 1, 2, 31)),
+      is_active: true,
+      status: "active",
+      created_by: "self-registration",
+    },
+  });
+
   const user = await prisma.user.create({
     data: {
       name: data.name,

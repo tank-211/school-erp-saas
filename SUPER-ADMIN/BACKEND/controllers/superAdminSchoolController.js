@@ -12,6 +12,19 @@ const normalizePlanType = (planType) => {
   return String(planType).trim().toLowerCase();
 };
 
+// Default academic year for a new school: the Indian school year (1 April to
+// 31 March) that contains today, e.g. "2026-27". A school needs an active year
+// before it can add leads, so onboarding creates one; the school admin can add
+// or switch years later in ADMISSION → School Setup.
+const defaultAcademicYear = (today = new Date()) => {
+  const year = today.getUTCMonth() >= 3 ? today.getUTCFullYear() : today.getUTCFullYear() - 1;
+  return {
+    year_name: `${year}-${String((year + 1) % 100).padStart(2, "0")}`,
+    start_date: new Date(Date.UTC(year, 3, 1)),
+    end_date: new Date(Date.UTC(year + 1, 2, 31)),
+  };
+};
+
 // GET /api/super-admin/schools — Fetch all schools
 const getAllSchools = async (req, res) => {
   try {
@@ -246,14 +259,32 @@ const createSchool = async (req, res) => {
         },
       });
 
-      return { school, admin };
+      const firstYear = defaultAcademicYear();
+      const academicYear = await tx.academic_year.create({
+        data: {
+          school_id: school.id,
+          year_name: firstYear.year_name,
+          start_date: firstYear.start_date,
+          end_date: firstYear.end_date,
+          is_active: true,
+          status: "active",
+          created_by: req.staffUser.full_name,
+        },
+        select: {
+          id: true,
+          year_name: true,
+        },
+      });
+
+      return { school, admin, academicYear };
     });
 
     return res.status(201).json(
       serializeBigInt({
-        message: "School created and admin provisioned successfully.",
+        message: "School created with its admin and first academic year.",
         school: result.school,
         admin: result.admin,
+        academic_year: result.academicYear,
       })
     );
   } catch (err) {
@@ -372,4 +403,4 @@ const updateSchool = async (req, res) => {
   }
 };
 
-module.exports = { getAllSchools, getStats, createSchool, updateSchool };
+module.exports = { getAllSchools, getStats, createSchool, updateSchool, defaultAcademicYear };
