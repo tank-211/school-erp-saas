@@ -26,7 +26,7 @@ const startOfToday = () => {
 
 // Same format as the FEES app (FEES/backend/src/services/invoiceService.ts).
 // invoice_number is unique across all schools, so it must not be a per-school counter.
-const newInvoiceNumber = () =>
+export const newInvoiceNumber = () =>
   `INV-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
 
 /**

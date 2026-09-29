@@ -1,4 +1,5 @@
 import prisma from '../../src/lib/prisma.js';
+import { newInvoiceNumber } from '../../services/admissionFeeService.js';
 
 /**
  * Convert Prisma BigInt values to strings.
@@ -234,24 +235,11 @@ export const getInvoiceById = async (
 };
 
 /**
- * generateInvoiceNumber(school_id)
- * Generate invoice number for the current year.
+ * generateInvoiceNumber()
+ * invoice_number is unique across all schools, so a per-school yearly counter
+ * (INV-2026-0001) collides between schools. Use the shared global format.
  */
-export const generateInvoiceNumber = async (school_id) => {
-  const year = new Date().getFullYear();
-
-  const count = await prisma.invoice.count({
-    where: {
-      school_id: BigInt(school_id),
-      created_at: {
-        gte: new Date(year, 0, 1),
-        lt: new Date(year + 1, 0, 1),
-      },
-    },
-  });
-
-  return `INV-${year}-${String(count + 1).padStart(4, '0')}`;
-};
+export const generateInvoiceNumber = async () => newInvoiceNumber();
 
 /**
  * createInvoice(invoiceData)

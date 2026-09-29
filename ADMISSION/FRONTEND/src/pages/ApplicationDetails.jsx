@@ -98,42 +98,8 @@ const navigate = useNavigate();
     }
   };
 
-  const completeAdmission = async () => {
-    try {
-        const token = localStorage.getItem("authToken");
-
-        const res = await fetch(`${API_URL}/api/applications/complete`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-            application_id: application.id,
-        }),
-        });
-
-        const data = await res.json();
-
-        console.log("COMPLETE ADMISSION RESPONSE:", data);
-
-        if (!res.ok) {
-        throw new Error(
-            data.message || "Failed to complete admission"
-        );
-        }
-
-        // Update UI immediately
-        setApplication((prev) => ({
-        ...prev,
-        status: "admission_completed",
-        }));
-
-    } catch (error) {
-        console.error("COMPLETE ADMISSION ERROR:", error);
-        alert(error.message);
-    }
-    };
+  // Admissions are completed from the admission form (Start Admission ->
+  // Enrollment -> Complete), which sends the admission_id the API needs.
 
   const startAdmission = async () => {
     try {

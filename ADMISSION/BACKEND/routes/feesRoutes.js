@@ -31,7 +31,7 @@ router.get('/transactions', getTransactions);
 router.get('/invoice/:id', getInvoiceById);
 
 // POST generate new invoice
-router.post('/generate-invoice', generateInvoice);
+router.post('/generate-invoice', requireSchool, generateInvoice);
 
 // Completed admissions that have no fees yet, and assigning them (admin only)
 router.get('/admissions-without-fees', requireSchool, getAdmissionsWithoutFees);
