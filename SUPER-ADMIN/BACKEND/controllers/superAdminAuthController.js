@@ -21,8 +21,6 @@ const login = async (req, res) => {
       },
     });
 
-    console.log("Staff:", staff);
-
     if (!staff) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
