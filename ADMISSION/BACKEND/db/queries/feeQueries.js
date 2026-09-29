@@ -165,14 +165,37 @@ export const getTransactions = async (school_id) => {
       school_id: BigInt(school_id),
     },
     include: {
-      student: true,
+      // Only what the list shows: name, admission number and current class
+      student: {
+        select: {
+          id: true,
+          first_name: true,
+          middle_name: true,
+          last_name: true,
+          admission_number: true,
+          admission: {
+            select: { school_class: { select: { class_name: true } } },
+            orderBy: { id: 'desc' },
+            take: 1,
+          },
+        },
+      },
     },
     orderBy: {
       created_at: 'desc',
     },
   });
 
-  return serializeBigInt(transactions);
+  return serializeBigInt(
+    transactions.map(({ student, ...invoice }) => ({
+      ...invoice,
+      student_name: student
+        ? [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(' ')
+        : null,
+      admission_number: student?.admission_number || null,
+      class_name: student?.admission?.[0]?.school_class?.class_name || null,
+    }))
+  );
 };
 
 /**

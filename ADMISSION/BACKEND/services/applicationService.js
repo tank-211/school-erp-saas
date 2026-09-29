@@ -1,6 +1,7 @@
 import path from 'path';
 import { unlink } from 'fs/promises';
 import prisma from '../src/lib/prisma.js';
+import { assignAdmissionFees } from './admissionFeeService.js';
 import {
   VALID_APPLICATION_DOCUMENT_TYPES,
   normalizeApplicationDocumentType,
@@ -2368,7 +2369,7 @@ export const approveApplication = async (applicationId, schoolId) => {
   }
 };
 
-export const completeAdmissionApplication = async (schoolId, admissionId) => {
+export const completeAdmissionApplication = async (schoolId, admissionId, actor = null) => {
   try {
     const schoolIdBigInt = BigInt(schoolId);
     const admissionIdBigInt = BigInt(admissionId);
@@ -2570,7 +2571,15 @@ export const completeAdmissionApplication = async (schoolId, admissionId) => {
         });
       }
 
+      // Assign the class's fees and raise the first invoice, in the same transaction.
+      const fees = await assignAdmissionFees(tx, {
+        schoolId: schoolIdBigInt,
+        admissionId: admissionIdBigInt,
+        actor,
+      });
+
       return {
+        fees,
         admission_id: updatedAdmission.id.toString(),
         application_id:
           updatedAdmission.application_id?.toString() || null,
