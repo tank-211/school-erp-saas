@@ -12,7 +12,10 @@ const prisma = new PrismaClient();
         include: {
         lead: true,
         app_user: true,
-        application_documents: true
+        application_documents: true,
+        application_student_info: true,
+        application_parent_info: true,
+        application_academic_info: true
         },
         orderBy: {
         created_at: "desc"
@@ -22,16 +25,25 @@ const prisma = new PrismaClient();
     return applications.map(app => ({
         id: app.id.toString(),
 
+        // ADMISSION can create applications without a lead: fall back to the
+        // application's own student info
         name:
-        `${app.lead.first_name} ${app.lead.last_name ?? ""}`,
+        (app.lead
+          ? `${app.lead.first_name} ${app.lead.last_name ?? ""}`
+          : `${app.application_student_info?.first_name ?? ""} ${app.application_student_info?.last_name ?? ""}`
+        ).trim() || "Unnamed applicant",
 
         appId:
         app.application_number,
 
         grade:
-        app.lead.desired_class || "N/A",
+        app.lead?.desired_class || app.application_academic_info?.desired_class || "N/A",
 
-        parent:"N/A",
+        parent:
+        app.application_parent_info?.primary_contact_person ||
+        app.application_parent_info?.father_name ||
+        app.application_parent_info?.mother_name ||
+        "N/A",
 
         submitted:
         new Date(app.created_at).toLocaleDateString(),
@@ -88,11 +100,11 @@ export const getApplicationStatsService = async (school_id) => {
       where: { school_id, status: "approved" }
     }),
     prisma.application.count({
-      where: { school_id, status: "waitlisted" }
+      where: { school_id, status: "rejected" }
     }),
-    prisma.application.count({
-      where: { school_id, status: "Rejected" }
-    }),
+    // "waitlisted" is not an allowed application status in the database
+    // (application_status_check), so no application can be waitlisted yet.
+    Promise.resolve(0),
   ]);
 
   return {
@@ -232,18 +244,30 @@ export const verifyDocumentService = async (
   });
 
 };
+// Allowed by the database constraint application_status_check (verified in Neon).
+export const APPLICATION_STATUSES = [
+  "draft", "in_progress", "documents_pending", "submitted", "under_review",
+  "approved", "rejected", "admission_started", "admission_completed"
+];
+
 export const updateApplicationStatusService =
 async (id, status) => {
+  const normalized = String(status ?? "").trim().toLowerCase().replace(/\s+/g, "_");
+  if (!APPLICATION_STATUSES.includes(normalized)) {
+    const error = new Error(`Status must be one of: ${APPLICATION_STATUSES.join(", ")}`);
+    error.statusCode = 400;
+    throw error;
+  }
 
   return prisma.application.update({
     where: {
       id: BigInt(id)
     },
     data: {
-      status
+      status: normalized,
+      updated_at: new Date()
     }
   });
-
 };
 
 export const deleteDocumentService = async (documentId) => {

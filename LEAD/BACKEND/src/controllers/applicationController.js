@@ -168,7 +168,7 @@ export const updateApplicationStatus = async (req, res) => {
   } catch (error) {
     console.error("APPLICATION ERROR:", error);
 
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message
     });

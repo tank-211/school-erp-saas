@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { STATUS_GROUPS } from "./leadService.js";
 
 const prisma = new PrismaClient();
 console.log(Object.keys(prisma));
@@ -74,28 +75,28 @@ export const getStatsService = async (schoolId) => {
       prisma.lead.count({
         where: {
           school_id: schoolId,
-          follow_up_status: "new"
+          follow_up_status: { in: STATUS_GROUPS.new }
         }
       }),
 
       prisma.lead.count({
         where: {
           school_id: schoolId,
-          follow_up_status: "contacted"
+          follow_up_status: { in: STATUS_GROUPS.contacted }
         }
       }),
 
       prisma.lead.count({
         where: {
           school_id: schoolId,
-          follow_up_status: "inactive"
+          follow_up_status: { in: STATUS_GROUPS.lost }
         }
       }),
 
       prisma.lead.count({
         where: {
           school_id: schoolId,
-          follow_up_status: "admitted"
+          follow_up_status: { in: STATUS_GROUPS.admitted }
         }
       })
   ]);
@@ -148,7 +149,7 @@ export const getEnrollmentTrendService = async (schoolId) => {
 
     trend[month].inquiries++;
 
-    if (lead.follow_up_status === "admitted") {
+    if (STATUS_GROUPS.admitted.includes(lead.follow_up_status)) {
       trend[month].enrollments++;
     }
   });
@@ -226,8 +227,11 @@ export const getTodayOverviewService = async (schoolId) => {
         }
       }),
 
+      // Only this school's calls today (activities belong to a school via their lead)
       prisma.activity.count({
         where: {
+          activity_type: "call",
+          lead: { school_id: schoolId },
           created_at: {
             gte: today,
             lt: tomorrow
@@ -235,8 +239,11 @@ export const getTodayOverviewService = async (schoolId) => {
         }
       }),
 
+      // Only this school's emails today
       prisma.communication.count({
         where: {
+          school_id: schoolId,
+          channel: "email",
           created_at: {
             gte: today,
             lt: tomorrow

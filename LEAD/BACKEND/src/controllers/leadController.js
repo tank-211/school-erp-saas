@@ -13,7 +13,7 @@ import {
 } from "../services/leadService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
 import fs from "fs";
-import csv from "csv-parser";
+import XLSX from "xlsx";
 import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const createLead = async (req, res) => {
@@ -127,104 +127,111 @@ export const deleteLead = async (req, res) => {
 };
 
 
-export const bulkCreateLeads = async (req, res) => {
-  
-  console.log("BODY:", req.body);
-  console.log("FILE:", req.file);
+const MAX_BULK_ROWS = 500;
 
-  const { id } = req.user; // ✅ ADD HERE
+// Header names are matched after trimming, removing a BOM/quotes and lower-casing,
+// so "Student First Name", "studentFirstName" and "student_first_name" all work.
+const normalizeHeader = (key) =>
+  String(key)
+    .trim()
+    .replace(/^\uFEFF/, "")
+    .replace(/^'+|'+$/g, "")
+    .replace(/[\s_-]+/g, "")
+    .toLowerCase();
+
+const pick = (row, ...names) => {
+  for (const name of names) {
+    const value = row[normalizeHeader(name)];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return String(value).trim();
+    }
+  }
+  return "";
+};
+
+export const bulkCreateLeads = async (req, res) => {
+  const filePath = req.file?.path;
 
   try {
     if (!req.file) {
       return res.status(400).json(errorResponse("No file uploaded"));
     }
 
-    const results = [];
+    // xlsx reads both .xlsx and .csv (the upload box offers both)
+    const workbook = XLSX.readFile(filePath, { raw: false });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rawRows = sheet ? XLSX.utils.sheet_to_json(sheet, { defval: "", raw: false }) : [];
 
-    fs.createReadStream(req.file.path)
-      .pipe(csv())
-      .on("data", (data) => results.push(data))
-      .on("end", async () => {
-        try {
-          if (!results.length) {
-            return res.status(400).json(errorResponse("CSV is empty"));
-          }
+    if (!rawRows.length) {
+      return res.status(400).json(errorResponse("File is empty"));
+    }
 
-            const validLeads = [];
-            const errors = [];
+    if (rawRows.length > MAX_BULK_ROWS) {
+      return res.status(400).json(errorResponse(`Maximum ${MAX_BULK_ROWS} leads per upload`));
+    }
 
-            results.forEach((row, index) => {
-              const cleanRow = {};
+    const validLeads = [];
+    const errors = [];
 
-              // 🔥 clean ALL keys properly
-              Object.keys(row).forEach((key) => {
-                const cleanKey = key
-                  .trim()
-                  .replace(/^\uFEFF/, "")   // remove BOM
-                  .replace(/^'+|'+$/g, ""); // remove quotes
-
-                cleanRow[cleanKey] = row[key];
-              });
-              
-              const lead = {
-                studentFirstName: cleanRow.studentFirstName?.trim(),
-                studentLastName: cleanRow.studentLastName?.trim(),
-                fatherName: cleanRow.fatherName?.trim() || "Unknown",
-                fatherPhone: cleanRow.fatherPhone?.trim(),
-                grade: cleanRow.grade?.trim(),
-                source: cleanRow.source?.trim() || "manual",
-                status: cleanRow.status?.trim() || "new",
-                assignedTo: id,
-                schoolId: req.user.schoolId,
-              };
-
-              if (!lead.studentFirstName) {
-                errors.push({ row: index + 2, reason: "Missing first name" });
-                return;
-              }
-
-              if (!lead.fatherPhone) {
-                errors.push({ row: index + 2, reason: "Missing phone" });
-                return;
-              }
-
-              validLeads.push(lead);
-            });
-
-
-            const result = await bulkCreateLeadsService(validLeads);
-
-
-          res.status(201).json(
-            successResponse(
-              {
-                created: result.count,
-                failed: errors.length,
-                errors,
-              },
-              "Bulk upload processed"
-            )
-          );
-        } catch (err) {
-          res.status(500).json(errorResponse(err.message));
-        }
-      })
-      .on("error", (err) => {
-        console.error("CSV ERROR:", err);
-        res.status(500).json(errorResponse("CSV parsing failed"));
+    rawRows.forEach((raw, index) => {
+      const row = {};
+      Object.keys(raw).forEach((key) => {
+        row[normalizeHeader(key)] = raw[key];
       });
 
+      const lead = {
+        studentFirstName: pick(row, "studentFirstName", "firstName", "first_name"),
+        studentLastName: pick(row, "studentLastName", "lastName", "last_name"),
+        fatherPhone: pick(row, "fatherPhone", "phone"),
+        fatherEmail: pick(row, "fatherEmail", "email"),
+        grade: pick(row, "grade", "desiredClass", "desired_class"),
+        source: pick(row, "source") || "bulk_upload",
+        status: pick(row, "status").toLowerCase() || "new",
+      };
+
+      if (!lead.studentFirstName) {
+        errors.push({ row: index + 2, reason: "Missing first name" });
+        return;
+      }
+
+      if (!lead.fatherPhone) {
+        errors.push({ row: index + 2, reason: "Missing phone" });
+        return;
+      }
+
+      validLeads.push(lead);
+    });
+
+    const result = await bulkCreateLeadsService(validLeads, req.user.schoolId, req.user.id);
+
+    res.status(201).json(
+      successResponse(
+        {
+          created: result.count,
+          failed: errors.length,
+          errors,
+        },
+        "Bulk upload processed"
+      )
+    );
   } catch (error) {
-    res.status(400).json(errorResponse(error.message));
+    res.status(error.statusCode || 400).json(errorResponse(error.message));
+  } finally {
+    // The uploaded file holds parents' phone numbers: never keep it on disk
+    if (filePath) {
+      fs.promises.unlink(filePath).catch(() => {});
+    }
   }
 };
+
 export const assignLead = async (req, res) => {
   try {
 
     const lead = await assignLeadService(
       req.params.id,
       req.body.assignedTo,
-      req.user.schoolId
+      req.user.schoolId,
+      req.user.id
     );
 
     res.status(200).json({
@@ -233,7 +240,7 @@ export const assignLead = async (req, res) => {
     });
 
   } catch (error) {
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message
     });
@@ -333,12 +340,17 @@ export const getTasksByLead = async (req, res) => {
   try {
     const { leadId } = req.params;
 
+    if (!/^\d+$/.test(String(leadId ?? ""))) {
+      return res.status(400).json({ success: false, message: "Invalid lead id" });
+    }
+
     const tasks = await prisma.task.findMany({
       where: {
-        leadId: Number(leadId),
+        lead_id: BigInt(leadId),
+        school_id: BigInt(req.user.schoolId),
       },
       orderBy: {
-        dueDate: "asc",
+        due_date: "asc",
       },
     });
 
