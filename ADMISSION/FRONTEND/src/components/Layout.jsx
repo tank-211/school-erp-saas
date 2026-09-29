@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2 } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { useAuth } from "../context/AuthContext.jsx";
 import schoolLogo from "../assets/school-logo.png";
@@ -22,6 +22,7 @@ const navItems = [
   { path: "/reports",       label: "Reports",             icon: BarChart3 },
   { path: "/security",      label: "Security & Compliance", icon: Shield },
   { path: "/admin",         label: "Admin Dashboard",     icon: Shield },
+  { path: "/admin/setup",   label: "School Setup",        icon: Building2 },
   { path: "/settings",      label: "Settings",            icon: SettingsIcon },
 ];
 
@@ -30,8 +31,12 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
 
-  const isActive = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
-  const visibleNavItems = navItems.filter((item) => item.path !== "/admin" || user?.role === "admin");
+  const matches = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
+  // Highlight only the most specific link (e.g. /admin/setup, not also /admin)
+  const isActive = (path) =>
+    matches(path) && !navItems.some((item) => item.path.startsWith(`${path}/`) && matches(item.path));
+  // Admin pages are listed for school admins only
+  const visibleNavItems = navItems.filter((item) => !item.path.startsWith("/admin") || user?.role === "admin");
 
   const toggleCollapse = () => {
     setCollapsed(!collapsed);

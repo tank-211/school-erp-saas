@@ -24,6 +24,7 @@ import counselingRoutes from './routes/counselingRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import feesRoutes from './routes/feesRoutes.js';
+import setupRoutes from './routes/setupRoutes.js';
 import { signUploadUrlsInResponse, verifySignedUpload } from './utils/signedUploads.js';
 
 dotenv.config();
@@ -152,6 +153,9 @@ app.use('/api/admin', adminRoutes);
 
 // Fees routes
 app.use('/api/fees', feesRoutes);
+
+// School setup routes (academic years, classes, sections)
+app.use('/api/setup', setupRoutes);
 
 // Funnel routes
 app.use('/api', funnelRoutes);

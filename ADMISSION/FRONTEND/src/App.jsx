@@ -22,6 +22,7 @@ import { Security } from "./pages/Security";
 import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { AdminPortal } from "./pages/AdminPortal";
+import { SchoolSetup } from "./pages/SchoolSetup";
 import LeadDetails from "./pages/LeadDetails";
 import ApplicationDetails from "./pages/ApplicationDetails";
 import { AdmissionResume } from "./pages/AdmissionResume";
@@ -74,6 +75,14 @@ export default function App() {
           <Route path="admin" element={adminRouteElement} />
           <Route path="admin/users" element={adminRouteElement} />
           <Route path="admin/management" element={adminRouteElement} />
+          <Route
+            path="admin/setup"
+            element={
+              <ProtectedRoute role="admin">
+                <SchoolSetup />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
