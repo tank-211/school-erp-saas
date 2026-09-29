@@ -5,7 +5,11 @@ import {
   getInvoiceById,
   generateInvoice
 } from '../controllers/feesController.js';
-import { authMiddleware } from '../middleware/auth.js';
+import {
+  getAdmissionsWithoutFees,
+  assignFeesToAdmissions
+} from '../controllers/admissionFeesController.js';
+import { authMiddleware, requireSchool, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -28,5 +32,9 @@ router.get('/invoice/:id', getInvoiceById);
 
 // POST generate new invoice
 router.post('/generate-invoice', generateInvoice);
+
+// Completed admissions that have no fees yet, and assigning them (admin only)
+router.get('/admissions-without-fees', requireSchool, getAdmissionsWithoutFees);
+router.post('/assign-admission-fees', requireSchool, isAdmin, assignFeesToAdmissions);
 
 export default router;

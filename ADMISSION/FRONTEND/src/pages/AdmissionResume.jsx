@@ -843,8 +843,10 @@ export function AdmissionResume() {
         "activeAdmissionId"
       );
 
+      // The message also says whether fees were assigned and which invoice was created
       alert(
-        "Admission completed successfully."
+        data.message ||
+          "Admission completed successfully."
       );
 
       navigate("/enrollment");

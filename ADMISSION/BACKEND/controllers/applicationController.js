@@ -1,6 +1,7 @@
 import * as applicationService from '../services/applicationService.js';
 import prisma from '../src/lib/prisma.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
+import { describeFeeResult } from '../services/admissionFeeService.js';
 /**
  * Create application from lead
  * POST /api/applications
@@ -934,13 +935,14 @@ export const completeAdmission = async (req, res) => {
 
     const result = await applicationService.completeAdmissionApplication(
       req.user.school_id,
-      admission_id
+      admission_id,
+      req.user.name || req.user.email || req.user.id
     );
 
     return res.status(200).json({
       success: true,
       data: serializeBigInt(result),
-      message: "Admission confirmed successfully",
+      message: `Admission confirmed successfully. ${describeFeeResult(result.fees)}`.trim(),
     });
   } catch (error) {
     console.error("Complete Admission Error:", error);

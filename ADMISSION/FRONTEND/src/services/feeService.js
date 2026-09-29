@@ -77,3 +77,35 @@ export async function generateInvoice(invoiceData) {
     throw error;
   }
 }
+/**
+ * Completed admissions that have no fees assigned yet
+ * GET /api/fees/admissions-without-fees
+ */
+export async function getAdmissionsWithoutFees() {
+  try {
+    const response = await axios.get('/api/fees/admissions-without-fees', {
+      headers: getAuthHeader(),
+    });
+    if (response.data && response.data.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data?.message || 'Failed to load admissions without fees');
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to load admissions without fees');
+  }
+}
+
+/**
+ * Assign fees and create invoices (admin only)
+ * POST /api/fees/assign-admission-fees  { admission_id } or { all: true }
+ */
+export async function assignAdmissionFees(body) {
+  try {
+    const response = await axios.post('/api/fees/assign-admission-fees', body, {
+      headers: getAuthHeader(),
+    });
+    return response.data;
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to assign fees');
+  }
+}

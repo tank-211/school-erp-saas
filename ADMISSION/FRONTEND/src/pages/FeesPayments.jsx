@@ -12,8 +12,24 @@ import {
 import {
   getFeeDashboardStats,
   getFeeTransactions,
+  getAdmissionsWithoutFees,
+  assignAdmissionFees,
 } from "../services/feeService";
+import { useAuth } from "../context/AuthContext.jsx";
 import "../style.css";
+
+const noticeStyle = (ok) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "12px 16px",
+  marginBottom: 16,
+  borderRadius: 10,
+  fontSize: 14,
+  background: ok ? "#dcfce7" : "#fee2e2",
+  color: ok ? "#166534" : "#991b1b",
+  border: `1px solid ${ok ? "#86efac" : "#fca5a5"}`,
+});
 
 export function FeesPayments() {
   const navigate = useNavigate();
@@ -25,10 +41,43 @@ export function FeesPayments() {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { user } = useAuth();
+  const isAdminUser = user?.role === "admin";
+  // Completed admissions with no fees assigned yet
+  const [pending, setPending] = useState(null);
+  const [pendingError, setPendingError] = useState("");
+  const [assigning, setAssigning] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
     loadData();
+    loadPending();
   }, []);
+
+  const loadPending = async () => {
+    try {
+      setPending(await getAdmissionsWithoutFees());
+      setPendingError("");
+    } catch (err) {
+      setPendingError(err.message || "Failed to load admissions without fees");
+    }
+  };
+
+  const runAssign = async (body, confirmText) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    try {
+      setAssigning(true);
+      setNotice(null);
+      const result = await assignAdmissionFees(body);
+      setNotice({ ok: result.success !== false, text: result.message });
+    } catch (err) {
+      setNotice({ ok: false, text: err.message });
+    } finally {
+      setAssigning(false);
+      loadData();
+      loadPending();
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -82,6 +131,102 @@ export function FeesPayments() {
           <p className="page-sub">Track admission fees and payment status</p>
         </div>
       </div>
+
+      {error && (
+        <div style={noticeStyle(false)}>{error}</div>
+      )}
+
+      {notice && (
+        <div style={noticeStyle(notice.ok)}>
+          {notice.text}
+          <button className="btn btn-ghost btn-sm" style={{ marginLeft: 12 }} onClick={() => setNotice(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {pendingError && (
+        <div style={noticeStyle(false)}>{pendingError}</div>
+      )}
+
+      {pending?.count > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header">
+            <div>
+              <div className="card-title">Admissions without fees ({pending.count})</div>
+              <div className="card-sub">
+                Completed admissions with no fees assigned. Assigning adds the class fees and creates an invoice.
+              </div>
+            </div>
+            {isAdminUser && pending.ready_count > 0 && (
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={assigning}
+                onClick={() =>
+                  runAssign(
+                    { all: true },
+                    `Assign fees and create invoices for ${pending.ready_count} admission(s)?`
+                  )
+                }
+              >
+                {assigning ? "Assigning..." : `Assign fees to ${pending.ready_count}`}
+              </button>
+            )}
+          </div>
+          <div className="table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Academic year</th>
+                  <th>Fee structure</th>
+                  {isAdminUser && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {pending.items.map((item) => (
+                  <tr key={item.admission_id}>
+                    <td className="td-bold">
+                      {item.student_name || `Admission ${item.admission_id}`}
+                      {item.admission_number && (
+                        <div className="text-muted text-sm">{item.admission_number}</div>
+                      )}
+                    </td>
+                    <td>{item.class_name || "—"}</td>
+                    <td>{item.year_name || "—"}</td>
+                    <td>
+                      {item.has_fee_structure ? (
+                        <span className="badge badge-green">Ready</span>
+                      ) : (
+                        <span className="badge badge-orange">Not set up</span>
+                      )}
+                    </td>
+                    {isAdminUser && (
+                      <td>
+                        {item.has_fee_structure && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            disabled={assigning}
+                            onClick={() => runAssign({ admission_id: item.admission_id })}
+                          >
+                            Assign
+                          </button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {pending.count > pending.ready_count && (
+            <div className="card-body text-muted text-sm">
+              "Not set up" means there is no fee structure for that class and academic year yet. Add it in the Fees app, then assign here.
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid-4 mb-5">
         {[
@@ -165,15 +310,12 @@ export function FeesPayments() {
                 </tr>
               ) : (
                 transactions.map((invoice) => {
-                  const studentName =
-                    `${invoice.first_name} ${invoice.middle_name || ""} ${invoice.last_name}`.trim();
+                  const studentName = invoice.student_name || "—";
                   return (
                     <tr key={invoice.id}>
                       <td className="td-bold">{invoice.invoice_number}</td>
                       <td>{studentName}</td>
-                      <td>
-                        {invoice.class_name} (Grade {invoice.grade})
-                      </td>
+                      <td>{invoice.class_name || "—"}</td>
                       <td style={{ fontWeight: 700 }}>
                         ₹{invoice.total_amount.toLocaleString()}
                       </td>
