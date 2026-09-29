@@ -19,6 +19,9 @@ import bulkUploadRoutes from './routes/bulkUploadRoutes';
 import feeStructureRoutes from './routes/feeStructureRoutes';
 
 const app = express();
+
+// Behind a proxy (Render etc.): use the visitor's IP for login rate limits
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || 'localhost';
 

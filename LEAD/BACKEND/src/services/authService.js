@@ -1,4 +1,5 @@
 import { hashPassword, comparePassword } from "../utils/bcrypt.js";
+import { getSchoolAccess } from "../utils/schoolAccess.js";
 import { generateToken } from "../utils/jwt.js";
 import prisma from '../prisma/index.js';
 import AppError from "../utils/AppError.js";
@@ -90,10 +91,6 @@ export const loginService = async (email, password) => {
     throw new Error("Invalid credentials");
   }
 
-  if (user.status !== "active") {
-    throw new Error("Account deactivated. Contact administrator.");
-  }
-    
   const passwordMatch = await comparePassword(
     password,
     user.password_hash
@@ -101,6 +98,20 @@ export const loginService = async (email, password) => {
 
   if (!passwordMatch) {
     throw new Error("Invalid credentials");
+  }
+
+  // Checked after the password so an account's state is only revealed to its owner
+  if (user.status !== "active") {
+    throw new Error("Account deactivated. Contact administrator.");
+  }
+
+  // Suspended or expired schools cannot log in
+  const access = await getSchoolAccess(user.school_id);
+  if (!access.allowed) {
+    const error = new Error(access.message);
+    error.status = 403;
+    error.code = access.code;
+    throw error;
   }
 
   const token = generateToken({userId: Number(user.id),schoolId: Number(user.school_id), role: user.role});

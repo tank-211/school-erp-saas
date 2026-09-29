@@ -2,8 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken, decodeToken } from '../config/jwt';
 import { AuthenticationError, AuthorizationError } from './errorHandler';
 import logger from '../config/logger';
+import { getSchoolAccess, SchoolAccessError } from '../utils/schoolAccess';
 
-export const authenticate = (
+export const authenticate = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -24,6 +25,15 @@ export const authenticate = (
       role: decoded.role,
       schoolId: decoded.schoolId,
     };
+
+    // Tokens stop working once the school is suspended or its subscription
+    // expires, not only at the next login.
+    if (/^\d+$/.test(String(decoded.schoolId ?? ''))) {
+      const access = await getSchoolAccess(decoded.schoolId);
+      if (!access.allowed) {
+        return next(new SchoolAccessError(access));
+      }
+    }
 
     logger.debug('User authenticated', { userId: decoded.id, email: decoded.email });
     next();

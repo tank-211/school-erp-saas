@@ -22,7 +22,10 @@ export const login = async (req, res) => {
     const result = await loginService(req.body.email, req.body.password);
     res.status(200).json(successResponse(result, "Login successful"));
   } catch (error) {
-    res.status(401).json(errorResponse(error.message));
+    // 403 with a code for a suspended/expired school; 401 for bad credentials
+    res
+      .status(error.status || 401)
+      .json({ ...errorResponse(error.message), ...(error.code && { code: error.code }) });
   }
 };
 

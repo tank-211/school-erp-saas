@@ -10,6 +10,7 @@ import {
 } from '../middleware/errorHandler';
 import { mockUsers } from './mockDataService';
 import logger from '../config/logger';
+import { getSchoolAccess, SchoolAccessError } from '../utils/schoolAccess';
 
 type UserRole = string;
 
@@ -145,12 +146,6 @@ export class AuthService {
         );
       }
 
-      if (user.status !== 'active') {
-        throw new AuthenticationError(
-          'User account is inactive'
-        );
-      }
-
       const passwordMatch = await bcrypt.compare(
         password,
         user.password_hash
@@ -160,6 +155,19 @@ export class AuthService {
         throw new AuthenticationError(
           'Invalid email or password'
         );
+      }
+
+      // Checked after the password so an account's state is only revealed to its owner
+      if (user.status !== 'active') {
+        throw new AuthenticationError(
+          'User account is inactive'
+        );
+      }
+
+      // Suspended or expired schools cannot log in
+      const access = await getSchoolAccess(user.school_id);
+      if (!access.allowed) {
+        throw new SchoolAccessError(access);
       }
 
       const tokens = generateTokenPair({

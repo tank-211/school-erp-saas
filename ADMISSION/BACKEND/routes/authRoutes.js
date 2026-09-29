@@ -7,15 +7,20 @@
 import express from 'express';
 import { login, signup, me, superAdminLogin } from '../controllers/authController.js';
 import { authMiddleware, isAdmin, requireSchool } from '../middleware/auth.js';
+import { createLoginLimiter } from '../utils/loginLimiter.js';
 const router = express.Router();
+
+// 10 failed attempts per IP + email, 50 per IP, in 15 minutes
+export const loginLimiter = createLoginLimiter();
+export const superAdminLoginLimiter = createLoginLimiter();
 
 /**
  * POST /api/auth/login
  * Login user with email and password
  * Returns JWT token
  */
-router.post('/login', login);
-router.post('/super-admin/login', superAdminLogin);
+router.post('/login', loginLimiter, login);
+router.post('/super-admin/login', superAdminLoginLimiter, superAdminLogin);
 
 /**
  * POST /api/auth/signup

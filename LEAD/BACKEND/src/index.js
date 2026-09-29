@@ -22,6 +22,9 @@ import pipelineRoutes from "./routes/pipelineRoutes.js";
 
 const app = express();
 
+// Behind Render's proxy: use the visitor's IP (for login rate limits), not the proxy's
+app.set("trust proxy", 1);
+
 // 🔥 VERY IMPORTANT — FIRST
 app.use(
   cors({
