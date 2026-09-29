@@ -25,24 +25,39 @@ const getExpiryStatus = (expiryDate) => {
   return "healthy";
 };
 
-function SchoolManagement() {
-  const [schools, setSchools] = useState([]);
-  const [search, setSearch] = useState("");
-  const [error, setError] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
+// Plan codes the backend accepts (superAdminSchoolController allowedPlanTypes)
+const PLAN_OPTIONS = [
+  { value: "trial", label: "Trial (1 month)" },
+  { value: "basic", label: "Basic" },
+  { value: "pro", label: "Pro" },
+  { value: "ultimate", label: "Ultimate" },
+];
+
+const EMPTY_FORM = {
     name: "",
     email: "",
     phone: "",
     address: "",
     city: "",
     principal_name: "",
+    plan_type: "trial",
     expiry_date: "",
     admin_name: "",
     admin_email: "",
     admin_password: "",
-  });
+};
+
+function SchoolManagement() {
+  const [schools, setSchools] = useState([]);
+  const [search, setSearch] = useState("");
+  const [error, setError] = useState("");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  // Shown once after creating a school, so the credentials can be handed over
+  const [created, setCreated] = useState(null);
+  const [copied, setCopied] = useState(false);
+  const isTrial = form.plan_type === "trial";
 
   useEffect(() => {
     let cancelled = false;
@@ -78,25 +93,22 @@ function SchoolManagement() {
     setError("");
 
     try {
-      await superAdminService.createSchool({
+      const result = await superAdminService.createSchool({
         ...form,
-        status: "active",
-        plan_type: "trial",
-        expiry_date: form.expiry_date || null,
+        // Trial end is set by the server (one month); paid plans send their date
+        expiry_date: isTrial ? null : form.expiry_date,
       });
 
-      setForm({
-        name: "",
-        email: "",
-        phone: "",
-        address: "",
-        city: "",
-        principal_name: "",
-        expiry_date: "",
-        admin_name: "",
-        admin_email: "",
-        admin_password: "",
+      setCreated({
+        schoolId: result.school?.id,
+        schoolName: result.school?.name,
+        plan: result.school?.plan_type,
+        expiry: result.school?.expiry_date,
+        adminEmail: result.admin?.email,
+        adminPassword: form.admin_password,
       });
+      setCopied(false);
+      setForm(EMPTY_FORM);
       setShowAddForm(false);
 
       const data = await superAdminService.getSchools();
@@ -176,6 +188,54 @@ function SchoolManagement() {
         </button>
       </div>
 
+      {created && (
+        <div className="sp-card" style={{ marginBottom: "14px", borderColor: "#22c55e" }}>
+          <h2 style={{ marginTop: 0 }}>School created: share these login details</h2>
+          <p className="sp-subtitle" style={{ marginTop: 0 }}>
+            The password is shown only now. Send it to the school admin privately and ask them
+            to change it after their first login.
+          </p>
+          <table className="sp-table">
+            <tbody>
+              <tr><th>School</th><td>{created.schoolName}</td></tr>
+              <tr><th>School ID</th><td>{created.schoolId}</td></tr>
+              <tr><th>Plan</th><td>{created.plan}</td></tr>
+              <tr>
+                <th>Access until</th>
+                <td>{created.expiry ? new Date(created.expiry).toLocaleDateString() : "-"}</td>
+              </tr>
+              <tr><th>Admin email</th><td>{created.adminEmail}</td></tr>
+              <tr><th>Admin password</th><td><code>{created.adminPassword}</code></td></tr>
+            </tbody>
+          </table>
+          <div className="sp-row-actions" style={{ marginTop: "12px" }}>
+            <button
+              className="sp-btn sp-btn-primary"
+              type="button"
+              onClick={async () => {
+                const text = [
+                  `School: ${created.schoolName}`,
+                  `School ID: ${created.schoolId}`,
+                  `Login email: ${created.adminEmail}`,
+                  `Password: ${created.adminPassword}`,
+                ].join("\n");
+                try {
+                  await navigator.clipboard.writeText(text);
+                  setCopied(true);
+                } catch {
+                  setError("Could not copy automatically. Select the details and copy them by hand.");
+                }
+              }}
+            >
+              {copied ? "Copied" : "Copy details"}
+            </button>
+            <button className="sp-btn sp-btn-ghost" type="button" onClick={() => setCreated(null)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
       {showAddForm && (
         <div className="sp-card" style={{ marginBottom: "14px" }}>
           <h2 style={{ marginTop: 0 }}>Register New School</h2>
@@ -248,17 +308,42 @@ function SchoolManagement() {
               />
             </label>
 
-            <label className="sp-label" htmlFor="expiry_date">
-              Expiry Date
-              <input
-                id="expiry_date"
+            <label className="sp-label" htmlFor="plan_type">
+              Plan
+              <select
+                id="plan_type"
                 className="sp-input"
-                type="date"
-                name="expiry_date"
-                value={form.expiry_date}
+                name="plan_type"
+                value={form.plan_type}
                 onChange={handleChange}
-              />
+              >
+                {PLAN_OPTIONS.map((plan) => (
+                  <option key={plan.value} value={plan.value}>
+                    {plan.label}
+                  </option>
+                ))}
+              </select>
             </label>
+
+            {isTrial ? (
+              <p className="sp-subtitle" style={{ margin: 0 }}>
+                Trial access runs for one month from today and then stops until you renew or
+                change the plan.
+              </p>
+            ) : (
+              <label className="sp-label" htmlFor="expiry_date">
+                Access until
+                <input
+                  id="expiry_date"
+                  className="sp-input"
+                  type="date"
+                  name="expiry_date"
+                  value={form.expiry_date}
+                  onChange={handleChange}
+                  required
+                />
+              </label>
+            )}
 
             <div
               className="sp-card"
@@ -305,6 +390,8 @@ function SchoolManagement() {
                     name="admin_password"
                     value={form.admin_password}
                     onChange={handleChange}
+                    minLength={8}
+                    autoComplete="new-password"
                     required
                   />
                 </label>
@@ -326,6 +413,7 @@ function SchoolManagement() {
         <table className="sp-table">
           <thead>
             <tr>
+              <th>ID</th>
               <th>Name</th>
               <th>Email</th>
               <th>Plan</th>
@@ -350,6 +438,7 @@ function SchoolManagement() {
                         : ""
                   }
                 >
+                  <td>{school.id}</td>
                   <td>{school.name}</td>
                   <td>{school.email || "-"}</td>
                   <td>

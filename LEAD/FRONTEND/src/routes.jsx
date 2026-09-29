@@ -5,7 +5,6 @@
  */
 
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Pipeline from './pages/Pipeline';
@@ -28,12 +27,6 @@ export const publicRoutes = [
     element: <Login />,
     exact: true,
     label: 'Login'
-  },
-  {
-    path: '/register',
-    element: <Register />,
-    exact: true,
-    label: 'Register'
   },
 ];
 

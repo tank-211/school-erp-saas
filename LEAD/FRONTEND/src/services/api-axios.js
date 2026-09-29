@@ -100,11 +100,6 @@ export const authAPI = {
     }
   },
 
-  register: async (userData) => {
-    const response = await apiClient.post('/auth/register', userData);
-    return response.data;
-  },
-
   logout: () => {
     tokenManager.removeToken();
     if (typeof window !== 'undefined') {

@@ -25,6 +25,24 @@ const defaultAcademicYear = (today = new Date()) => {
   };
 };
 
+// Trial length for new schools: one calendar month from today's India date
+// (29 Sep -> 29 Oct; 31 Jan -> 28/29 Feb). The school stays usable through
+// that day and is blocked from the next day (see utils/schoolAccess in the
+// school apps).
+const TRIAL_MONTHS = 1;
+const trialEndDate = (now = new Date()) => {
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })
+    .format(now)
+    .split("-")
+    .map(Number);
+  const targetMonth = m - 1 + TRIAL_MONTHS;
+  const lastDay = new Date(Date.UTC(y, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, targetMonth, Math.min(d, lastDay)));
+};
+
+const isValidDateString = (value) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) && !Number.isNaN(new Date(value).getTime());
+
 // GET /api/super-admin/schools — Fetch all schools
 const getAllSchools = async (req, res) => {
   try {
@@ -213,6 +231,38 @@ const createSchool = async (req, res) => {
       });
     }
 
+    // The school apps' logins require at least 8 characters (LEAD rejects less)
+    if (String(admin_password).length < 8) {
+      return res.status(400).json({ error: "Admin password must be at least 8 characters." });
+    }
+
+    const adminEmail = String(admin_email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) {
+      return res.status(400).json({ error: "Admin email is not valid." });
+    }
+
+    // Trial: always one month. Paid plans: an explicit end date is required, so
+    // no school gets unlimited access by accident; renewals extend it later.
+    let schoolExpiry;
+    if (normalizedPlanType === "trial") {
+      schoolExpiry = trialEndDate();
+    } else {
+      if (!isValidDateString(expiry_date)) {
+        return res.status(400).json({ error: "Expiry date (YYYY-MM-DD) is required for paid plans." });
+      }
+      schoolExpiry = new Date(expiry_date);
+    }
+
+    // The school apps find users by email alone at login, so an email may
+    // belong to only one account across all schools.
+    const emailTaken = await prisma.app_user.findFirst({
+      where: { email: { equals: adminEmail, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (emailTaken) {
+      return res.status(409).json({ error: "This admin email is already used by another account." });
+    }
+
     const hashedPassword = await bcrypt.hash(admin_password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
@@ -229,7 +279,8 @@ const createSchool = async (req, res) => {
           principal_name,
           plan_type: normalizedPlanType,
           is_active: true,
-          expiry_date: expiry_date ? new Date(expiry_date) : null,
+          expiry_date: schoolExpiry,
+          trial_end_date: normalizedPlanType === "trial" ? schoolExpiry : null,
           status: "active",
           created_by: req.staffUser.full_name,
         },
@@ -245,7 +296,7 @@ const createSchool = async (req, res) => {
         data: {
           school_id: school.id,
           name: admin_name,
-          email: admin_email,
+          email: adminEmail,
           password_hash: hashedPassword,
           role: "admin",
           status: "active",
@@ -403,4 +454,4 @@ const updateSchool = async (req, res) => {
   }
 };
 
-module.exports = { getAllSchools, getStats, createSchool, updateSchool, defaultAcademicYear };
+module.exports = { getAllSchools, getStats, createSchool, updateSchool, defaultAcademicYear, trialEndDate };

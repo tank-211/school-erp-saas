@@ -14,7 +14,8 @@ import ApplicationDetails from "./pages/ApplicationDetails";
  * Main routing structure for the application
  * 
  * Route Types:
- * 1. Public Routes: /login, /register (no auth required, no sidebar/header)
+ * 1. Public Routes: /login (no auth required, no sidebar/header). There is no
+ *    sign-up: Super Admin creates schools and their admin accounts.
  * 2. Protected Routes: All other routes (auth required, with sidebar/header)
  */
 export default function App() {
