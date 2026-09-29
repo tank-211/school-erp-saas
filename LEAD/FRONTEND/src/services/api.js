@@ -188,19 +188,6 @@ export const authAPI = {
   },
 
   /**
-   * Register new user
-   * @param {Object} userData - User registration data
-   * @returns {Promise} Created user data
-   */
-  register: async (userData) => {
-    return apiRequest('/auth/register', {
-      method: 'POST',
-      body: userData,
-      requiresAuth: false,
-    });
-  },
-
-  /**
    * Logout user and clear token
    */
   logout: () => {

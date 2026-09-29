@@ -4,83 +4,9 @@ import { generateToken } from "../utils/jwt.js";
 import prisma from '../prisma/index.js';
 import AppError from "../utils/AppError.js";
 
-export const registerService = async (data) => {
-  const existingUser = await prisma.user.findFirst({
-    where: { email: data.email },
-  });
-
-  if (existingUser) {
-    throw new Error("Email already registered");
-  }
-
-  const hashedPassword = await hashPassword(data.password);
-
-  // Normalize input
-  const schoolName = data.schoolName.trim().toLowerCase();
-
-  // Self-registration may only create a NEW school. Joining an existing school
-  // is not allowed here: it let anyone who knew a school's name become a user
-  // of that school and read its data. Staff of an existing school are added by
-  // that school's admin (user invite) or by Super Admin.
-  const existingSchool = await prisma.school.findFirst({
-    where: {
-      name: { equals: schoolName, mode: "insensitive" },
-    },
-    select: { id: true },
-  });
-
-  if (existingSchool) {
-    throw new AppError(
-      "A school with this name is already registered. Ask your school admin to add you.",
-      409
-    );
-  }
-
-  const school = await prisma.school.create({
-    data: {
-      name: schoolName,
-    },
-  });
-
-  // A school needs an active academic year before it can add leads. Create the
-  // current Indian school year (1 April - 31 March); the admin can change it in
-  // ADMISSION -> School Setup.
-  const now = new Date();
-  const startYear = now.getUTCMonth() >= 3 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
-  await prisma.academic_year.create({
-    data: {
-      school_id: school.id,
-      year_name: `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`,
-      start_date: new Date(Date.UTC(startYear, 3, 1)),
-      end_date: new Date(Date.UTC(startYear + 1, 2, 31)),
-      is_active: true,
-      status: "active",
-      created_by: "self-registration",
-    },
-  });
-
-  const user = await prisma.user.create({
-    data: {
-      name: data.name,
-      email: data.email,
-      password_hash: hashedPassword,
-      school_id: school.id, // 🔥 THIS IS THE FIX
-      role: "counselor",
-      status: "active",
-    },
-  });
-  const token = generateToken({userId: Number(user.id),schoolId: Number(user.school_id), role: user.role,});
-  return {
-    user: {
-          id: Number(user.id),
-          schoolID: Number(user.school_id),
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-        token,
-      };
-    };
+// There is no self-registration: schools and their first admin are created
+// by Super Admin (SUPER-ADMIN createSchool), and staff are added by the
+// school's admin.
 
 export const loginService = async (email, password) => {
   const user = await prisma.user.findFirst({

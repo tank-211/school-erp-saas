@@ -4,7 +4,7 @@ import './AuthLayout.css';
 /**
  * AuthLayout Component
  * Renders only authentication pages without sidebar and header
- * Used for Login and Register routes
+ * Used for the Login route
  */
 const AuthLayout = ({ children }) => {
   return <div className="auth-layout">{children}</div>;

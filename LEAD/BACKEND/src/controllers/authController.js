@@ -1,21 +1,10 @@
 import {
-  registerService,
   loginService,
   getCurrentUserService,
   updateProfileService,
   changePasswordService,
 } from "../services/authService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
-
-export const register = async (req, res) => {
-  try {
-    const result = await registerService(req.body);
-    res.status(201).json(successResponse(result, "User registered successfully"));
-  } catch (error) {
-    console.log("❌ REGISTER ERROR:", error.message);
-    res.status(error.statusCode || 400).json(errorResponse(error.message));
-  }
-};
 
 export const login = async (req, res) => {
   try {
