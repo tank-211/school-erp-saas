@@ -2,8 +2,12 @@ import { Router } from 'express';
 import * as authController from '../controllers/authController';
 import { authenticate, authorize } from '../middleware/auth';
 import { validateRequest, loginValidator, registerValidator } from '../middleware/validation';
+import { createLoginLimiter } from '../utils/loginLimiter';
 
 const router = Router();
+
+// 10 failed attempts per IP + email, 50 per IP, in 15 minutes
+export const loginLimiter = createLoginLimiter();
 
 // Admin-only: create a user in the caller's own school.
 // Public self-registration is closed because it let anyone create an account
@@ -19,6 +23,7 @@ router.post(
 // Public routes
 router.post(
   '/login',
+  loginLimiter,
   validateRequest(loginValidator),
   authController.login
 );

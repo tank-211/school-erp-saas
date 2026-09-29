@@ -4,6 +4,9 @@ require('dotenv').config();
 
 const app = express();
 
+// Behind a proxy (Render etc.): use the visitor's IP for login rate limits
+app.set('trust proxy', 1);
+
 const defaultCorsOrigins = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',

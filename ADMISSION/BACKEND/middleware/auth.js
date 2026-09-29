@@ -7,6 +7,7 @@
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../utils/jwtSecret.js';
 import * as authQueries from '../db/queries/authQueries.js';
+import { getSchoolAccess, denySchoolAccess } from '../utils/schoolAccess.js';
 
 /**
  * authMiddleware
@@ -14,7 +15,7 @@ import * as authQueries from '../db/queries/authQueries.js';
  * Tokens expected in: Authorization: Bearer <token>
  * Or in x-access-token header
  */
-export const authMiddleware = (req, res, next) => {
+export const authMiddleware = async (req, res, next) => {
   try {
     // Get token from Authorization header (Bearer token) or x-access-token header
     let token = req.headers['authorization'];
@@ -44,6 +45,16 @@ export const authMiddleware = (req, res, next) => {
       email: decoded.email,
       ...decoded,
     };
+
+    // A school user's token stops working once the school is suspended or its
+    // subscription expires, not only at the next login.
+    const tokenSchoolId = parseSchoolId(req.user.school_id);
+    if (tokenSchoolId) {
+      const access = await getSchoolAccess(tokenSchoolId);
+      if (!access.allowed) {
+        return denySchoolAccess(res, access);
+      }
+    }
 
     next();
   } catch (error) {

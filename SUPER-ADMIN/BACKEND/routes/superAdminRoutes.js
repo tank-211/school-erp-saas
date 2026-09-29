@@ -1,5 +1,8 @@
 const express = require('express');
 const router = express.Router();
+const { createLoginLimiter } = require('../utils/loginLimiter');
+// Staff login: 10 failed attempts per IP + email, 50 per IP, in 15 minutes
+const staffLoginLimiter = createLoginLimiter();
 const verifyInternalStaff = require('../src/middleware/verifyInternalStaff');
 const verifySuperAdmin = require('../src/middleware/verifySuperAdmin');
 const { login } = require('../controllers/superAdminAuthController');
@@ -23,7 +26,7 @@ const {
 
 // Auth (no middleware needed)
 router.options('/login', (req, res) => res.sendStatus(204));
-router.post('/login', login);
+router.post('/login', staffLoginLimiter, login);
 
 // Protected routes
 router.options('/stats', (req, res) => res.sendStatus(204));
@@ -79,3 +82,4 @@ router.post(
 );
 
 module.exports = router;
+module.exports.staffLoginLimiter = staffLoginLimiter;

@@ -1,5 +1,6 @@
 import { verifyToken } from "../utils/jwt.js";
 import { errorResponse } from "../utils/response.js";
+import { getSchoolAccess } from "../utils/schoolAccess.js";
 
 export const authMiddleware = async (req, res, next) => {
   try {
@@ -27,6 +28,14 @@ export const authMiddleware = async (req, res, next) => {
       role: decoded.role 
     };
 
+    // Tokens stop working once the school is suspended or its subscription
+    // expires, not only at the next login.
+    if (/^\d+$/.test(String(decoded.schoolId ?? ""))) {
+      const access = await getSchoolAccess(decoded.schoolId);
+      if (!access.allowed) {
+        return res.status(403).json({ ...errorResponse(access.message), code: access.code });
+      }
+    }
 
     next();
   } catch (error) {

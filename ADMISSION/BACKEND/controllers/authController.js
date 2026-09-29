@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../utils/jwtSecret.js';
 import bcrypt from 'bcryptjs';
 import * as authQueries from '../db/queries/authQueries.js';
+import { getSchoolAccess, denySchoolAccess } from '../utils/schoolAccess.js';
 
 /**
  * login(req, res, next)
@@ -102,6 +103,13 @@ export const login = async (req, res, next) => {
         success: false,
         message: 'Invalid email or password'
       });
+    }
+
+    // Suspended or expired schools cannot log in (checked after the password,
+    // so the school's status is only revealed to its own users)
+    const access = await getSchoolAccess(user.school_id);
+    if (!access.allowed) {
+      return denySchoolAccess(res, access);
     }
 
     // Generate JWT token
