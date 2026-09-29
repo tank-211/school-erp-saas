@@ -8,7 +8,7 @@ import {
   CreditCard,
   AlertCircle,
 } from 'lucide-react'
-import { fetchInvoiceDetails, recordPayment, } from '../services/apiService'
+import { fetchInvoiceDetails } from '../services/apiService'
 import '../styles/payment-page.css'
 import RazorpayPaymentModal from '../components/RazorpayPaymentModal'
 
@@ -116,7 +116,12 @@ const Payment = () => {
       'paymentData',
       JSON.stringify({
         invoiceId,
-        amount: Number(paymentData.amount),
+        // What the server recorded (from Razorpay's order), not what the page asked for
+        amount: Number(
+          paymentData.verificationResponse?.amount ?? paymentData.amount
+        ),
+        paymentNumber:
+          paymentData.verificationResponse?.paymentNumber,
         paymentMethod: 'ONLINE',
         transactionId:
           paymentData.paymentId,
@@ -136,42 +141,6 @@ const Payment = () => {
     )
   }
 
-    const handleTestPayment = async () => {
-      try {
-        console.log('🧪 Starting ₹1 test payment...')
-
-        const result = await recordPayment(
-          invoiceId,
-          1,
-          'CASH',
-          `TEST-${Date.now()}`,
-          'Development test payment'
-        )
-
-        console.log('🧪 TEST PAYMENT RESULT:', result)
-
-        if (result.success) {
-          alert('✅ ₹1 test payment recorded successfully')
-
-          // Reload invoice so Paid/Pending amounts update
-          await loadInvoice()
-        } else {
-          alert(
-            `❌ Test payment failed: ${
-              result.error || 'Unknown error'
-            }`
-          )
-        }
-      } catch (error) {
-        console.error('❌ TEST PAYMENT ERROR:', error)
-
-        alert(
-          `❌ Test payment failed: ${
-            error.message || 'Unknown error'
-          }`
-        )
-      }
-    }
 
   return (
     <div className="page">
@@ -322,23 +291,6 @@ const Payment = () => {
                     handlePaymentFailure
                   }
                 />
-
-                  <button
-                    type="button"
-                    onClick={handleTestPayment}
-                    style={{
-                      marginTop: '12px',
-                      width: '100%',
-                      padding: '10px 20px',
-                      background: '#666',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    🧪 DEV: Test ₹1 Payment
-                </button>
 
                 <div className="security-footer">
                   <Lock size={14} />

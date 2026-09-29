@@ -38,6 +38,15 @@ router.use(authenticate);
 
 router.get('/profile', authController.getProfile);
 
+// Same as /profile; the frontend's getCurrentUser calls /auth/me
+router.get('/me', authController.getProfile);
+
+// Tokens are stateless JWTs: logging out means the browser drops them. This
+// endpoint exists so the frontend's logout call succeeds.
+router.post('/logout', (_req, res) => {
+  res.json({ success: true, message: 'Logged out' });
+});
+
 router.put('/profile', authController.updateProfile);
 
 router.get('/users', authorize('ADMIN'), authController.listUsers);

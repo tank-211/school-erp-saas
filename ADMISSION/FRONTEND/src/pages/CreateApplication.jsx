@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileText, Search, Loader } from "lucide-react";
 import { useLeads } from "../hooks/useLeads";
+import { fetchSetupOverview } from "../services/setupService";
 import {
   createApplicationFromLead,
   createApplicationWithoutLead,
@@ -27,9 +28,28 @@ export function CreateApplication() {
 
   // State for application configuration
   const [form, setForm] = useState({
-    year: "6", // Academic year ID
+    year: "", // Academic year ID, defaults to the school's active year
     type: "new",
   });
+
+  // The school's own academic years (School Setup)
+  const [years, setYears] = useState([]);
+  const [yearsError, setYearsError] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    fetchSetupOverview()
+      .then((overview) => {
+        if (cancelled) return;
+        const list = overview?.academic_years || [];
+        setYears(list);
+        const active = list.find((y) => y.is_active);
+        if (active) setForm((p) => ({ ...p, year: p.year || active.id }));
+      })
+      .catch((err) => !cancelled && setYearsError(err.message || "Could not load academic years"));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
@@ -285,8 +305,19 @@ export function CreateApplication() {
                   }
                 >
                   <option value="">Select academic year</option>
-                  <option value="6">2026-27</option>
+                  {years.map((y) => (
+                    <option key={y.id} value={y.id}>
+                      {y.year_name}
+                      {y.is_active ? " (active)" : ""}
+                    </option>
+                  ))}
                 </select>
+                {yearsError && <div className="form-error">{yearsError}</div>}
+                {!yearsError && years.length === 0 && (
+                  <div className="form-hint">
+                    No academic years yet. An admin can add one in School Setup.
+                  </div>
+                )}
               </div>
 
               {/* Admission Type */}

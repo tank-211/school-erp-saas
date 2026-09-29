@@ -112,10 +112,11 @@ export const createApplication = async (leadId, academicYearId, schoolId) => {
         );
       }
 
-      // Verify academic year exists
-      const academicYear = await tx.academic_year.findUnique({
+      // The academic year must belong to the caller's school
+      const academicYear = await tx.academic_year.findFirst({
         where: {
           id: BigInt(academicYearId),
+          school_id: BigInt(schoolId),
         },
         select: {
           id: true,
@@ -123,9 +124,7 @@ export const createApplication = async (leadId, academicYearId, schoolId) => {
       });
 
       if (!academicYear) {
-        throw new Error(
-          `Academic year with ID ${academicYearId} not found`
-        );
+        throw new Error('Academic year not found for this school');
       }
 
       // Verify school exists

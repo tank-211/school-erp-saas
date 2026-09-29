@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Bell, User, LogOut, Settings, ChevronDown } from "lucide-react";
+import { logoutUser } from "../../services/apiService";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -14,14 +15,29 @@ const Navbar = () => {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('fees_auth');
-    sessionStorage.removeItem('fees_auth');
+  // Clears the stored tokens and user, then returns to the login page
+  const handleLogout = async () => {
+    await logoutUser();
     navigate("/", { replace: true });
   };
 
-  const userName = "Admin User";
-  const userInitials = userName.split(' ').map(n => n[0]).join('');
+  // The signed-in user, as stored at login
+  let storedUser = {};
+  try {
+    storedUser = JSON.parse(localStorage.getItem("user") || "{}") || {};
+  } catch {
+    storedUser = {};
+  }
+  const userName =
+    [storedUser.firstName, storedUser.lastName].filter(Boolean).join(" ") ||
+    storedUser.name ||
+    storedUser.email ||
+    "";
+  const userRole = storedUser.role
+    ? String(storedUser.role).charAt(0).toUpperCase() + String(storedUser.role).slice(1).toLowerCase()
+    : "";
+  const userInitials =
+    userName.split(" ").filter(Boolean).map((n) => n[0]).join("").slice(0, 2).toUpperCase() || "?";
 
   return (
     <header className="navbar">
@@ -70,7 +86,6 @@ const Navbar = () => {
         {/* Notifications */}
         <div className="notification-icon">
           <Bell size={18} />
-          <span className="notification-badge">3</span>
         </div>
 
         {/* User Profile Dropdown */}
@@ -93,7 +108,7 @@ const Navbar = () => {
                 </div>
                 <div>
                   <div className="dropdown-user-name">{userName}</div>
-                  <div className="dropdown-user-role">School Administrator</div>
+                  <div className="dropdown-user-role">{userRole}</div>
                 </div>
               </div>
               <div className="dropdown-divider"></div>

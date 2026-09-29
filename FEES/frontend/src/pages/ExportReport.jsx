@@ -17,7 +17,7 @@ const ExportReport = () => {
     if (!isAuth) {
       setDebugInfo('⚠️ Not authenticated. No accessToken or authToken found in localStorage.')
     } else {
-      setDebugInfo(`✅ Authenticated. Token: ${token.substring(0, 30)}...`)
+      setDebugInfo('✅ Signed in')
     }
   }, [])
 
@@ -188,20 +188,9 @@ const ExportReport = () => {
               {loading ? '⏳ Exporting...' : '⬇️ Download Report'}
             </button>
 
-            {/* Debug Info */}
-            <div style={{ 
-              marginTop: '15px', 
-              padding: '10px', 
-              backgroundColor: '#f0f0f0',
-              borderRadius: '4px',
-              fontSize: '0.85em',
-              fontFamily: 'monospace',
-              color: '#333'
-            }}>
-              <strong>Debug Info:</strong>
-              <div>{debugInfo}</div>
-              <div>API URL: {import.meta.env.VITE_API_URL || 'http://localhost:5000'}</div>
-            </div>
+            {debugInfo && (
+              <div style={{ marginTop: '15px', fontSize: '0.85em', color: '#555' }}>{debugInfo}</div>
+            )}
           </div>
         </div>
 

@@ -6,7 +6,6 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const getToken = () => {
   // Try multiple storage keys for compatibility
   const token = localStorage.getItem('accessToken') || localStorage.getItem('authToken');
-  console.log('🔑 Token retrieved:', token ? `${token.substring(0, 20)}...` : 'None');
   return token;
 };
 

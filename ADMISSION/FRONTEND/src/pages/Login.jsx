@@ -70,10 +70,6 @@ export function Login() {
         }
 
         setSuccess("Login successful! Redirecting...");
-        console.log(
-          "✅ [LOGIN] Token received:",
-          data.data.token?.substring(0, 20) + "...",
-        );
 
         setTimeout(() => {
           navigate(user?.role === "admin" ? "/admin" : "/dashboard", { replace: true });

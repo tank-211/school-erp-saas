@@ -5,7 +5,6 @@ const prisma = require('../config/prisma');
 const login = async (req, res) => {
   try {
     console.log("=== LOGIN START ===");
-    console.log("Body:", req.body);
 
     const { email, password } = req.body;
 
