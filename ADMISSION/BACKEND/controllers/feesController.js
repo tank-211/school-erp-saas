@@ -1,6 +1,8 @@
 import prisma from '../src/lib/prisma.js';
 import * as feeQueries from '../db/queries/feeQueries.js';
 import Joi from 'joi';
+import { newInvoiceNumber } from '../services/admissionFeeService.js';
+import { serializeBigInt } from '../utils/bigintSerializer.js';
 
 /**
  * Fees Controller
@@ -127,27 +129,17 @@ export const generateInvoice = async (req, res, next) => {
         throw error;
       }
 
-      const totalAmount = selectedFees.reduce(
-        (sum, fee) =>
-          sum + parseFloat(fee.final_amount),
-        0
-      );
+      // Sum in paise so 0.1 + 0.2 style float errors cannot creep into amounts
+      const totalAmount = (
+        selectedFees.reduce(
+          (sum, fee) => sum + Math.round(Number(fee.final_amount) * 100),
+          0
+        ) / 100
+      ).toFixed(2);
 
-      const year = new Date().getFullYear();
-
-      const invoiceCount =
-        await tx.invoice.count({
-          where: {
-            school_id: BigInt(school_id),
-            created_at: {
-              gte: new Date(year, 0, 1),
-              lt: new Date(year + 1, 0, 1)
-            }
-          }
-        });
-
-      const invoiceNumber =
-        `INV-${year}-${String(invoiceCount + 1).padStart(4, '0')}`;
+      // invoice_number is unique across all schools, so it cannot be a
+      // per-school counter (school B's INV-2026-0001 would clash with school A's).
+      const invoiceNumber = newInvoiceNumber();
 
       const invoiceDate = new Date();
       const dueDate = new Date(
@@ -181,7 +173,8 @@ export const generateInvoice = async (req, res, next) => {
           entity: 'invoice',
           entity_id: invoice.id,
           status: 'success',
-          new_data: invoice,
+          // BigInt ids cannot go into a JSON column as-is
+          new_data: serializeBigInt(invoice),
           change_summary:
             `Generated invoice ${invoiceNumber} for student ${student_id}`,
           ip_address: req.ip,
@@ -194,7 +187,7 @@ export const generateInvoice = async (req, res, next) => {
 
     res.status(201).json({
       success: true,
-      data: result,
+      data: serializeBigInt(result),
       message: 'Invoice generated successfully'
     });
 
