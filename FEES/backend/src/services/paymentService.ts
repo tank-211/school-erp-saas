@@ -57,19 +57,48 @@ function generatePaymentNumber(): string {
 }
 
 export class PaymentService {
+  /**
+   * Create a Razorpay order for one invoice of the caller's school. The
+   * invoice and school are stored on the order (notes), so verification can
+   * record the payment against the right invoice using Razorpay's own amount.
+   */
   async createRazorpayOrder(
     amount: number,
     currency: string = 'INR',
-    receipt?: string
+    invoiceId: string | undefined,
+    schoolId: string
   ) {
+    if (!/^\d+$/.test(String(invoiceId ?? ''))) {
+      throw new ValidationError('A valid invoice is required to pay online');
+    }
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: BigInt(String(invoiceId)), school_id: BigInt(schoolId) },
+      select: { id: true, pending_amount: true },
+    });
+    if (!invoice) {
+      throw new NotFoundError('Invoice not found');
+    }
+    const amountPaise = Math.round(Number(amount) * 100);
+    const pendingPaise = Math.round(Number(invoice.pending_amount) * 100);
+    if (!(amountPaise > 0)) {
+      throw new ValidationError('Valid amount is required');
+    }
+    if (amountPaise > pendingPaise) {
+      throw new ValidationError(`Amount cannot exceed the pending amount of ${(pendingPaise / 100).toFixed(2)}`);
+    }
+
     try {
       const razorpay = getRazorpayInstance();
 
       const options = {
-        amount: Math.round(amount * 100),
+        amount: amountPaise,
         currency,
-        receipt: receipt || `receipt_${Date.now()}`,
+        receipt: `inv_${invoice.id}_${Date.now()}`.slice(0, 40),
         payment_capture: 1,
+        notes: {
+          invoice_id: invoice.id.toString(),
+          school_id: String(schoolId),
+        },
       };
 
       const order = await razorpay.orders.create(options);
@@ -121,7 +150,7 @@ export class PaymentService {
     razorpay_order_id: string;
     razorpay_payment_id: string;
     razorpay_signature: string;
-  }) {
+  }, schoolId?: string, receivedBy?: string) {
     const {
       razorpay_order_id,
       razorpay_payment_id,
@@ -143,7 +172,9 @@ export class PaymentService {
       )
       .digest('hex');
 
-    if (generatedSignature !== razorpay_signature) {
+    const expected = Buffer.from(generatedSignature);
+    const given = Buffer.from(String(razorpay_signature));
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
       logger.warn(
         'Razorpay payment signature verification failed',
         {
@@ -162,10 +193,55 @@ export class PaymentService {
       paymentId: razorpay_payment_id,
     });
 
+    if (!schoolId) {
+      return { verified: true, orderId: razorpay_order_id, paymentId: razorpay_payment_id };
+    }
+
+    // Record the payment. Invoice and amount come from the order as stored at
+    // Razorpay, never from the browser.
+    const order: any = await getRazorpayInstance().orders.fetch(razorpay_order_id);
+    const orderInvoiceId = order?.notes?.invoice_id;
+    if (!orderInvoiceId || String(order?.notes?.school_id) !== String(schoolId)) {
+      throw new ValidationError('This payment does not belong to an invoice of your school');
+    }
+
+    // The same payment verified twice (retry, double click) is recorded once
+    const existing = await prisma.payment.findFirst({
+      where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
+      select: { id: true, payment_number: true, amount: true },
+    });
+    if (existing) {
+      return {
+        verified: true,
+        recorded: true,
+        alreadyRecorded: true,
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        invoiceId: String(orderInvoiceId),
+        paymentNumber: existing.payment_number,
+        amount: Number(existing.amount),
+      };
+    }
+
+    const amount = Number(order.amount) / 100;
+    const result = await this.recordPayment(String(orderInvoiceId), schoolId, {
+      amount,
+      paymentMethod: 'online',
+      razorpayOrderId: razorpay_order_id,
+      razorpayPaymentId: razorpay_payment_id,
+      notes: `Razorpay order ${razorpay_order_id}`,
+      receivedBy: receivedBy || 'Razorpay',
+    });
+
     return {
       verified: true,
+      recorded: true,
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
+      invoiceId: String(orderInvoiceId),
+      paymentNumber: result.payment.payment_number,
+      amount,
+      invoiceStatus: result.invoice.status,
     };
   }
 

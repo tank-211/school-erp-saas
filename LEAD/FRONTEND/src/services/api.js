@@ -54,7 +54,6 @@ const apiConfig = {
 // Create headers with authentication
 const createAuthHeaders = (additionalHeaders = {}) => {
   const token = tokenManager.getToken();
-    console.log("🔥 TOKEN SENT:", token); // ADD THIS
   const headers = {
     'Content-Type': 'application/json',
     ...additionalHeaders,
@@ -166,7 +165,6 @@ export const authAPI = {
       const result = await response.json();
 
       console.log("🔥 LOGIN RESPONSE:", result); // 👈 ADD HERE
-      console.log("🔥 TOKEN RECEIVED:", result.data.token); // 👈 ADD HERE
 
     if (result.success && result.data.token) {
       tokenManager.setToken(

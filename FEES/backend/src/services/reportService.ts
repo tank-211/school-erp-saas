@@ -23,12 +23,13 @@ export const getDashboardStats = async (schoolId: string) => {
       },
     });
 
-    // Pending invoice amounts
+    // Pending invoice amounts (this school only)
     const pendingPayments = await prisma.invoice.aggregate({
       _sum: {
         pending_amount: true,
       },
       where: {
+        school_id: BigInt(schoolId),
         status: {
           in: ['unpaid', 'partial', 'overdue'],
         },

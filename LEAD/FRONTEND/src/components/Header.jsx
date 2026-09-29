@@ -12,17 +12,11 @@ export default function Header({ onAddLead }) {
   const { logout } = useAuth();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const settings = useSettings();
-  console.log("HEADER USER:", user);
+  // Clears the session (tokens, user) and returns to the login page
   const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    localStorage.removeItem("role");
-    localStorage.removeItem("user") ;
-
-    // optional: clear everything
-    // localStorage.clear()
-
-    window.location.href = "/login"
-  }
+    logout();
+    window.location.href = "/login";
+  };
 
   useEffect(() => {
     fetchNotifications();
@@ -114,7 +108,7 @@ export default function Header({ onAddLead }) {
           <div className="user-info">
             <span className="user-name">{user?.name||"User"}</span>
             <span className="user-role-tag">{user?.role||"Admin"}</span>
-            <button onClick={logout} className="logout-btn">Logout</button>
+            <button onClick={handleLogout} className="logout-btn">Logout</button>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <polyline points="6 9 12 15 18 9"/>

@@ -106,7 +106,6 @@ export const useAuth = () => {
 
   const logout = () => {
     setUser(null);
-    setToken(null);
     setIsAuthenticated(false);
 
     localStorage.removeItem('authToken');

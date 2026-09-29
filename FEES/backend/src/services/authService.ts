@@ -7,6 +7,7 @@ import {
   ConflictError,
   NotFoundError,
   AuthenticationError,
+  AuthorizationError,
 } from '../middleware/errorHandler';
 import { mockUsers } from './mockDataService';
 import logger from '../config/logger';
@@ -418,7 +419,11 @@ export class AuthService {
   ) {
     const skip = (page - 1) * limit;
 
-    const where: any = schoolId ? { school_id: BigInt(schoolId) } : {};
+    // Always one school: without a school this would list every school's users
+    if (!schoolId) {
+      throw new AuthorizationError('A school is required to list users');
+    }
+    const where: any = { school_id: BigInt(schoolId) };
 
     if (role) {
       where.role = role;

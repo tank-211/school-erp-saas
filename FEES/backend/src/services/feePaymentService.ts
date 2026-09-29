@@ -376,11 +376,12 @@ export class FeePaymentService {
   /**
    * Dashboard fee statistics.
    */
-  async getDashboardStats(courseId?: string) {
+  async getDashboardStats(schoolId: string, courseId?: string) {
     /**
      * No course model exists in current schema.
      */
     void courseId;
+    const sid = BigInt(schoolId);
 
     const [
       paymentTotals,
@@ -388,6 +389,7 @@ export class FeePaymentService {
       invoices,
     ] = await Promise.all([
       prisma.payment.aggregate({
+        where: { school_id: sid },
         _sum: {
           amount: true,
         },
@@ -398,6 +400,7 @@ export class FeePaymentService {
 
       prisma.payment.groupBy({
         by: ['payment_method'],
+        where: { school_id: sid },
         _sum: {
           amount: true,
         },
@@ -407,6 +410,7 @@ export class FeePaymentService {
       }),
 
       prisma.invoice.findMany({
+        where: { school_id: sid },
         select: {
           total_amount: true,
           paid_amount: true,
@@ -491,6 +495,7 @@ export class FeePaymentService {
    * Get collection data for last 12 months.
    */
   async getMonthlyCollectionData(
+    schoolId: string,
     courseId?: string
   ) {
     /**
@@ -527,6 +532,7 @@ export class FeePaymentService {
     const payments =
       await prisma.payment.findMany({
         where: {
+          school_id: BigInt(schoolId),
           payment_date: {
             gte: startDate,
           },

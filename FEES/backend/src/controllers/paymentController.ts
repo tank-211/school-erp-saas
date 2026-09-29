@@ -19,25 +19,26 @@ export const createRazorpayOrder = asyncHandler(async (req: Request, res: Respon
     return sendError(res, 'Valid amount is required', [], 400);
   }
 
-  const order = await paymentService.createRazorpayOrder(amount, currency || 'INR', _invoiceId);
+  const order = await paymentService.createRazorpayOrder(amount, currency || 'INR', _invoiceId, req.user!.schoolId);
 
   sendSuccess(res, 'Razorpay order created successfully', order, 200);
 });
 
 export const verifyRazorpayPayment = asyncHandler(async (req: Request, res: Response) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, invoiceId, amount, paymentMethod } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return sendError(res, 'All Razorpay verification fields are required', [], 400);
   }
 
-  const verification = await paymentService.verifyRazorpayPayment({
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-  });
+  // Verifies the signature, then records the payment on the order's invoice
+  const verification = await paymentService.verifyRazorpayPayment(
+    { razorpay_order_id, razorpay_payment_id, razorpay_signature },
+    req.user!.schoolId,
+    req.user?.id?.toString()
+  );
 
-  sendSuccess(res, 'Payment verified successfully', verification, 200);
+  sendSuccess(res, 'Payment verified and recorded', verification, 200);
 });
 
 export const recordPayment = asyncHandler(async (req: Request, res: Response) => {
