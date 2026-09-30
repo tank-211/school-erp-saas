@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { AlertCircle, CheckCircle } from "lucide-react";
 import "../style.css";
+import "../erp-login.css";
 import { useAuth } from "../context/AuthContext.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -16,6 +16,7 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const handleSecretShortcut = (event) => {
@@ -84,169 +85,98 @@ export function Login() {
     }
   };
 
+  // Same sign-in page as Lead and Fees (erp-login.css)
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        background: "var(--primary-bg)",
-      }}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: "var(--r-lg)",
-          boxShadow: "var(--shadow-lg)",
-          padding: 40,
-          width: "100%",
-          maxWidth: 400,
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 24,
-            fontWeight: 600,
-            marginBottom: 8,
-            color: "var(--gray-900)",
-          }}
-        >
-          {isAdminLogin ? "Admin Portal Login" : "Login"}
-        </h1>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <p style={{ fontSize: 14, color: "var(--gray-500)", margin: 0 }}>
-            {isAdminLogin ? "Enter admin credentials to access the portal" : "Enter your credentials to access the system"}
-          </p>
-          {showAdminAccess && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid var(--gray-200)', borderRadius: '9999px', padding: '4px', background: 'var(--gray-50)' }}>
-              <button
-                type="button"
-                onClick={() => setIsAdminLogin(false)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '9999px',
-                  background: !isAdminLogin ? 'white' : 'transparent',
-                  color: !isAdminLogin ? 'var(--primary-dark)' : 'var(--gray-500)',
-                  fontWeight: 600,
-                  boxShadow: !isAdminLogin ? 'var(--shadow-sm)' : 'none'
-                }}
-              >
-                Staff
-              </button>
-              <button
-                type="button"
-                onClick={() => setIsAdminLogin(true)}
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '9999px',
-                  background: isAdminLogin ? 'white' : 'transparent',
-                  color: isAdminLogin ? 'var(--primary-dark)' : 'var(--gray-500)',
-                  fontWeight: 600,
-                  boxShadow: isAdminLogin ? 'var(--shadow-sm)' : 'none'
-                }}
-              >
-                Admin Portal
-              </button>
-            </div>
-          )}
+    <div className="erp-login">
+      <div className="erp-login-card">
+        <div className="erp-login-brand">
+          <div className="erp-login-mark">SE</div>
+          <div>
+            <div className="erp-login-product">School ERP</div>
+            <div className="erp-login-module">{isAdminLogin ? "Admissions · Admin Portal" : "Admissions"}</div>
+          </div>
         </div>
 
-        {error && (
-          <div
-            style={{
-              background: "#fee2e2",
-              border: "1px solid #fca5a5",
-              borderRadius: "var(--r)",
-              padding: "12px 16px",
-              marginBottom: 16,
-              display: "flex",
-              gap: 12,
-            }}
-          >
-            <AlertCircle
-              size={20}
-              style={{ color: "#dc2626", flexShrink: 0 }}
-            />
-            <div style={{ color: "#991b1b", fontSize: 14 }}>{error}</div>
-          </div>
-        )}
+        <h1 className="erp-login-title">Sign in</h1>
+        <p className="erp-login-sub">
+          {isAdminLogin
+            ? "School administrators only."
+            : "Use the email and password your school administrator gave you."}
+        </p>
 
-        {success && (
-          <div
-            style={{
-              background: "#dcfce7",
-              border: "1px solid #86efac",
-              borderRadius: "var(--r)",
-              padding: "12px 16px",
-              marginBottom: 16,
-              display: "flex",
-              gap: 12,
-            }}
-          >
-            <CheckCircle
-              size={20}
-              style={{ color: "#16a34a", flexShrink: 0 }}
-            />
-            <div style={{ color: "#15803d", fontSize: 14 }}>{success}</div>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: 14,
-                fontWeight: 500,
-                marginBottom: 6,
-                color: "var(--gray-700)",
-              }}
+        {showAdminAccess && (
+          <div className="erp-login-tabs" role="tablist">
+            <button
+              type="button"
+              className={`erp-login-tab ${!isAdminLogin ? "is-active" : ""}`}
+              onClick={() => setIsAdminLogin(false)}
             >
-              Email
-            </label>
+              Staff
+            </button>
+            <button
+              type="button"
+              className={`erp-login-tab ${isAdminLogin ? "is-active" : ""}`}
+              onClick={() => setIsAdminLogin(true)}
+            >
+              Admin Portal
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div className="erp-login-alert erp-login-alert-error" role="alert">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="erp-login-alert erp-login-alert-success">
+            {success}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="erp-login-form">
+          <label className="erp-login-label">
+            Email address
             <input
+              className="erp-login-input"
               type="email"
-              className="form-input"
-              placeholder="admin@test.com"
+              autoComplete="username"
+              placeholder="you@school.edu"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
+              disabled={loading}
             />
-          </div>
+          </label>
 
-          <div style={{ marginBottom: 24 }}>
-            <label
-              style={{
-                display: "block",
-                fontSize: 14,
-                fontWeight: 500,
-                marginBottom: 6,
-                color: "var(--gray-700)",
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              className="form-input"
-              placeholder="Enter password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              required
-            />
-          </div>
+          <label className="erp-login-label">
+            Password
+            <div className="erp-login-password">
+              <input
+                className="erp-login-input"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="Your password"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                disabled={loading}
+              />
+              <button type="button" className="erp-login-show" onClick={() => setShowPassword((v) => !v)}>
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+          </label>
 
-          <button
-            type="submit"
-            className="btn btn-primary"
-            style={{ width: "100%" }}
-            disabled={loading}
-          >
-            {loading ? "Logging in..." : "Login"}
+          <button type="submit" className="erp-login-button" disabled={loading}>
+            {loading && <span className="erp-login-spinner" />}
+            {loading ? "Signing in..." : "Sign in"}
           </button>
         </form>
+
+        <p className="erp-login-foot">Accounts are created by your school administrator.</p>
       </div>
+      <div className="erp-login-apps">Admissions · Leads · Fees</div>
     </div>
   );
 }

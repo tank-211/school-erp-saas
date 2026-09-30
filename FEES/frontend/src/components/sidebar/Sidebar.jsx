@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { fetchSchoolProfile } from '../../services/apiService'
+
+const initialsOf = (name = '') =>
+  name.split(/\s+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'S'
 import {
   Home,
   GraduationCap,
@@ -50,9 +53,15 @@ const Sidebar = () => {
   const navigate = useNavigate()
   const { logout, user } = useAuth()
   const [schoolName, setSchoolName] = useState('')
+  const [schoolCity, setSchoolCity] = useState('')
   // The signed-in user's own school, not a fixed name
   useEffect(() => {
-    fetchSchoolProfile().then((r) => { if (r.success) setSchoolName(r.data?.name || '') })
+    fetchSchoolProfile().then((r) => {
+      if (r.success) {
+        setSchoolName(r.data?.name || '')
+        setSchoolCity(r.data?.city || '')
+      }
+    })
   }, [])
   
   // Load expanded state from localStorage or default to null
@@ -114,12 +123,11 @@ const Sidebar = () => {
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-icon">
-          <BookOpen size={22} color="#14b8a6" strokeWidth={2} />
-        </div>
+        {/* The signed-in user's own school (name and city from the school record) */}
+        <div className="school-badge" title={schoolName || 'School'}>{initialsOf(schoolName)}</div>
         <div className="logo-text-wrap">
-          <div className="school-name">{schoolName || 'Fees'}</div>
-          <div className="school-sub">Fees & Payments</div>
+          <div className="school-name">{schoolName || 'Loading...'}</div>
+          <div className="school-sub">{[schoolCity, 'Fees'].filter(Boolean).join(' · ')}</div>
         </div>
       </div>
 

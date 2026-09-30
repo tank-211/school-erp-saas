@@ -44,11 +44,15 @@ export const getSettings = async (req, res) => {
     });
 
     // Rows created earlier hold the old placeholders: show the real values instead
+    // The school's name and city always come from the school record (set by
+    // Super Admin), so every module shows the same school
     const shown = {
       ...settings,
-      schoolName: settings.schoolName === DEFAULT_SETTINGS.schoolName ? real.schoolName : settings.schoolName,
-      email: settings.email === DEFAULT_SETTINGS.email ? real.email : settings.email,
-      phone: settings.phone || real.phone,
+      schoolName: real.schoolName,
+      campus: school?.city || null,
+      city: school?.city || null,
+      email: real.email || (settings.email === DEFAULT_SETTINGS.email ? "" : settings.email),
+      phone: real.phone || settings.phone || "",
     };
 
     res.json({ success: true, data: shown });
@@ -68,26 +72,47 @@ export const updateProfile = async (req, res) => {
         message: "Access denied"
       });
     }
-    const { schoolName, email, phone } = req.body;
+    // The school name is set by Super Admin; the school's contact details are
+    // saved on the school record, which Admission and Fees also use
+    const email = String(req.body.email || "").trim();
+    const phone = String(req.body.phone || "").trim();
 
-    if (!schoolName || !email) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({
         success: false,
-        message: "schoolName and email are required",
+        message: "A valid contact email is required",
       });
     }
+    if (phone.length > 20) {
+      return res.status(400).json({ success: false, message: "Phone must be 20 characters or fewer" });
+    }
 
-    const updated = await prisma.settings.upsert({
+    let school;
+    try {
+      school = await prisma.school.update({
+        where: { id: BigInt(req.user.schoolId) },
+        data: { email, phone: phone || null, updated_at: new Date() },
+        select: { name: true, city: true, email: true, phone: true },
+      });
+    } catch (e) {
+      if (e.code === "P2002") {
+        return res.status(409).json({ success: false, message: "Another school already uses this contact email" });
+      }
+      throw e;
+    }
+
+    const saved = await prisma.settings.upsert({
       where: { schoolId: req.user.schoolId },
-      update: { schoolName, email, phone },
+      update: { schoolName: school.name, email, phone },
       create: {
         schoolId: req.user.schoolId,
         ...DEFAULT_SETTINGS,
-        schoolName,
+        schoolName: school.name,
         email,
         phone,
       },
     });
+    const updated = { ...saved, schoolName: school.name, campus: school.city, city: school.city };
 
     await prisma.settingsLog.create({
       data: {

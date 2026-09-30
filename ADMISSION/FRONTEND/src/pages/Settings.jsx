@@ -65,6 +65,7 @@ export function Settings() {
       setSaving(true);
       setSchoolMsg(null);
       const res = await axios.put("/api/schools/me", form, { headers: getAuthHeader() });
+      window.dispatchEvent(new Event("school-updated"));
       setSchool(res.data?.data || school);
       setSchoolMsg({ ok: true, text: res.data?.message || "Saved" });
     } catch (err) {

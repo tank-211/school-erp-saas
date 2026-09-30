@@ -212,3 +212,26 @@
 }
 .sub-nav-item:hover { background: var(--primary-lighter); color: var(--primary-dark); }
 .sub-nav-item.active { color: var(--primary-dark); font-weight: 600; background: var(--primary-light); }
+
+/* School badge: same layout in Admission, Lead and Fees */
+.school-badge {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+.brand-text .brand-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}

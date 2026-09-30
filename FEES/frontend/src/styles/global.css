@@ -2647,3 +2647,26 @@ ul, ol { list-style: none; }
 }
 .alert-error   { background: var(--red-bg, #fee2e2);   border: 1px solid #fca5a5; color: var(--red-dark, #991b1b); }
 .alert-success { background: var(--green-bg, #dcfce7); border: 1px solid #86efac; color: #166534; }
+
+/* School badge in the sidebar: same layout in Admission, Lead and Fees */
+.school-badge {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  user-select: none;
+}
+.sidebar-logo .school-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}

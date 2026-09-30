@@ -3,9 +3,7 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2 } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { useAuth } from "../context/AuthContext.jsx";
-import schoolLogo from "../assets/school-logo.png";
-import sLogo from "../assets/sc-logo.png";
-import Full from "../assets/full.png";
+import { useSchool, initialsOf } from "../hooks/useSchool.js";
 import "../style.css";
 
 const navItems = [
@@ -29,6 +27,7 @@ export function Layout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const { user } = useAuth();
+  const school = useSchool();
 
   const matches = (path) => location.pathname === path || location.pathname.startsWith(`${path}/`);
   // Highlight only the most specific link (e.g. /admin/setup, not also /admin)
@@ -47,33 +46,21 @@ export function Layout() {
     <div className="app-wrapper">
       {/* Sidebar - Always visible */}
       <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+        {/* The signed-in user's own school (name and city from the school record) */}
         <div className="sidebar-logo">
-          <div className="logo-icon" onClick={toggleCollapse} style={{ cursor: "pointer" }}>
-            {collapsed ? (
-              <img 
-                src={sLogo}
-                alt="Sacred Tree" 
-                className="scl-logo"
-                style={{ width: "32px", height: "32px", objectFit: "contain" }}
-              />
-            ) : (
-              <img 
-                src={schoolLogo} 
-                alt="Sacred Tree International School" 
-                className="logo-image"
-                style={{ width: "40px", height: "40px", objectFit: "contain" }}
-              />
-            )}
+          <div
+            className="school-badge"
+            onClick={toggleCollapse}
+            title={school?.name || "School"}
+          >
+            {initialsOf(school?.name)}
           </div>
-          
           {!collapsed && (
             <div className="logo-text-wrap">
-              <img 
-                src={Full} 
-                alt="Sacred Tree International School" 
-                className="logo-image"
-                style={{ width: "40px", height: "40px", objectFit: "contain" }}
-              />
+              <div className="school-name">{school?.name || "Loading..."}</div>
+              <div className="school-sub">
+                {[school?.city, "Admissions"].filter(Boolean).join(" · ")}
+              </div>
             </div>
           )}
         </div>

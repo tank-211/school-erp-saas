@@ -726,3 +726,35 @@ input, select, textarea { font-family: var(--font); }
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* School badge in the sidebar: same layout in Admission, Lead and Fees */
+.school-badge {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  user-select: none;
+}
+.school-sub {
+  font-size: 12px;
+  color: var(--gray-500);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.logo-text-wrap .school-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
