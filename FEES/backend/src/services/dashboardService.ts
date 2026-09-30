@@ -509,15 +509,22 @@ static async getDashboardMetrics(schoolId: string) {
           }
         });
 
-      const formattedDistribution =
-        distribution.map((item) => ({
-          status: item.status ?? 'unknown',
-
-          count: item._count.id,
-
-          totalAmount:
-            Number(item._sum.amount ?? 0)
-        }));
+        const formattedStats =
+          distribution.map((item: {
+            status: string | null;
+            _count: {
+              id: number;
+            };
+            _sum: {
+              amount: unknown;
+            };
+          }) => ({
+            status: item.status ?? 'unknown',
+        
+            count: item._count.id,
+        
+            totalAmount: Number(item._sum.amount ?? 0),
+          }));
 
       logger.info(
         `✅ Payment status distribution fetched for school ${schoolId}`
