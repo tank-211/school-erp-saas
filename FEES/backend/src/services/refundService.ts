@@ -4,6 +4,16 @@ import { NotFoundError, ValidationError } from '../middleware/errorHandler';
 
 type RefundStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
 
+type RefundStatRow = {
+  status: string | null;
+  _count: {
+    _all: number;
+  };
+  _sum: {
+    amount: unknown;
+  };
+};
+
 // Ids arrive from URLs and forms: reject anything that is not a whole number
 const toId = (value: unknown, what: string): bigint => {
   if (!/^\d+$/.test(String(value ?? ''))) {
@@ -450,7 +460,8 @@ export class RefundService {
     ]);
 
     const processed = stats.find(
-      (s) => s.status === 'PROCESSED'
+      (s: RefundStatRow) => s.status === 'PROCESSED'
+
     );
 
     return {
@@ -460,7 +471,7 @@ export class RefundService {
 
       totalCount: totalRequested._count._all,
 
-      byStatus: stats.map((s) => ({
+      byStatus: stats.map((s: RefundStatRow) => ({
         status: s.status,
         count: s._count._all,
         amount: Number(s._sum.amount ?? 0),
