@@ -6,10 +6,14 @@ import {
 
 /**
  * Razorpay Payment Modal Component
- * 
+ *
+ * Each school has its own Razorpay account. The server creates the order with
+ * the school's keys and returns the school's PUBLIC key id with it; Checkout
+ * opens with that key, so the money goes to the school's account.
+ *
  * SECURITY ARCHITECTURE:
- * 1. Only PUBLIC Key (VITE_RAZORPAY_KEY) is in frontend code
- * 2. Secret Key stays ONLY in backend .env file
+ * 1. Only the school's PUBLIC key id reaches the browser (from the order)
+ * 2. Secret keys stay on the server (stored encrypted)
  * 3. Frontend calls backend to create order (backend uses secret key)
  * 4. Frontend calls backend to verify payment (backend uses secret key)
  * 5. Razorpay SDK handles payment collection on frontend
@@ -31,20 +35,6 @@ const RazorpayPaymentModal = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Get PUBLIC Razorpay Key from Vite environment
-  // This is safe to expose - it's public information
-  const PUBLIC_KEY = import.meta.env.VITE_RAZORPAY_KEY;
-
-  // Backend API base URL - construct it properly without duplication
-  
-
-  if (!PUBLIC_KEY) {
-    return (
-      <div className="error-message">
-        Error: Razorpay public key not configured. Check VITE_RAZORPAY_KEY in .env
-      </div>
-    );
-  }
 
   /**
    * Step 1: Call backend to create Razorpay Order
@@ -179,24 +169,18 @@ const RazorpayPaymentModal = ({
         // Step 3: Initialize Razorpay Modal
         const razorpayOptions = {
           // Order details from backend
-          key: PUBLIC_KEY, // PUBLIC Key - safe to expose
+          key: orderData.keyId, // the school's PUBLIC key id, from the order
           order_id: orderData.orderId, // Order ID from backend
           amount: orderData.amount, // Amount in paise
           currency: orderData.currency, // INR
 
-          // User information
+          // Only the real name; the payer types their own email and phone.
+          // Payment methods follow the school's Razorpay account settings.
           prefill: {
             name: studentName,
-            email: `student_${studentId}@institution.edu`,
-            contact: '9999999999', // Optional: pre-fill if available
           },
-
-          // Payment methods
-          method: {
-            upi: true,
-            card: false,
-            wallet: false,
-            netbanking: false,
+          notes: {
+            student_id: String(studentId || ''),
           },
 
           // Callbacks

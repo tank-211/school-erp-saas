@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { schoolPaymentStatus } from '../services/schoolRazorpay';
 import paymentService from '../services/paymentService';
 import { sendSuccess, sendError } from '../utils/responseHelper';
 import { asyncHandler } from '../middleware/errorHandler';
@@ -78,4 +79,26 @@ export const getPaymentHistory = asyncHandler(async (req: Request, res: Response
   const history = await paymentService.getPaymentHistory(invoiceId, req.user!.schoolId);
 
   sendSuccess(res, 'Payment history retrieved successfully', history, 200);
+});
+
+
+// Razorpay calls this (no login). Answers 2xx for handled and ignored events so
+// Razorpay does not retry them; a bad signature or unknown school is refused.
+export const razorpayWebhook = async (req: Request, res: Response) => {
+  try {
+    const result = await paymentService.handleRazorpayWebhook(
+      String(req.params.schoolId),
+      (req as any).rawBody,
+      req.get('x-razorpay-signature') || undefined
+    );
+    res.status(200).json({ success: true, ...result });
+  } catch (error: any) {
+    res.status(error?.status || 500).json({ success: false, message: error?.message || 'Webhook failed' });
+  }
+};
+
+// Whether this school can take online payments (for the Pay page)
+export const razorpayStatus = asyncHandler(async (req: Request, res: Response) => {
+  const status = await schoolPaymentStatus(req.user!.schoolId);
+  sendSuccess(res, 'Online payment status', status, 200);
 });

@@ -505,6 +505,16 @@ function SchoolManagement() {
                       >
                         Renew
                       </Link>
+                      {/* The school's own Razorpay account */}
+                      <Link
+                        className={`sp-btn ${school.payment_gateway_status === "connected" ? "sp-btn-ghost" : "sp-btn-secondary"}`}
+                        to={`/sp-control-portal/schools/${school.id}/payments`}
+                        title="The school's own Razorpay account"
+                      >
+                        {school.payment_gateway_status === "connected"
+                          ? `Payments · ${school.payment_gateway_mode || "on"}`
+                          : "Set up payments"}
+                      </Link>
                     </div>
                   </td>
                 </tr>

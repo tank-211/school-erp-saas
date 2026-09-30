@@ -148,6 +148,43 @@ export const superAdminService = {
     }
   },
 
+  // Each school's own Razorpay account
+  async getSchoolGateway(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}/payment-gateway`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to load the school payment account.')
+    }
+  },
+
+  async saveSchoolGateway(id, data) {
+    try {
+      const response = await superAdminApi.put(`/schools/${id}/payment-gateway`, data)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to save the school payment account.')
+    }
+  },
+
+  async testSchoolGateway(id) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/payment-gateway/test`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Test failed.')
+    }
+  },
+
+  async disconnectSchoolGateway(id) {
+    try {
+      const response = await superAdminApi.delete(`/schools/${id}/payment-gateway`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to disconnect.')
+    }
+  },
+
   async getSchool(id) {
     try {
       const response = await superAdminApi.get(`/schools/${id}`)

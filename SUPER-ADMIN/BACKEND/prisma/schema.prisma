@@ -643,6 +643,16 @@ model school_payment_gateway {
   connected_at    DateTime? @db.Timestamp(6)
   disconnected_at DateTime? @db.Timestamp(6)
 
+  // The school's own Razorpay API keys (prisma/sql/2026-09-30_school_razorpay_keys.sql).
+  // Secrets are AES-256-GCM encrypted with PAYMENT_KEYS_SECRET; never returned.
+  key_id             String?   @db.VarChar(100)
+  key_secret_enc     String?   @db.Text
+  webhook_secret_enc String?   @db.Text
+  mode               String?   @db.VarChar(10)
+  last_tested_at     DateTime? @db.Timestamp(6)
+  last_error         String?   @db.Text
+  updated_by         String?   @db.VarChar(150)
+
   created_at DateTime @default(now()) @db.Timestamp(6)
   updated_at DateTime @updatedAt @db.Timestamp(6)
 

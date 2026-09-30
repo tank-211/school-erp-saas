@@ -278,11 +278,10 @@ function PaymentGateway() {
         <h2>Where these keys are used</h2>
 
         <p>
-          Student fee payments in the Fees app currently use the Razorpay
-          keys set on the Fees server (RAZORPAY_KEY_ID and
-          RAZORPAY_KEY_SECRET) and the checkout key in the Fees website's
-          settings, not the keys saved here. Switching the Fees app to these
-          keys changes live checkout, so it is a separate, planned step.
+          School fees are paid into each school's own Razorpay account, set
+          on the school's Payments page (Schools → Set up payments). These
+          platform keys are not used for school fees; they are kept for
+          charging schools themselves (for example subscriptions) later.
         </p>
       </div>
     </div>

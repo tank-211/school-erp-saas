@@ -1,5 +1,5 @@
 import prisma from '../config/database';
-import Razorpay from 'razorpay';
+import { getSchoolRazorpay } from './schoolRazorpay';
 import crypto from 'crypto';
 import {
   NotFoundError,
@@ -7,27 +7,10 @@ import {
 } from '../middleware/errorHandler';
 import logger from '../config/logger';
 
-let razorpayInstance: Razorpay | null = null;
-
-function getRazorpayInstance() {
-  if (!razorpayInstance) {
-    const keyId = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    if (!keyId || !keySecret) {
-      throw new ValidationError(
-        'Razorpay credentials not configured'
-      );
-    }
-
-    razorpayInstance = new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret,
-    });
-  }
-
-  return razorpayInstance;
-}
+// Online payments use each school's own Razorpay account (services/schoolRazorpay).
+// In-process guard: the browser confirmation and the webhook for the same
+// payment must not both record it (a unique index in the database backs this up).
+const recording = new Map<string, Promise<any>>();
 
 function normalizePaymentMethod(method: string): string {
   return method.trim().toLowerCase();
@@ -87,8 +70,11 @@ export class PaymentService {
       throw new ValidationError(`Amount cannot exceed the pending amount of ${(pendingPaise / 100).toFixed(2)}`);
     }
 
+    // Throws "not set up" (409) when the school has no connected Razorpay account
+    const rzp = await getSchoolRazorpay(schoolId);
+
     try {
-      const razorpay = getRazorpayInstance();
+      const razorpay = rzp.client;
 
       const options = {
         amount: amountPaise,
@@ -115,17 +101,11 @@ export class PaymentService {
         currency: order.currency,
         receipt: order.receipt,
         status: order.status,
+        // The school's public key: Checkout must open with the same account
+        keyId: rzp.keyId,
+        mode: rzp.mode,
       };
       } catch (error: any) {
-        console.error('========== RAZORPAY ORDER ERROR ==========');
-        console.error('Full error:', error);
-        console.error('Error message:', error?.message);
-        console.error('Error description:', error?.error?.description);
-        console.error('Error code:', error?.error?.code);
-        console.error('Error status:', error?.statusCode);
-        console.error('Error response:', error?.response?.data);
-        console.error('==========================================');
-
         logger.error('Error creating Razorpay order', {
           message: error?.message,
           description: error?.error?.description,
@@ -157,13 +137,11 @@ export class PaymentService {
       razorpay_signature,
     } = data;
 
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    if (!keySecret) {
-      throw new ValidationError(
-        'Razorpay credentials not configured'
-      );
+    if (!schoolId) {
+      throw new ValidationError('A school is required to verify a payment');
     }
+    const rzp = await getSchoolRazorpay(schoolId);
+    const keySecret = rzp.keySecret;
 
     const generatedSignature = crypto
       .createHmac('sha256', keySecret)
@@ -193,17 +171,38 @@ export class PaymentService {
       paymentId: razorpay_payment_id,
     });
 
-    if (!schoolId) {
-      return { verified: true, orderId: razorpay_order_id, paymentId: razorpay_payment_id };
-    }
-
     // Record the payment. Invoice and amount come from the order as stored at
     // Razorpay, never from the browser.
-    const order: any = await getRazorpayInstance().orders.fetch(razorpay_order_id);
+    const order: any = await rzp.client.orders.fetch(razorpay_order_id);
+    return this.recordFromOrder(order, razorpay_payment_id, schoolId, receivedBy || 'Razorpay');
+  }
+
+  /**
+   * Records a captured Razorpay payment against the invoice named on its order,
+   * once per payment id. Used by the browser confirmation and the webhook.
+   */
+  async recordFromOrder(order: any, razorpay_payment_id: string, schoolId: string, receivedBy: string) {
+    const razorpay_order_id = String(order?.id || '');
     const orderInvoiceId = order?.notes?.invoice_id;
     if (!orderInvoiceId || String(order?.notes?.school_id) !== String(schoolId)) {
       throw new ValidationError('This payment does not belong to an invoice of your school');
     }
+
+    const lockKey = `${schoolId}:${razorpay_payment_id}`;
+    const inFlight = recording.get(lockKey);
+    if (inFlight) {
+      await inFlight.catch(() => undefined);
+    }
+    const work = this.recordOnce(order, razorpay_order_id, razorpay_payment_id, String(orderInvoiceId), schoolId, receivedBy);
+    recording.set(lockKey, work);
+    try {
+      return await work;
+    } finally {
+      if (recording.get(lockKey) === work) recording.delete(lockKey);
+    }
+  }
+
+  private async recordOnce(order: any, razorpay_order_id: string, razorpay_payment_id: string, orderInvoiceId: string, schoolId: string, receivedBy: string) {
 
     // The same payment verified twice (retry, double click) is recorded once
     const existing = await prisma.payment.findFirst({
@@ -224,14 +223,36 @@ export class PaymentService {
     }
 
     const amount = Number(order.amount) / 100;
-    const result = await this.recordPayment(String(orderInvoiceId), schoolId, {
-      amount,
-      paymentMethod: 'online',
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
-      notes: `Razorpay order ${razorpay_order_id}`,
-      receivedBy: receivedBy || 'Razorpay',
-    });
+    let result;
+    try {
+      result = await this.recordPayment(String(orderInvoiceId), schoolId, {
+        amount,
+        paymentMethod: 'online',
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        notes: `Razorpay order ${razorpay_order_id}`,
+        receivedBy: receivedBy || 'Razorpay',
+      });
+    } catch (error: any) {
+      // Another server recorded it a moment earlier (unique index on the payment id)
+      if (error?.code === 'P2002') {
+        const again = await prisma.payment.findFirst({
+          where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
+          select: { payment_number: true, amount: true },
+        });
+        return {
+          verified: true,
+          recorded: true,
+          alreadyRecorded: true,
+          orderId: razorpay_order_id,
+          paymentId: razorpay_payment_id,
+          invoiceId: String(orderInvoiceId),
+          paymentNumber: again?.payment_number,
+          amount: Number(again?.amount ?? amount),
+        };
+      }
+      throw error;
+    }
 
     return {
       verified: true,
@@ -243,6 +264,58 @@ export class PaymentService {
       amount,
       invoiceStatus: result.invoice.status,
     };
+  }
+
+  /**
+   * Razorpay webhook for one school (POST /api/payments/razorpay/webhook/:schoolId).
+   * Checks Razorpay's signature with the school's webhook secret, then records
+   * the payment once, even if the parent closed the browser before returning.
+   */
+  async handleRazorpayWebhook(schoolId: string, rawBody: Buffer | undefined, signature: string | undefined) {
+    if (!/^\d+$/.test(String(schoolId || ''))) {
+      throw new ValidationError('Invalid school');
+    }
+    if (!rawBody || !signature) {
+      throw new ValidationError('Missing webhook body or signature');
+    }
+    const rzp = await getSchoolRazorpay(schoolId);
+    if (!rzp.webhookSecret) {
+      throw new ValidationError('No webhook secret is saved for this school');
+    }
+
+    const expected = Buffer.from(crypto.createHmac('sha256', rzp.webhookSecret).update(rawBody).digest('hex'));
+    const given = Buffer.from(String(signature));
+    if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) {
+      logger.warn('Razorpay webhook signature mismatch', { schoolId });
+      throw new ValidationError('Invalid webhook signature');
+    }
+
+    let event: any;
+    try {
+      event = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      throw new ValidationError('Webhook body is not JSON');
+    }
+
+    let order: any = null;
+    let paymentId: string | null = null;
+    if (event?.event === 'order.paid') {
+      order = event.payload?.order?.entity || null;
+      paymentId = event.payload?.payment?.entity?.id || null;
+    } else if (event?.event === 'payment.captured') {
+      const payment = event.payload?.payment?.entity;
+      paymentId = payment?.id || null;
+      if (payment?.order_id) order = await rzp.client.orders.fetch(payment.order_id);
+    } else {
+      return { ignored: true, reason: `event ${event?.event || 'unknown'} is not used` };
+    }
+
+    // Orders not created by this app for this school (no invoice note) are left alone
+    if (!order || !paymentId || !order.notes?.invoice_id || String(order.notes?.school_id) !== String(schoolId)) {
+      return { ignored: true, reason: 'not an invoice payment of this school' };
+    }
+
+    return this.recordFromOrder(order, paymentId, String(schoolId), 'Razorpay webhook');
   }
 
   async recordPayment(

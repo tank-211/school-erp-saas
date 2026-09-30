@@ -8,13 +8,23 @@ import {
   CreditCard,
   AlertCircle,
 } from 'lucide-react'
-import { fetchInvoiceDetails } from '../services/apiService'
+import { fetchInvoiceDetails, getOnlinePaymentStatus } from '../services/apiService'
 import '../styles/payment-page.css'
 import RazorpayPaymentModal from '../components/RazorpayPaymentModal'
 
 const Payment = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
+
+  // Online payment needs the school's own Razorpay account to be connected
+
+  const [online, setOnline] = useState(null)
+
+  useEffect(() => {
+
+    getOnlinePaymentStatus().then((r) => setOnline(r.success ? r.data : { enabled: false, error: r.error }))
+
+  }, [])
 
   const [invoice, setInvoice] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -272,8 +282,23 @@ const Payment = () => {
                   on this invoice.
                 </p>
               </div>
+            ) : online === null ? (
+              <p className="text-muted">Checking online payment...</p>
+            ) : !online.enabled ? (
+              <div className="text-center">
+                <h3>Online payment is not set up</h3>
+                <p className="text-muted">
+                  {online.error ||
+                    "This school's Razorpay account has not been connected yet. The platform team connects it from Super Admin. Meanwhile, record cash, cheque or bank payments from the Students page."}
+                </p>
+              </div>
             ) : (
               <>
+                {online.mode === 'test' && (
+                  <p className="text-muted" style={{ marginBottom: 12 }}>
+                    Test mode: no real money is charged.
+                  </p>
+                )}
                 <RazorpayPaymentModal
                   studentName={
                     invoice.studentName
