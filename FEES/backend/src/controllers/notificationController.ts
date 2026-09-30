@@ -45,9 +45,15 @@ export const sendBulkNotifications = asyncHandler(async (req: Request, res: Resp
     message,
   });
 
+  if (!result.successCount) {
+    // Nothing went out (e.g. no provider connected): say why
+    const reason = result.results.find((r) => r.error)?.error || `No ${channel} messages were sent`;
+    return sendError(res, reason, result.results, 503);
+  }
+
   sendSuccess(
     res,
-    `Bulk ${channel} notification completed`,
+    `${result.successCount} of ${result.total} ${channel} messages sent`,
     result,
     200
   );

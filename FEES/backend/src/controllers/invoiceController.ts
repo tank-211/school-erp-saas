@@ -15,14 +15,16 @@ export const getInvoice = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getAllInvoices = asyncHandler(async (req: Request, res: Response) => {
-  const { page, limit, status, studentId, courseId } = req.query;
+  const { page, limit, status, studentId, courseId, invoiceNumber } = req.query;
 
   const { page: p, limit: l } = getPaginationParams({ page, limit });
 
+  // The school always comes from the token (the service ignores any other)
   const result = await invoiceService.getAllInvoices(p, l, {
     status: status as string,
-    studentId: studentId as string,
+    studentId: /^\d+$/.test(String(studentId ?? '')) ? (studentId as string) : undefined,
     courseId: courseId as string,
+    invoiceNumber: invoiceNumber ? String(invoiceNumber).trim() : undefined,
   }, req.user!.schoolId);
 
   sendSuccess(res, 'Invoices retrieved successfully', result.invoices, 200, {

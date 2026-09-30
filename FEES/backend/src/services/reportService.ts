@@ -1,3 +1,4 @@
+import { readyRefundTable, RefundsNotSetUpError } from '../utils/refunds';
 import prisma from '../config/database';
 import logger from '../config/logger';
 
@@ -270,7 +271,9 @@ export const getPendingPaymentsReport = async (schoolId: string, limit: number =
  */
 export const getRefundRequestsReport = async (schoolId: string, limit: number = 10) => {
   try {
-    const refunds = await prisma.refund_request.findMany({
+    const table = await readyRefundTable();
+    if (!table) throw new RefundsNotSetUpError();
+    const refunds = await table.findMany({
       where: { school_id: BigInt(schoolId) },
       take: limit,
       orderBy: {
@@ -314,7 +317,8 @@ export const getComprehensiveReportData = async (schoolId: string) => {
       getPaymentMethodDistribution(schoolId),
       getRecentTransactions(schoolId, 15),
       getPendingPaymentsReport(schoolId, 20),
-      getRefundRequestsReport(schoolId, 10),
+      // Refunds are skipped while the refunds table does not exist
+      getRefundRequestsReport(schoolId, 10).catch((e) => (e instanceof RefundsNotSetUpError ? [] : Promise.reject(e))),
     ]);
 
     return {

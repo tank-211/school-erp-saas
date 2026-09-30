@@ -1,7 +1,16 @@
+import { refundTable } from '../utils/refunds';
 import prisma from '../config/database';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler';
 
 type RefundStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSED';
+
+// Ids arrive from URLs and forms: reject anything that is not a whole number
+const toId = (value: unknown, what: string): bigint => {
+  if (!/^\d+$/.test(String(value ?? ''))) {
+    throw new ValidationError(`A valid ${what} id is required`);
+  }
+  return BigInt(String(value));
+};
 
 type RefundMethod = string;
 
@@ -14,8 +23,8 @@ export class RefundService {
     reason: string;
     description?: string;
   }) {
-    const studentId = BigInt(data.studentId);
-    const paymentId = BigInt(data.feePaymentId);
+    const studentId = toId(data.studentId, 'student');
+    const paymentId = toId(data.feePaymentId, 'payment');
 
     // Check student exists
     const schoolId = BigInt(data.schoolId);
@@ -56,7 +65,7 @@ export class RefundService {
     }
 
     // Check existing active refund request
-    const existing = await prisma.refund_request.findFirst({
+    const existing = await refundTable().findFirst({
       where: {
         payment_id: paymentId,
         status: {
@@ -72,7 +81,7 @@ export class RefundService {
     }
 
     // Create refund request
-    const refund = await prisma.refund_request.create({
+    const refund = await refundTable().create({
       data: {
         school_id: payment.school_id,
         student_id: studentId,
@@ -118,9 +127,9 @@ export class RefundService {
     approvedBy: string,
     notes?: string
   ) {
-    const id = BigInt(refundId);
+    const id = toId(refundId, 'refund request');
 
-    const refund = await prisma.refund_request.findFirst({
+    const refund = await refundTable().findFirst({
       where: { id, school_id: BigInt(schoolId) },
     });
 
@@ -134,7 +143,7 @@ export class RefundService {
       );
     }
 
-    const updated = await prisma.refund_request.update({
+    const updated = await refundTable().update({
       where: {
         id,
       },
@@ -180,9 +189,9 @@ export class RefundService {
     rejectionReason: string,
     approvedBy: string
   ) {
-    const id = BigInt(refundId);
+    const id = toId(refundId, 'refund request');
 
-    const refund = await prisma.refund_request.findFirst({
+    const refund = await refundTable().findFirst({
       where: { id, school_id: BigInt(schoolId) },
     });
 
@@ -196,7 +205,7 @@ export class RefundService {
       );
     }
 
-    const updated = await prisma.refund_request.update({
+    const updated = await refundTable().update({
       where: {
         id,
       },
@@ -214,17 +223,17 @@ export class RefundService {
   async processRefund(
     refundId: string,
     schoolId: string,
-    _refundMethod: RefundMethod,
-    _bankDetails?: {
+    refundMethod: RefundMethod,
+    bankDetails?: {
       accountHolder: string;
       accountNumber: string;
       ifscCode: string;
     },
-    _transactionId?: string
+    transactionId?: string
   ) {
-    const id = BigInt(refundId);
+    const id = toId(refundId, 'refund request');
 
-    const refund = await prisma.refund_request.findFirst({
+    const refund = await refundTable().findFirst({
       where: { id, school_id: BigInt(schoolId) },
     });
 
@@ -238,25 +247,25 @@ export class RefundService {
       );
     }
 
-    /*
-     * The current Prisma schema does not contain dedicated fields for:
-     * refund method
-     * bank account holder
-     * bank account number
-     * IFSC
-     * refund transaction ID
-     *
-     * Therefore these values cannot be persisted in refund_request
-     * until the schema is extended.
-     */
+    const method = String(refundMethod || '').trim().toLowerCase();
+    if (!method) {
+      throw new ValidationError('Refund method is required');
+    }
+    const accountDigits = String(bankDetails?.accountNumber || '').replace(/\D/g, '');
 
-    const processed = await prisma.refund_request.update({
+    const processed = await refundTable().update({
       where: {
         id,
       },
       data: {
         status: 'PROCESSED',
         processed_date: new Date(),
+        refund_method: method.slice(0, 50),
+        refund_reference: transactionId ? String(transactionId).trim().slice(0, 100) : null,
+        account_holder: bankDetails?.accountHolder ? String(bankDetails.accountHolder).trim().slice(0, 150) : null,
+        // Only the last 4 digits are kept: enough to identify the account, not to use it
+        account_last4: accountDigits ? accountDigits.slice(-4) : null,
+        ifsc_code: bankDetails?.ifscCode ? String(bankDetails.ifscCode).trim().toUpperCase().slice(0, 20) : null,
       },
       include: {
         student: {
@@ -289,9 +298,9 @@ export class RefundService {
   }
 
   async getRefundRequestById(refundId: string, schoolId: string) {
-    const id = BigInt(refundId);
+    const id = toId(refundId, 'refund request');
 
-    const refund = await prisma.refund_request.findFirst({
+    const refund = await refundTable().findFirst({
       where: { id, school_id: BigInt(schoolId) },
       include: {
         student: {
@@ -361,7 +370,7 @@ export class RefundService {
     void courseId;
 
     const [refunds, total] = await Promise.all([
-      prisma.refund_request.findMany({
+      refundTable().findMany({
         where,
         include: {
           student: {
@@ -395,7 +404,7 @@ export class RefundService {
         take: limit,
       }),
 
-      prisma.refund_request.count({
+      refundTable().count({
         where,
       }),
     ]);
@@ -418,7 +427,7 @@ export class RefundService {
     void courseId;
 
     const [stats, totalRequested] = await Promise.all([
-      prisma.refund_request.groupBy({
+      refundTable().groupBy({
         by: ['status'],
         _sum: {
           amount: true,
@@ -429,7 +438,7 @@ export class RefundService {
         where,
       }),
 
-      prisma.refund_request.aggregate({
+      refundTable().aggregate({
         _sum: {
           amount: true,
         },

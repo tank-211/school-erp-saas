@@ -38,7 +38,7 @@ export const generateReport = (reportData: any) => {
       addPendingPayments(doc, reportData.pendingPayments);
       doc.addPage();
       addRefundRequests(doc, reportData.refundRequests);
-      addFooter(doc);
+      addFooter(doc, reportData.schoolName);
 
       doc.end();
     } catch (error: any) {
@@ -296,12 +296,12 @@ const addRefundRequests = (doc: any, refunds: any) => {
   doc.moveDown(1);
 };
 
-const addFooter = (doc: any) => {
+const addFooter = (doc: any, schoolName?: string) => {
   doc
     .fontSize(8)
     .fillColor('#999999')
     .text(
-      `Report Generated on: ${new Date().toLocaleString()} | Sacred Tree International School`,
+      `Report generated on ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}${schoolName ? ` | ${schoolName}` : ''}`,
       40,
       doc.page.height - 50,
       { align: 'center' }

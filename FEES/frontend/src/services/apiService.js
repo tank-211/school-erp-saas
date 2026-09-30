@@ -225,6 +225,9 @@ api.interceptors.response.use(
 
 function formatErrorMessage(error, context = 'API call') {
   if (error.response) {
+    // Show the server's own explanation when it gives one
+    const serverMessage = error.response.data?.message
+    if (serverMessage) return serverMessage
     return `[${error.response.status}] ${error.response.statusText || 'Server Error'} - ${context}`
   } else if (error.request) {
     return `Network Error - Backend server not responding. Check if server is running on ${API_BASE_URL.split('/api')[0]}`
@@ -380,10 +383,15 @@ export const fetchRecentTransactions = async (limit = 5) => {
 
 export const fetchTransactions = async () => {
   try {
-    console.log('💳 Fetching all transactions...')
-    const response = await api.get('/invoices')
-    console.log('✅ Transactions loaded successfully')
-    return { success: true, data: response.data.data || response.data }
+    // Every invoice of the school, 100 per request
+    const all = []
+    for (let page = 1; page <= 50; page++) {
+      const response = await api.get(`/invoices?page=${page}&limit=100`)
+      const rows = response.data?.data || []
+      all.push(...rows)
+      if (rows.length < 100) break
+    }
+    return { success: true, data: all }
   } catch (error) {
     const errorMessage = formatErrorMessage(error, 'transactions')
     console.error('💳 Transactions Error:', errorMessage)
@@ -436,6 +444,27 @@ export const fetchStudents = async (filters = {}) => {
   }
 }
 
+
+// ==================== SCHOOL & STATS API CALLS ====================
+
+// Small wrapper: { success, data } or { success: false, error }
+const getData = async (url, label) => {
+  try {
+    const response = await api.get(url)
+    return { success: true, data: response.data?.data ?? response.data }
+  } catch (error) {
+    return { success: false, error: formatErrorMessage(error, label), details: error }
+  }
+}
+
+// School name, address and contact details (invoice and receipt letterhead)
+export const fetchSchoolProfile = () => getData('/school/profile', 'school details')
+
+// Classes with sections, and academic years, for filters
+export const fetchSchoolLookups = () => getData('/school/lookups', 'classes and years')
+
+// Student totals plus collections today and this month
+export const fetchStudentStats = () => getData('/students/stats', 'student statistics')
 
 // ==================== INVOICE API CALLS ====================
 
@@ -532,6 +561,16 @@ export const sendSMSMessage = async (invoiceId) => {
     return { success: true, message: response.data?.message || 'SMS sent', data: response.data.data }
   } catch (error) {
     return { success: false, message: error?.response?.data?.message || 'Failed to send SMS' }
+  }
+}
+
+// Reminders to several invoices at once; fails with the reason when nothing went out
+export const sendBulkReminders = async (channel, invoiceIds) => {
+  try {
+    const response = await api.post('/notifications/bulk', { channel, invoiceIds })
+    return { success: true, message: response.data?.message, data: response.data?.data }
+  } catch (error) {
+    return { success: false, message: error?.response?.data?.message || 'Failed to send reminders' }
   }
 }
 
@@ -862,3 +901,16 @@ export const testConnection = async () => {
 }
 
 export default api
+
+// Find one of the school's invoices by its printed number (INV-...)
+export const findInvoiceByNumber = async (invoiceNumber) => {
+  try {
+    const response = await api.get('/invoices', {
+      params: { invoiceNumber: String(invoiceNumber || '').trim(), page: 1, limit: 1 },
+    })
+    const list = response.data?.data || []
+    return { success: true, data: Array.isArray(list) && list.length ? list[0] : null }
+  } catch (error) {
+    return { success: false, error: formatErrorMessage(error, 'invoice lookup') }
+  }
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { fetchSchoolProfile } from '../../services/apiService'
 import {
   Home,
   GraduationCap,
@@ -34,28 +35,25 @@ const mainMenuItems = [
       { label: 'Refund Management', icon: RefreshCw, path: '/refund-management' },
     ],
   },
-  { label: 'Exams', icon: PenTool, path: '/exams' },
-  { label: 'Timetable', icon: Clock, path: '/timetable' },
-  { label: 'Staff', icon: Users, path: '/staff' },
-  { label: 'Library', icon: Library, path: '/library' },
-  { label: 'Transport', icon: Truck, path: '/transport' },
-  { label: 'Stationery', icon: FileText, path: '/stationery' },
 ]
 
+// Only pages this app has (App.jsx); other modules are not built here
 const reportsMenuItems = [
-  { label: 'Performance', icon: BarChart3, path: '/performance' },
-  { label: 'Fee Reports', icon: FileText, path: '/fees' },
-  { label: 'Custom Reports', icon: BarChart3, path: '/custom-reports' },
+  { label: 'Payment Monitoring', icon: FileText, path: '/fees' },
+  { label: 'Export Report', icon: BarChart3, path: '/export-report' },
 ]
 
-const settingsMenuItem = [
-  { label: 'Settings', icon: Settings, path: '/settings' },
-]
+const settingsMenuItem = []
 
 const Sidebar = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
+  const [schoolName, setSchoolName] = useState('')
+  // The signed-in user's own school, not a fixed name
+  useEffect(() => {
+    fetchSchoolProfile().then((r) => { if (r.success) setSchoolName(r.data?.name || '') })
+  }, [])
   
   // Load expanded state from localStorage or default to null
   const [expandedItem, setExpandedItem] = useState(() => {
@@ -104,9 +102,9 @@ const Sidebar = () => {
     }
   }
 
-  const userName = "Admin"
-  const userRole = "Administrator"
-  const userInitials = "A"
+  const userName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || user?.email || 'User'
+  const userRole = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : ''
+  const userInitials = userName.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
 
   const handleLogout = () => {
     logout()
@@ -120,8 +118,8 @@ const Sidebar = () => {
           <BookOpen size={22} color="#14b8a6" strokeWidth={2} />
         </div>
         <div className="logo-text-wrap">
-          <div className="school-name">Sacred Tree</div>
-          <div className="school-sub">International School</div>
+          <div className="school-name">{schoolName || 'Fees'}</div>
+          <div className="school-sub">Fees & Payments</div>
         </div>
       </div>
 

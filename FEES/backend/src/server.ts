@@ -17,6 +17,7 @@ import paymentRoutes from './routes/paymentRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import bulkUploadRoutes from './routes/bulkUploadRoutes';
 import feeStructureRoutes from './routes/feeStructureRoutes';
+import schoolRoutes from './routes/schoolRoutes';
 
 const app = express();
 
@@ -65,6 +66,8 @@ app.use('/api/invoices', invoiceRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/bulk-upload', bulkUploadRoutes);
+// The caller's own school: letterhead details and class/year lists
+app.use('/api/school', schoolRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

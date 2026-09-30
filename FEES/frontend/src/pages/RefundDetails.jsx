@@ -2,7 +2,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useState, useEffect, useCallback } from 'react'
 import { ArrowLeft, User, FileText, Clock, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
-import { fetchRefundById, approveRefundRequest, rejectRefundRequest, processRefund } from '../services/apiService'
+import { fetchRefundById, approveRefundRequest, rejectRefundRequest } from '../services/apiService'
+import ProcessRefundDialog from '../components/refund/ProcessRefundDialog'
 
 function RefundDetails() {
   const { id } = useParams()
@@ -11,6 +12,8 @@ function RefundDetails() {
   const [refund, setRefund] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [processing, setProcessing] = useState(false)
 
   const loadRefund = useCallback(async () => {
     setLoading(true)
@@ -18,15 +21,31 @@ function RefundDetails() {
     try {
       const result = await fetchRefundById(id)
       if (result.success && result.data) {
+        const r = result.data
+        const day = (v) => (v ? new Date(v).toLocaleDateString('en-IN') : null)
         setRefund({
-          id: result.data.id,
-          studentName: `${result.data.student?.firstName || ''} ${result.data.student?.lastName || ''}`.trim() || 'Unknown',
-          invoiceId: result.data.feePayment?.id || 'N/A',
-          amount: Number(result.data.amount || 0),
-          reason: result.data.reason || 'Other',
-          status: result.data.status || 'Pending',
-          requestedDate: result.data.requestDate ? new Date(result.data.requestDate).toISOString().split('T')[0] : 'N/A',
-          adminNotes: result.data.notes || '',
+          id: String(r.id),
+          studentName: [r.student?.first_name, r.student?.last_name].filter(Boolean).join(' ') || '—',
+          admissionNumber: r.student?.admission_number || '—',
+          invoiceNumber: r.payment?.invoice?.invoice_number || '—',
+          invoiceId: r.payment?.invoice?.id ? String(r.payment.invoice.id) : null,
+          paymentAmount: Number(r.payment?.amount || 0),
+          paymentMethod: r.payment?.payment_method || '—',
+          paymentDate: day(r.payment?.payment_date) || '—',
+          amount: Number(r.amount || 0),
+          reason: r.reason || '—',
+          description: r.description || '',
+          status: String(r.status || 'PENDING').toUpperCase(),
+          requestedDate: day(r.created_at) || '—',
+          adminNotes: r.notes || '',
+          rejectionReason: r.rejection_reason || '',
+          decidedOn: day(r.approval_date),
+          processedOn: day(r.processed_date),
+          refundMethod: r.refund_method || '',
+          refundReference: r.refund_reference || '',
+          accountHolder: r.account_holder || '',
+          accountLast4: r.account_last4 || '',
+          ifscCode: r.ifsc_code || '',
         })
       } else {
         setError(result.error || 'Refund not found')
@@ -43,27 +62,23 @@ function RefundDetails() {
   }, [loadRefund])
 
   const handleApprove = async () => {
+    setActionError('')
     const result = await approveRefundRequest(refund.id, { notes: refund.adminNotes })
-    if (result.success) {
-      setRefund(prev => ({ ...prev, status: 'APPROVED' }))
-    }
+    if (result.success) loadRefund()
+    else setActionError(result.error || 'Approval failed')
   }
 
   const handleReject = async () => {
-    const result = await rejectRefundRequest(refund.id, 'Rejected by admin')
-    if (result.success) {
-      setRefund(prev => ({ ...prev, status: 'REJECTED' }))
+    setActionError('')
+    const reason = window.prompt('Why is this refund being rejected?')
+    if (reason === null) return
+    if (!reason.trim()) {
+      setActionError('A rejection reason is required.')
+      return
     }
-  }
-
-  const handleProcess = async () => {
-    const result = await processRefund(refund.id, {
-      refundMethod: 'BANK_TRANSFER',
-      bankDetails: {}
-    })
-    if (result.success) {
-      setRefund(prev => ({ ...prev, status: 'PROCESSED' }))
-    }
+    const result = await rejectRefundRequest(refund.id, reason.trim())
+    if (result.success) loadRefund()
+    else setActionError(result.error || 'Rejection failed')
   }
 
   const handleNotesChange = (e) => {
@@ -172,8 +187,22 @@ function RefundDetails() {
               <div className="info-value-box">{refund.studentName}</div>
             </div>
             <div className="info-item">
-              <div className="form-label">Invoice ID</div>
-              <div className="info-value-box td-mono">{refund.invoiceId}</div>
+              <div className="form-label">Admission No.</div>
+              <div className="info-value-box">{refund.admissionNumber}</div>
+            </div>
+            <div className="info-item">
+              <div className="form-label">Invoice</div>
+              <div className="info-value-box td-mono">
+                {refund.invoiceId ? (
+                  <a href={`/receipt/${refund.invoiceId}`} onClick={(e) => { e.preventDefault(); navigate(`/receipt/${refund.invoiceId}`) }}>
+                    {refund.invoiceNumber}
+                  </a>
+                ) : refund.invoiceNumber}
+              </div>
+            </div>
+            <div className="info-item">
+              <div className="form-label">Payment Refunded</div>
+              <div className="info-value-box">₹{refund.paymentAmount.toLocaleString('en-IN')} · {refund.paymentMethod} · {refund.paymentDate}</div>
             </div>
           </div>
         </div>
@@ -199,8 +228,23 @@ function RefundDetails() {
             </div>
             <div className="info-item">
               <div className="form-label">Reason</div>
-              <div className="info-value-box">{refund.reason}</div>
+              <div className="info-value-box">{refund.reason}{refund.description ? ` — ${refund.description}` : ''}</div>
             </div>
+            {refund.rejectionReason && (
+              <div className="info-item">
+                <div className="form-label">Rejected because</div>
+                <div className="info-value-box">{refund.rejectionReason}{refund.decidedOn ? ` (${refund.decidedOn})` : ''}</div>
+              </div>
+            )}
+            {refund.status === 'PROCESSED' && (
+              <div className="info-item">
+                <div className="form-label">Refunded</div>
+                <div className="info-value-box">
+                  {[refund.processedOn, refund.refundMethod.replace(/_/g, ' '), refund.refundReference && `ref ${refund.refundReference}`,
+                    refund.accountLast4 && `a/c ••••${refund.accountLast4}`, refund.ifscCode, refund.accountHolder].filter(Boolean).join(' · ') || '—'}
+                </div>
+              </div>
+            )}
             <div className="info-item">
               <div className="form-label">Status</div>
               <div className="info-value-box">
@@ -225,15 +269,17 @@ function RefundDetails() {
         <div className="card-body">
           <textarea
             className="form-textarea"
-            placeholder="Add notes about this refund request..."
+            placeholder={refund.status === 'PENDING' ? 'Notes saved with the approval...' : 'No notes'}
             value={refund.adminNotes}
             onChange={handleNotesChange}
             rows="4"
+            disabled={refund.status !== 'PENDING'}
           />
         </div>
 
         {/* Action Buttons */}
         <div className="card-body">
+          {actionError && <div className="alert alert-error" style={{ marginBottom: 12 }}>{actionError}</div>}
           <div className="flex gap-3" style={{ justifyContent: 'flex-end' }}>
             <button className="btn btn-outline" onClick={handleClose}>
               Close
@@ -249,13 +295,21 @@ function RefundDetails() {
               </>
             )}
             {refund.status === 'APPROVED' && (
-              <button className="btn btn-primary" onClick={handleProcess}>
-                Mark as Processed
+              <button className="btn btn-primary" onClick={() => setProcessing(true)}>
+                Mark as Refunded
               </button>
             )}
           </div>
         </div>
       </div>
+
+      {processing && (
+        <ProcessRefundDialog
+          refund={refund}
+          onClose={() => setProcessing(false)}
+          onDone={() => { setProcessing(false); loadRefund() }}
+        />
+      )}
 
       {/* Info Box for Guidance */}
       {refund.status === 'PENDING' && (

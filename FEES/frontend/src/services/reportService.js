@@ -76,7 +76,7 @@ export const reportService = {
       return { success: true, message: 'Report exported successfully' };
     } catch (error) {
       console.error('❌ Error exporting PDF:', error);
-      const errorMessage = this.getErrorMessage(error);
+      const errorMessage = await this.getErrorMessage(error);
       return { 
         success: false, 
         message: errorMessage,
@@ -125,7 +125,7 @@ export const reportService = {
       return { success: true, message: 'Transactions exported successfully' };
     } catch (error) {
       console.error('❌ Error exporting transactions:', error);
-      const errorMessage = this.getErrorMessage(error);
+      const errorMessage = await this.getErrorMessage(error);
       return { 
         success: false, 
         message: errorMessage,
@@ -159,7 +159,7 @@ export const reportService = {
       return { success: true, message: 'Pending payments exported successfully' };
     } catch (error) {
       console.error('❌ Error exporting pending payments:', error);
-      const errorMessage = this.getErrorMessage(error);
+      const errorMessage = await this.getErrorMessage(error);
       return { 
         success: false, 
         message: errorMessage,
@@ -193,7 +193,7 @@ export const reportService = {
       return { success: true, message: 'Refund requests exported successfully' };
     } catch (error) {
       console.error('❌ Error exporting refunds:', error);
-      const errorMessage = this.getErrorMessage(error);
+      const errorMessage = await this.getErrorMessage(error);
       return { 
         success: false, 
         message: errorMessage,
@@ -220,7 +220,19 @@ export const reportService = {
   /**
    * Helper method to extract error message
    */
-  getErrorMessage(error) {
+  async getErrorMessage(error) {
+    // Downloads use responseType 'blob', so an error body arrives as a Blob:
+    // read it to show the server's own message
+    let serverMessage = error.response?.data?.message
+    const body = error.response?.data
+    if (!serverMessage && body && typeof body.text === 'function') {
+      try {
+        serverMessage = JSON.parse(await body.text())?.message
+      } catch {
+        // not JSON
+      }
+    }
+    if (serverMessage) return serverMessage
     if (error.response?.status === 401) {
       return 'Authentication failed. Please login again. (401 Unauthorized)';
     }
@@ -236,7 +248,7 @@ export const reportService = {
     if (error.message === 'Network Error') {
       return 'Network error. Unable to reach the server. Is the backend running?';
     }
-    return error.response?.data?.message || error.message || 'An error occurred while exporting the report';
+    return error.message || 'An error occurred while exporting the report';
   }
 };
 

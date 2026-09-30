@@ -19,26 +19,28 @@ const Dashboard = () => {
   const [monthlyData, setMonthlyData] = useState([]);
   const [paymentMethodData, setPaymentMethodData] = useState([]);
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   // Fetch all dashboard data from database on component mount
   useEffect(() => {
     const fetchDashboardData = async () => {
       setLoading(true);
       try {
-        const [metricsData, monthlyChartData, paymentData, recentTransactionsData] = await Promise.all([
+        // Each section loads on its own, so one failure does not blank the rest
+        const [metricsRes, monthlyRes, paymentRes, recentRes] = await Promise.allSettled([
           getDashboardMetrics(),
           getMonthlyData(),
           getPaymentMethodData(),
           getRecentTransactionsData(10)
         ]);
 
-        setMetrics(metricsData);
-        setMonthlyData(monthlyChartData);
-        setPaymentMethodData(paymentData);
-        setRecentTransactions(recentTransactionsData.slice(0,5));
-      } catch (error) {
-        console.error('Error loading dashboard data:', error);
-        // Keep showing UI with empty data rather than breaking
+        if (metricsRes.status === 'fulfilled') setMetrics(metricsRes.value);
+        if (monthlyRes.status === 'fulfilled') setMonthlyData(monthlyRes.value);
+        if (paymentRes.status === 'fulfilled') setPaymentMethodData(paymentRes.value);
+        if (recentRes.status === 'fulfilled') setRecentTransactions(recentRes.value.slice(0, 5));
+
+        const failed = [metricsRes, monthlyRes, paymentRes, recentRes].filter((r) => r.status === 'rejected');
+        setLoadError(failed.length ? (failed[0].reason?.message || 'Some dashboard data could not be loaded.') : '');
       } finally {
         setLoading(false);
       }
@@ -76,6 +78,12 @@ const Dashboard = () => {
 
        
       </div>
+
+      {loadError && (
+        <div style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+          {loadError}
+        </div>
+      )}
 
       {/* CARDS */}
       <div className="grid-4">
@@ -169,7 +177,7 @@ const Dashboard = () => {
               </div>
 
               <div className="stat-value">
-                ₹{(Number(metrics.totalRefund) / 100000).toFixed(2)}L
+                {metrics.totalRefund === null ? 'Not set up' : `₹${(Number(metrics.totalRefund) / 100000).toFixed(2)}L`}
               </div>
             </div>
           </div>

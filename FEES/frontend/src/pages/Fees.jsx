@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Eye, ArrowLeft, Bell } from 'lucide-react'
 import { FaWhatsapp } from 'react-icons/fa'
 import { MdSms } from 'react-icons/md'
-import { fetchTransactions, sendWhatsAppMessage, sendSMSMessage } from '../services/apiService'
+import { fetchTransactions, sendWhatsAppMessage, sendSMSMessage, sendBulkReminders } from '../services/apiService'
 
 const Fees = () => {
   const navigate = useNavigate()
@@ -13,8 +13,9 @@ const Fees = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('All')
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
 
-  const statusOptions = ['All', 'Paid', 'Pending', 'Failed', 'Partially Paid']
+  const statusOptions = ['All', 'Paid', 'Partly Paid', 'Not Paid', 'Overdue']
 
   const loadTransactions = useCallback(async () => {
     setLoading(true)
@@ -22,22 +23,24 @@ const Fees = () => {
       const result = await fetchTransactions()
       if (result.success && Array.isArray(result.data)) {
         const transformed = result.data.map((tx) => ({
-          id: tx.id || tx.invoiceId,
-          invoiceId: tx.invoiceId || tx.id,
+          id: tx.invoiceId,
+          invoiceId: String(tx.invoiceId),
+          invoiceNumber: tx.invoiceNumber,
           studentName: tx.studentName || 'Unknown',
-          class: tx.class || tx.academicYear || 'N/A',
-          amount: Number(tx.totalAmount || tx.amount || 0),
-          amountPaid: Number(tx.amountPaid || 0),
-          status: tx.paymentStatus || tx.status || 'Pending',
-          paymentMethod: tx.payments?.[0]?.paymentMethod || tx.paymentMethod || 'N/A',
-          phone: tx.student?.phone || '',
-          date: tx.createdAt || tx.date || new Date().toISOString(),
+          class: tx.className || '—',
+          amount: Number(tx.totalAmount || 0),
+          amountPaid: Number(tx.paidAmount || 0),
+          status: String(tx.status || 'unpaid').toUpperCase(),
+          paymentMethod: tx.lastPaymentMethod || '—',
+          phone: tx.phone || '',
+          date: tx.invoiceDate,
         }))
         setAllTransactions(transformed)
         setFilteredTransactions(transformed)
       }
+      else setLoadError(result.error || 'Could not load invoices')
     } catch (error) {
-      console.error('Error loading transactions:', error)
+      setLoadError(error.message || 'Could not load invoices')
     } finally {
       setLoading(false)
     }
@@ -47,23 +50,22 @@ const Fees = () => {
     let filtered = [...allTransactions]
 
     if (filterStatus !== 'All') {
-      filtered = filtered.filter((tx) => {
-        if (filterStatus === 'Partially Paid') {
-          return (
-            (tx.status === 'PENDING' || tx.status === 'PARTIAL') &&
-            (tx.amountPaid || 0) > 0 &&
-            (tx.amountPaid || 0) < tx.amount
-          )
-        }
-        return tx.status === filterStatus.toUpperCase() || tx.status === filterStatus
-      })
+      // Decided from the amounts, whatever the stored status word is
+      const due = (tx) => tx.amount - tx.amountPaid
+      const test = {
+        'Paid': (tx) => due(tx) <= 0,
+        'Partly Paid': (tx) => tx.amountPaid > 0 && due(tx) > 0,
+        'Not Paid': (tx) => tx.amountPaid <= 0 && due(tx) > 0,
+        'Overdue': (tx) => tx.status === 'OVERDUE',
+      }[filterStatus]
+      filtered = filtered.filter(test)
     }
 
     if (searchTerm) {
       filtered = filtered.filter(
         (tx) =>
           tx.studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          tx.invoiceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          String(tx.invoiceNumber || tx.invoiceId).toLowerCase().includes(searchTerm.toLowerCase()) ||
           (tx.class && tx.class.toLowerCase().includes(searchTerm.toLowerCase())),
       )
     }
@@ -79,42 +81,21 @@ const Fees = () => {
     filterTransactions()
   }, [searchTerm, filterStatus, allTransactions, filterTransactions])
 
-  const handleNotifyPaid = async () => {
-    const paidRecords = filteredTransactions.filter(tx => tx.status === 'PAID' || tx.status === 'Paid')
-    if (paidRecords.length > 0) {
-      alert(`Fees paid successfully for ${paidRecords.length} student(s)`)
-    } else {
-      alert('No paid records found')
-    }
+  // Reminders to every listed invoice that still has money due
+  const remindPending = async (channel) => {
+    const pending = filteredTransactions.filter((tx) => tx.amount - tx.amountPaid > 0)
+    if (!pending.length) return alert('No invoices with money due in this list')
+    if (!window.confirm(`Send ${channel === 'sms' ? 'SMS' : 'WhatsApp'} reminders for ${pending.length} invoice(s)?`)) return
+    const result = await sendBulkReminders(channel, pending.map((tx) => tx.invoiceId))
+    alert(result.message)
   }
+  const handleNotifyPaid = () => remindPending('whatsapp')
+  const handleNotifyPending = () => remindPending('sms')
 
-  const handleNotifyPending = async () => {
-    const pendingRecords = filteredTransactions.filter(
-      tx => tx.status === 'PENDING' || tx.status === 'Pending' || tx.status === 'PARTIAL' || tx.status === 'Partially Paid' || tx.status === 'OVERDUE'
-    )
-    if (pendingRecords.length > 0) {
-      alert(`Your fee is pending for ${pendingRecords.length} student(s)`)
-    } else {
-      alert('No pending records found')
-    }
-  }
-
-  const getTransactionId = useCallback(() => {
-    return 'TXN' + Date.now() + '-' + Math.random().toString(36).substring(2, 9).toUpperCase()
-  }, [])
-
+  // Paid invoices open their receipt, others the invoice
   const handleView = (transaction) => {
-    if (transaction.status === 'PAID' || transaction.status === 'Paid') {
-      const paymentData = {
-        invoiceId: transaction.invoiceId,
-        studentName: transaction.studentName,
-        amount: transaction.amountPaid || transaction.amount,
-        paymentMethod: transaction.paymentMethod || 'Cash',
-        transactionId: getTransactionId(),
-        timestamp: new Date().toISOString()
-      }
-      sessionStorage.setItem('paymentData', JSON.stringify(paymentData))
-      navigate('/payment-success')
+    if (transaction.status === 'PAID') {
+      navigate(`/receipt/${transaction.invoiceId}`)
     } else {
       navigate(`/invoice/${transaction.invoiceId}`)
     }
@@ -157,7 +138,7 @@ const Fees = () => {
     <div className="page">
       <div className="page-header">
         <div>
-          <button className="back-btn mb-2" onClick={() => navigate('/')}>
+          <button className="back-btn mb-2" onClick={() => navigate('/dashboard')}>
             <ArrowLeft size={20} />
             <span>Back to Dashboard</span>
           </button>
@@ -165,6 +146,12 @@ const Fees = () => {
           <p className="page-sub">Track and monitor all payment transactions</p>
         </div>
       </div>
+
+      {loadError && (
+        <div style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+          {loadError}
+        </div>
+      )}
 
       <div className="flex gap-4 mb-6 flex-wrap">
         <div className="flex-1" style={{ minWidth: '200px' }}>
@@ -195,10 +182,10 @@ const Fees = () => {
 
         <div className="flex gap-2">
           <button onClick={handleNotifyPaid} className="btn btn-success btn-sm">
-            <Bell size={14} /> Notify Paid
+            <Bell size={14} /> WhatsApp reminders
           </button>
           <button onClick={handleNotifyPending} className="btn btn-warning btn-sm">
-            <Bell size={14} /> Notify Pending
+            <Bell size={14} /> SMS reminders
           </button>
         </div>
       </div>

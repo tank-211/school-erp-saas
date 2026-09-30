@@ -1,14 +1,32 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Download, AlertCircle, CheckCircle } from 'lucide-react'
+import { ArrowLeft, Download, AlertCircle, CheckCircle, Clock } from 'lucide-react'
 import { fetchInvoiceDetails, getPaymentHistory } from '../services/apiService'
+
+const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+const day = (value) => (value ? new Date(value).toLocaleDateString('en-IN') : '—')
+
+const label = { color: '#666', fontSize: '12px', fontWeight: '600' }
+const value = { margin: '4px 0 0 0', color: '#333', fontSize: '14px' }
+const button = (bg) => ({
+  padding: '10px 20px',
+  backgroundColor: bg,
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontWeight: '600',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+})
 
 const Receipt = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
   const [invoice, setInvoice] = useState(null)
-  const [paymentHistory, setPaymentHistory] = useState(null)
+  const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -18,7 +36,7 @@ const Receipt = () => {
     try {
       const [invoiceResult, historyResult] = await Promise.all([
         fetchInvoiceDetails(invoiceId),
-        getPaymentHistory(invoiceId)
+        getPaymentHistory(invoiceId),
       ])
 
       if (invoiceResult.success && invoiceResult.data) {
@@ -27,8 +45,8 @@ const Receipt = () => {
         setError(invoiceResult.error || 'Invoice not found')
       }
 
-      if (historyResult.success && historyResult.data) {
-        setPaymentHistory(historyResult.data)
+      if (historyResult.success && Array.isArray(historyResult.data?.payments)) {
+        setPayments(historyResult.data.payments)
       }
     } catch {
       setError('Failed to load receipt data')
@@ -41,104 +59,50 @@ const Receipt = () => {
     loadInvoiceData()
   }, [loadInvoiceData])
 
-  const handleDownloadReceipt = () => {
-    if (!invoice) return
-
-    const recentPayment = paymentHistory?.payments?.[0] || invoice.payments?.[0]
-
-    const receiptText = `
-╔════════════════════════════════════════════════════════════════════╗
-║                         PAYMENT RECEIPT                           ║
-║                    Sacred Tree International School                ║
-╚════════════════════════════════════════════════════════════════════╝
-
-INVOICE DETAILS:
-────────────────────────────────────────────────────────────────────
-Invoice ID:                    ${invoice.invoiceId}
-Invoice Date:                  ${invoice.invoiceDate}
-Receipt Generated:             ${new Date().toLocaleDateString()}
-
-STUDENT INFORMATION:
-────────────────────────────────────────────────────────────────────
-Student Name:                  ${invoice.studentName}
-Class/Section:                 ${invoice.class}
-Roll Number:                   ${invoice.rollNumber}
-
-PARENT INFORMATION:
-────────────────────────────────────────────────────────────────────
-Parent Name:                   ${invoice.parentName || 'N/A'}
-Email:                         ${invoice.email || 'N/A'}
-Phone:                         ${invoice.phone || 'N/A'}
-
-PAYMENT DETAILS:
-────────────────────────────────────────────────────────────────────
-Payment Method:                ${recentPayment?.paymentMethod || 'N/A'}
-Transaction ID:                ${recentPayment?.transactionId || recentPayment?.id || 'N/A'}
-Payment Date:                  ${recentPayment?.createdAt ? new Date(recentPayment.createdAt).toLocaleDateString() : 'N/A'}
-Payment Time:                  ${new Date().toLocaleTimeString()}
-
-FEE BREAKDOWN:
-────────────────────────────────────────────────────────────────────
-${invoice.feeBreakdown?.map((fee) => `${fee.description.padEnd(30)} ₹${fee.amount.toLocaleString().padStart(10)}`).join('\n') || 'N/A'}
-────────────────────────────────────────────────────────────────────
-TOTAL AMOUNT PAID:             ₹${(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}
-
-PAYMENT STATUS:
-────────────────────────────────────────────────────────────────────
-Status:                        ✓ PAID
-Amount Paid:                   ₹${(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}
-Outstanding Amount:            ₹0.00
-
-TERMS & CONDITIONS:
-────────────────────────────────────────────────────────────────────
-• This is an electronically generated receipt and is as valid as an
-  original receipt.
-• The payment has been successfully processed and credited to your
-  student account.
-• Keep this receipt for your records and verification purposes.
-• For any discrepancies, contact the accounts department immediately.
-
-════════════════════════════════════════════════════════════════════
-Thank you for your payment! Your child's education is our priority.
-════════════════════════════════════════════════════════════════════
-    `.trim()
-
-    const element = document.createElement('a')
-    const file = new Blob([receiptText], { type: 'text/plain' })
-    element.href = URL.createObjectURL(file)
-    element.download = `Receipt_${invoiceId}.txt`
-    document.body.appendChild(element)
-    element.click()
-    document.body.removeChild(element)
-  }
+  const shell = (children) => (
+    <div className="receipt-page" style={{ padding: '40px 20px', minHeight: '100vh', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '40px', textAlign: 'center', maxWidth: '500px' }}>
+        {children}
+      </div>
+    </div>
+  )
 
   if (loading) {
-    return (
-      <div className="receipt-page" style={{ padding: '40px 20px', minHeight: '100vh', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '40px', textAlign: 'center', maxWidth: '500px' }}>
-          <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
-          <p>Loading receipt...</p>
-        </div>
-      </div>
+    return shell(
+      <>
+        <div className="spinner" style={{ margin: '0 auto 20px' }}></div>
+        <p>Loading receipt...</p>
+      </>
     )
   }
 
   if (error || !invoice) {
-    return (
-      <div className="receipt-page" style={{ padding: '40px 20px', minHeight: '100vh', backgroundColor: '#f8f9fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', padding: '40px', textAlign: 'center', maxWidth: '500px' }}>
-          <AlertCircle size={40} style={{ color: '#dc3545', marginBottom: '20px' }} />
-          <h2>Receipt Not Found</h2>
-          <p style={{ marginBottom: '20px', color: '#666' }}>{error || `The receipt for ${invoiceId} does not exist in our records.`}</p>
-          <button onClick={() => navigate('/')} style={{ padding: '10px 24px', backgroundColor: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: '600' }}>
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
+    return shell(
+      <>
+        <AlertCircle size={40} style={{ color: '#dc3545', marginBottom: '20px' }} />
+        <h2>Receipt Not Found</h2>
+        <p style={{ marginBottom: '20px', color: '#666' }}>{error || `No receipt was found for invoice ${invoiceId}.`}</p>
+        <button onClick={() => navigate('/fees')} style={button('#28a745')}>
+          Back to Payments
+        </button>
+      </>
     )
   }
 
-  const recentPayment = paymentHistory?.payments?.[0] || invoice.payments?.[0]
+  const school = invoice.school || {}
+  const paid = Number(invoice.paidAmount || invoice.amountPaid || 0)
+  const balance = Math.max(Number(invoice.amountPending ?? (Number(invoice.totalAmount || 0) - paid)), 0)
+  const fullyPaid = paid > 0 && balance <= 0
+  const latest = payments[0] || null
+  const classLabel = [invoice.className, invoice.section].filter(Boolean).join(' / ')
+  const breakdown = Array.isArray(invoice.feeBreakdown) ? invoice.feeBreakdown : []
+  const contact = [school.phone, school.email].filter(Boolean).join(' | ')
+
+  const banner = fullyPaid
+    ? { bg: '#d4edda', border: '#28a745', color: '#155724', icon: <CheckCircle size={40} style={{ color: '#fff' }} />, dot: '#28a745', title: 'Fully Paid', text: `${money(paid)} received against this invoice` }
+    : paid > 0
+      ? { bg: '#fff3cd', border: '#ffc107', color: '#856404', icon: <Clock size={36} style={{ color: '#fff' }} />, dot: '#ffc107', title: 'Partly Paid', text: `${money(paid)} received · ${money(balance)} still due` }
+      : { bg: '#f8d7da', border: '#dc3545', color: '#721c24', icon: <AlertCircle size={36} style={{ color: '#fff' }} />, dot: '#dc3545', title: 'No Payment Yet', text: `${money(balance)} due${invoice.dueDate ? ` by ${invoice.dueDate}` : ''}` }
 
   return (
     <div className="receipt-page" style={{ padding: '20px', minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
@@ -150,78 +114,76 @@ Thank you for your payment! Your child's education is our priority.
             Back
           </button>
           <h1 style={{ margin: '0 0 5px 0', fontSize: '28px', color: '#333' }}>Payment Receipt</h1>
-          <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>{invoice.invoiceId}</p>
+          <p style={{ margin: 0, color: '#666', fontSize: '14px' }}>Invoice {invoice.invoiceNumber || invoice.invoiceId}</p>
         </div>
-        <button
-          onClick={handleDownloadReceipt}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: '#28a745',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontWeight: '600',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}
-        >
+        {/* The browser's print dialog can save the receipt as a PDF */}
+        <button onClick={() => window.print()} style={button('#28a745')}>
           <Download size={18} />
-          Download Receipt
+          Print / Save as PDF
         </button>
       </div>
 
-      {/* Receipt Card */}
       <div style={{ maxWidth: '700px', margin: '0 auto', backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 2px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        {/* Payment Status Header */}
-        <div style={{ backgroundColor: '#d4edda', borderBottom: '2px solid #28a745', padding: '30px', textAlign: 'center' }}>
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '15px' }}>
-            <div style={{ width: '60px', height: '60px', backgroundColor: '#28a745', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CheckCircle size={40} style={{ color: '#fff' }} />
-            </div>
-          </div>
-          <h2 style={{ margin: '15px 0 5px 0', color: '#155724', fontSize: '24px' }}>Payment Successful</h2>
-          <p style={{ margin: 0, color: '#155724', fontSize: '14px' }}>Your payment has been processed and credited</p>
+        {/* School letterhead */}
+        <div style={{ padding: '20px 30px', borderBottom: '1px solid #eee', textAlign: 'center' }}>
+          <h2 style={{ margin: 0, color: '#333', fontSize: '20px' }}>{school.name || 'School'}</h2>
+          {school.address && <p style={{ margin: '4px 0 0', color: '#666', fontSize: '13px' }}>{school.address}</p>}
+          {contact && <p style={{ margin: '2px 0 0', color: '#666', fontSize: '13px' }}>{contact}</p>}
         </div>
 
-        {/* Receipt Content */}
+        {/* Payment status, from what has actually been paid */}
+        <div style={{ backgroundColor: banner.bg, borderBottom: `2px solid ${banner.border}`, padding: '24px', textAlign: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px' }}>
+            <div style={{ width: '60px', height: '60px', backgroundColor: banner.dot, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {banner.icon}
+            </div>
+          </div>
+          <h2 style={{ margin: '10px 0 5px 0', color: banner.color, fontSize: '22px' }}>{banner.title}</h2>
+          <p style={{ margin: 0, color: banner.color, fontSize: '14px' }}>{banner.text}</p>
+        </div>
+
         <div style={{ padding: '30px' }}>
-          {/* Invoice & Payment Details */}
+          {/* Invoice & latest payment */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
             <div style={{ borderRight: '1px solid #eee', paddingRight: '20px' }}>
               <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Invoice Details</h4>
               <div style={{ marginBottom: '12px' }}>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Invoice ID</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px', fontWeight: '600' }}>{invoice.invoiceId}</p>
+                <span style={label}>Invoice No.</span>
+                <p style={{ ...value, fontWeight: '600' }}>{invoice.invoiceNumber || invoice.invoiceId}</p>
               </div>
               <div style={{ marginBottom: '12px' }}>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Invoice Date</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{invoice.invoiceDate}</p>
+                <span style={label}>Invoice Date</span>
+                <p style={value}>{invoice.invoiceDate || '—'}</p>
               </div>
               <div>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Status</span>
-                <p style={{ margin: '4px 0 0 0', color: '#28a745', fontSize: '14px', fontWeight: '600' }}>✓ Paid</p>
+                <span style={label}>Invoice Total</span>
+                <p style={value}>{money(invoice.totalAmount)}</p>
               </div>
             </div>
             <div>
-              <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Payment Details</h4>
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Payment Method</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{recentPayment?.paymentMethod || 'N/A'}</p>
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Payment Date</span>
-                <p style={{ margin: '4px 0 0 0', color: '#333', fontSize: '14px' }}>{recentPayment?.createdAt ? new Date(recentPayment.createdAt).toLocaleDateString() : 'N/A'}</p>
-              </div>
-              <div>
-                <span style={{ color: '#666', fontSize: '12px', fontWeight: '600' }}>Transaction ID</span>
-                <p style={{ margin: '4px 0 0 0', color: '#28a745', fontSize: '12px', fontFamily: 'monospace' }}>{recentPayment?.transactionId || recentPayment?.id || 'N/A'}</p>
-              </div>
+              <h4 style={{ margin: '0 0 15px 0', color: '#333' }}>Latest Payment</h4>
+              {latest ? (
+                <>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={label}>Receipt No.</span>
+                    <p style={{ ...value, fontFamily: 'monospace', fontSize: '12px' }}>{latest.paymentNumber || latest.id}</p>
+                  </div>
+                  <div style={{ marginBottom: '12px' }}>
+                    <span style={label}>Amount / Method</span>
+                    <p style={value}>{money(latest.amount)} · {latest.paymentMethod || '—'}</p>
+                  </div>
+                  <div>
+                    <span style={label}>Payment Date</span>
+                    <p style={value}>{day(latest.paymentDate)}</p>
+                  </div>
+                </>
+              ) : (
+                <p style={{ ...value, color: '#666' }}>No payment has been recorded for this invoice.</p>
+              )}
             </div>
           </div>
 
-          {/* Student Information */}
+          {/* Student */}
           <div style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#333' }}>Student Information</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', fontSize: '13px' }}>
@@ -231,91 +193,75 @@ Thank you for your payment! Your child's education is our priority.
               </div>
               <div>
                 <span style={{ color: '#666' }}>Class:</span>
-                <p style={{ margin: '2px 0 0 0', color: '#333', fontWeight: '600' }}>{invoice.class}</p>
+                <p style={{ margin: '2px 0 0 0', color: '#333', fontWeight: '600' }}>{classLabel || '—'}</p>
               </div>
               <div>
-                <span style={{ color: '#666' }}>Roll Number:</span>
-                <p style={{ margin: '2px 0 0 0', color: '#333', fontWeight: '600' }}>{invoice.rollNumber}</p>
+                <span style={{ color: '#666' }}>Admission No.:</span>
+                <p style={{ margin: '2px 0 0 0', color: '#333', fontWeight: '600' }}>{invoice.rollNumber || '—'}</p>
               </div>
               <div>
-                <span style={{ color: '#666' }}>Email:</span>
-                <p style={{ margin: '2px 0 0 0', color: '#333' }}>{invoice.email || 'N/A'}</p>
+                <span style={{ color: '#666' }}>Academic Year:</span>
+                <p style={{ margin: '2px 0 0 0', color: '#333' }}>{invoice.academicYear || '—'}</p>
               </div>
             </div>
           </div>
 
-          {/* Fee Breakdown */}
+          {/* What the invoice covers */}
           <div style={{ marginBottom: '20px' }}>
             <h4 style={{ margin: '0 0 12px 0', color: '#333' }}>Fee Breakdown</h4>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <tbody>
-                {invoice.feeBreakdown?.map((fee, idx) => (
+                {(breakdown.length ? breakdown : [{ feeType: invoice.notes || 'School fees', amount: invoice.totalAmount }]).map((fee, idx) => (
                   <tr key={idx} style={{ borderBottom: '1px solid #eee' }}>
-                    <td style={{ padding: '10px 0', color: '#333', fontSize: '13px' }}>{fee.description}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', color: '#333', fontWeight: '600', fontSize: '13px' }}>₹{fee.amount.toLocaleString()}</td>
+                    <td style={{ padding: '10px 0', color: '#333', fontSize: '13px' }}>{fee.feeType || fee.description}</td>
+                    <td style={{ padding: '10px 0', textAlign: 'right', color: '#333', fontWeight: '600', fontSize: '13px' }}>{money(fee.amount)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '15px 0', borderTop: '2px solid #dee2e6', marginTop: '10px' }}>
-              <span style={{ color: '#333', fontWeight: '600', fontSize: '14px' }}>Total Amount Paid</span>
-              <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '16px' }}>₹{(invoice.paidAmount || invoice.amountPaid || 0).toLocaleString()}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0 4px', borderTop: '2px solid #dee2e6', marginTop: '10px' }}>
+              <span style={{ color: '#333', fontWeight: '600', fontSize: '14px' }}>Total Paid</span>
+              <span style={{ color: '#28a745', fontWeight: 'bold', fontSize: '16px' }}>{money(paid)}</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
+              <span style={{ color: '#333', fontSize: '14px' }}>Balance Due</span>
+              <span style={{ color: balance > 0 ? '#dc3545' : '#333', fontWeight: '600', fontSize: '14px' }}>{money(balance)}</span>
             </div>
           </div>
 
-          {/* Notes */}
-          <div style={{ backgroundColor: '#f8f9fa', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 10px 0', color: '#333', fontSize: '13px' }}>Important Notes</h4>
-            <ul style={{ margin: 0, paddingLeft: '20px', color: '#666', fontSize: '12px' }}>
-              <li style={{ marginBottom: '6px' }}>This receipt is an official record of payment. Please keep it for your records.</li>
-              <li style={{ marginBottom: '6px' }}>The amount paid has been credited to your student's account.</li>
-              <li style={{ marginBottom: '6px' }}>For any discrepancies, contact the accounts department within 7 days.</li>
-              <li>Email: accounts@school.edu | Phone: 1800-123-4567</li>
-            </ul>
-          </div>
+          {/* Every payment on this invoice */}
+          {payments.length > 1 && (
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 12px 0', color: '#333' }}>All Payments</h4>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id} style={{ borderBottom: '1px solid #eee' }}>
+                      <td style={{ padding: '8px 0' }}>{day(p.paymentDate)}</td>
+                      <td style={{ padding: '8px 0' }}>{p.paymentMethod || '—'}</td>
+                      <td style={{ padding: '8px 0', fontFamily: 'monospace', fontSize: '12px' }}>{p.paymentNumber || p.id}</td>
+                      <td style={{ padding: '8px 0', textAlign: 'right', fontWeight: '600' }}>{money(p.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          {/* Action Buttons */}
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-            <button
-              onClick={() => navigate('/')}
-              style={{
-                padding: '10px 24px',
-                backgroundColor: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '600',
-              }}
-            >
-              Back to Dashboard
+            <button onClick={() => navigate('/fees')} style={button('#6c757d')}>
+              Back to Payments
             </button>
-            <button
-              onClick={handleDownloadReceipt}
-              style={{
-                padding: '10px 24px',
-                backgroundColor: '#28a745',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: '600',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}
-            >
+            <button onClick={() => window.print()} style={button('#28a745')}>
               <Download size={16} />
-              Download Receipt
+              Print / Save as PDF
             </button>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
       <div style={{ textAlign: 'center', marginTop: '30px', color: '#666', fontSize: '12px' }}>
-        <p>Sacred Tree International School | Excellence in Education</p>
-        <p>This is an electronically generated receipt and is as valid as an original receipt.</p>
+        <p>{school.name ? `${school.name} · ` : ''}This is a computer-generated receipt.</p>
       </div>
     </div>
   )

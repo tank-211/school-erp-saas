@@ -1,60 +1,48 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { fetchInvoiceDetails } from '../services/apiService'
 import { CheckCircle, Download, ArrowLeft, FileText, Calendar, CreditCard, Hash } from 'lucide-react'
 
 const PaymentSuccess = () => {
   const navigate = useNavigate()
   const [paymentData, setPaymentData] = useState(null)
+  const [missing, setMissing] = useState(false)
+  const [invoice, setInvoice] = useState(null)
 
   useEffect(() => {
-    // Get payment data from sessionStorage
+    // Set by the Payment page after the server verified the Razorpay payment
     const data = sessionStorage.getItem('paymentData')
-    if (data) {
-      setPaymentData(JSON.parse(data))
+    if (!data) {
+      setMissing(true)
+      return
+    }
+    const parsed = JSON.parse(data)
+    setPaymentData(parsed)
+    // Student name and school contact come from the invoice itself
+    if (parsed.invoiceId) {
+      fetchInvoiceDetails(parsed.invoiceId).then((result) => {
+        if (result.success && result.data) setInvoice(result.data)
+      })
     }
   }, [])
 
+  // The receipt page reads the recorded payment and prints to PDF
   const handleDownloadReceipt = () => {
-    if (paymentData) {
-      const receipt = `
-╔══════════════════════════════════════════════════════════════╗
-║                    PAYMENT RECEIPT                           ║
-║              Sacred Tree International School                ║
-╚══════════════════════════════════════════════════════════════╝
-
-Invoice ID:       ${paymentData.invoiceId}
-Student Name:     ${paymentData.studentName}
-Amount Paid:      ₹${paymentData.amount.toLocaleString()}
-Payment Method:   ${paymentData.paymentMethod || 'Razorpay'}
-Transaction ID:   ${paymentData.transactionId}
-Date & Time:      ${paymentData.timestamp || new Date().toLocaleString()}
-Payment Status:   ✅ SUCCESSFUL
-
-────────────────────────────────────────────────────────────────
-Thank you for your payment!
-For any queries, contact: accounts@sacredtree.edu.in
-────────────────────────────────────────────────────────────────
-      `.trim()
-
-      const element = document.createElement('a')
-      const file = new Blob([receipt], { type: 'text/plain' })
-      element.href = URL.createObjectURL(file)
-      element.download = `Receipt_${paymentData.invoiceId}_${Date.now()}.txt`
-      document.body.appendChild(element)
-      element.click()
-      document.body.removeChild(element)
-    }
+    if (paymentData?.invoiceId) navigate(`/receipt/${paymentData.invoiceId}`)
   }
 
   const handleBackToDashboard = () => {
     sessionStorage.removeItem('paymentData')
-    navigate('/')
+    navigate('/dashboard')
   }
 
- const handleViewInvoice = () => {
-  navigate('/fees')
-}
+  const handleViewInvoice = () => {
+    navigate('/fees')
+  }
 
+  const school = invoice?.school || {}
+  const contactEmail = school.email || null
+  const contactPhone = school.phone || null
 
   // Format date nicely
   const getFormattedDate = () => {
@@ -97,9 +85,9 @@ For any queries, contact: accounts@sacredtree.edu.in
                 <div className="detail-row">
                   <div className="detail-label">
                     <Hash size={14} />
-                    <span>Invoice ID</span>
+                    <span>Invoice</span>
                   </div>
-                  <div className="detail-value">{paymentData.invoiceId}</div>
+                  <div className="detail-value">{invoice?.invoiceNumber || paymentData.invoiceId}</div>
                 </div>
 
                 <div className="detail-row">
@@ -107,7 +95,7 @@ For any queries, contact: accounts@sacredtree.edu.in
                     <FileText size={14} />
                     <span>Student Name</span>
                   </div>
-                  <div className="detail-value">{paymentData.studentName}</div>
+                  <div className="detail-value">{invoice?.studentName || paymentData.studentName || '—'}</div>
                 </div>
 
                 <div className="detail-row highlight">
@@ -115,7 +103,7 @@ For any queries, contact: accounts@sacredtree.edu.in
                     <CreditCard size={14} />
                     <span>Amount Paid</span>
                   </div>
-                  <div className="detail-value amount">₹{paymentData.amount.toLocaleString()}</div>
+                  <div className="detail-value amount">₹{Number(paymentData.amount || 0).toLocaleString()}</div>
                 </div>
 
                 <div className="detail-row">
@@ -125,6 +113,16 @@ For any queries, contact: accounts@sacredtree.edu.in
                   </div>
                   <div className="detail-value">{paymentData.paymentMethod || 'Razorpay'}</div>
                 </div>
+
+                {paymentData.paymentNumber && (
+                  <div className="detail-row">
+                    <div className="detail-label">
+                      <Hash size={14} />
+                      <span>Receipt No.</span>
+                    </div>
+                    <div className="detail-value transaction-id">{paymentData.paymentNumber}</div>
+                  </div>
+                )}
 
                 <div className="detail-row">
                   <div className="detail-label">
@@ -151,7 +149,11 @@ For any queries, contact: accounts@sacredtree.edu.in
             <div className="payment-details-card loading">
               <div className="details-list">
                 <div className="detail-row">
-                  <div className="detail-label">Loading payment details...</div>
+                  <div className="detail-label">
+                    {missing
+                      ? 'No recent payment to show. Open the invoice from Payment Monitoring to see its payments.'
+                      : 'Loading payment details...'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -159,10 +161,12 @@ For any queries, contact: accounts@sacredtree.edu.in
 
           {/* Action Buttons */}
           <div className="action-buttons">
-            <button className="btn btn-primary btn-large" onClick={handleDownloadReceipt}>
-              <Download size={18} />
-              Download Receipt
-            </button>
+            {paymentData?.invoiceId && (
+              <button className="btn btn-primary btn-large" onClick={handleDownloadReceipt}>
+                <Download size={18} />
+                View / Print Receipt
+              </button>
+            )}
             {paymentData?.invoiceId && (
               <button className="btn btn-outline btn-large" onClick={handleViewInvoice}>
                 <FileText size={18} />
@@ -179,17 +183,22 @@ For any queries, contact: accounts@sacredtree.edu.in
           <div className="next-steps">
             <h4 className="next-steps-title">What's Next?</h4>
             <ul className="next-steps-list">
-              <li>✓ A confirmation email has been sent to your registered email</li>
-              <li>✓ Download and save your receipt for your records</li>
-              <li>✓ You can view your payment history in the dashboard</li>
-              <li>✓ For any queries, contact the accounts department</li>
+              <li>✓ The payment is recorded against the invoice</li>
+              <li>✓ Open the receipt to print it or save it as a PDF</li>
+              <li>✓ The invoice's payment history is in Payment Monitoring</li>
             </ul>
           </div>
 
-          {/* Help Contact */}
-          <div className="help-contact">
-            <p>Need help? Contact us at <a href="mailto:accounts@sacredtree.edu.in">accounts@sacredtree.edu.in</a></p>
-          </div>
+          {/* Help Contact: the school's own details, when on record */}
+          {(contactEmail || contactPhone) && (
+            <div className="help-contact">
+              <p>
+                Need help? Contact {school.name || 'the school'}
+                {contactEmail && <> at <a href={`mailto:${contactEmail}`}>{contactEmail}</a></>}
+                {contactPhone && <>{contactEmail ? ' or ' : ' on '}{contactPhone}</>}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

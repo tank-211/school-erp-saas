@@ -432,6 +432,7 @@ export class PaymentService {
           payment: {
             select: {
               id: true,
+              payment_number: true,
               amount: true,
               payment_method: true,
               transaction_id: true,
@@ -485,6 +486,7 @@ export class PaymentService {
       payments: invoice.payment.map(
         (payment) => ({
           id: payment.id.toString(),
+          paymentNumber: payment.payment_number,
           amount: Number(payment.amount),
           paymentMethod:
             payment.payment_method,

@@ -1,3 +1,4 @@
+import { readyRefundTable, REFUNDS_NOT_SET_UP } from '../utils/refunds';
 // ================================================================
 // DASHBOARD SERVICE - Analytics & Metrics Queries
 // ================================================================
@@ -118,13 +119,22 @@ static async getDashboardMetrics(schoolId: string) {
       }
     }
 
+    // Refunded so far; null while the refunds table does not exist
+    const refunds = await readyRefundTable();
+    const refunded = refunds
+      ? await refunds.aggregate({
+          where: { school_id: schoolIdBigInt, status: { in: ['processed', 'PROCESSED', 'completed'] } },
+          _sum: { amount: true },
+        })
+      : null;
+
     const metrics = {
       totalFeesCollected: Number(
         totalCollected._sum.amount ?? 0
       ),
       pendingPayments: totalPending,
       overduePayments: totalOverdue,
-      refundRequests: 0,
+      refundRequests: refunded ? Number(refunded._sum.amount ?? 0) : null,
     };
 
     logger.info(
@@ -889,8 +899,12 @@ static async getDashboardMetrics(schoolId: string) {
         `💰 Fetching refund statistics for school ${schoolId}`
       );
 
+      const table = await readyRefundTable();
+      if (!table) {
+        return { available: false, message: REFUNDS_NOT_SET_UP, distribution: [] };
+      }
       const distribution =
-        await prisma.refund_request.groupBy({
+        await table.groupBy({
           by: ['status'],
 
           _count: {

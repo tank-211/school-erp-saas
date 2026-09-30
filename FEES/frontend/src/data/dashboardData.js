@@ -30,28 +30,16 @@ export const getDashboardMetrics = async () => {
       throw new Error('Dashboard overallStats missing from API response');
     }
 
-    const metrics = {
+    return {
       totalCollected: Number(stats.totalCollected ?? 0),
       totalPending: Number(stats.totalPending ?? 0),
       totalOverdue: Number(stats.totalOverdue ?? 0),
-      totalRefund: Number(stats.totalRefund ?? 0),
+      // null while refunds are not set up (no refunds table yet)
+      totalRefund: stats.totalRefund === null || stats.totalRefund === undefined ? null : Number(stats.totalRefund),
     };
-
-    console.log('📊 FINAL DASHBOARD METRICS:', metrics);
-
-    return metrics;
   } catch (error) {
-    console.error(
-      'Failed to fetch dashboard metrics from database',
-      error
-    );
-
-    return {
-      totalCollected: 0,
-      totalPending: 0,
-      totalOverdue: 0,
-      totalRefund: 0,
-    };
+    // Let the page show the error instead of pretending everything is zero
+    throw error;
   }
 };
 

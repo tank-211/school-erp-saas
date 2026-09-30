@@ -552,6 +552,7 @@ model payment {
   school         school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   student        student   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  refund_request refund_request[]
   @@index([invoice_id], map: "idx_payment_invoice_id")
   @@index([payment_date], map: "idx_payment_payment_date")
   @@index([school_id], map: "idx_payment_school_id")
@@ -624,6 +625,7 @@ model school {
   student_fee_assignment      student_fee_assignment[]
   task                        task[]
 
+  refund_request refund_request[]
   @@index([name], map: "idx_school_name")
   @@index([status], map: "idx_school_status")
 }
@@ -733,6 +735,7 @@ model student {
   school                 school                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   student_fee_assignment student_fee_assignment[]
 
+  refund_request refund_request[]
   @@index([admission_number], map: "idx_student_admission_number")
   @@index([email], map: "idx_student_email")
   @@index([school_id], map: "idx_student_school_id")
@@ -857,4 +860,37 @@ enum visit_status {
   completed
   cancelled
   no_show
+}
+
+/// Refund requests against a recorded payment (FEES Refund Management).
+/// Created by prisma/sql/2026-09-30_add_refund_request.sql. Only FEES uses it.
+model refund_request {
+  id               BigInt    @id @default(autoincrement())
+  school_id        BigInt
+  student_id       BigInt
+  payment_id       BigInt
+  amount           Decimal   @db.Decimal(12, 2)
+  reason           String
+  description      String?
+  status           String    @default("PENDING") @db.VarChar(20)
+  approved_by      String?   @db.VarChar(100)
+  approval_date    DateTime? @db.Timestamp(6)
+  rejection_reason String?
+  notes            String?
+  processed_date   DateTime? @db.Timestamp(6)
+  refund_method    String?   @db.VarChar(50)
+  refund_reference String?   @db.VarChar(100)
+  account_holder   String?   @db.VarChar(150)
+  account_last4    String?   @db.VarChar(4)
+  ifsc_code        String?   @db.VarChar(20)
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @default(now()) @db.Timestamp(6)
+  school           school    @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student          student   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  payment          payment   @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([school_id], map: "idx_refund_request_school_id")
+  @@index([student_id], map: "idx_refund_request_student_id")
+  @@index([payment_id], map: "idx_refund_request_payment_id")
+  @@index([status], map: "idx_refund_request_status")
 }
