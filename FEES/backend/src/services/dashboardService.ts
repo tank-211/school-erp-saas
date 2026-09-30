@@ -482,66 +482,63 @@ static async getDashboardMetrics(schoolId: string) {
   /**
    * Get payment status distribution.
    */
-  static async getPaymentStatusDistribution(
-    schoolId: string
-  ) {
-    try {
-      const schoolIdBigInt = this.getSchoolId(schoolId);
-
-      logger.info(
-        `📊 Fetching payment status distribution for school ${schoolId}`
-      );
-
-      const distribution =
-        await prisma.payment.groupBy({
-          by: ['status'],
-
-          _count: {
-            id: true
-          },
-
-          _sum: {
-            amount: true
-          },
-
-          where: {
-            school_id: schoolIdBigInt
-          }
-        });
-
-        const formattedStats =
-          distribution.map((item: {
-            status: string | null;
+    static async getPaymentStatusDistribution(
+      schoolId: string
+    ) {
+      try {
+        const schoolIdBigInt = this.getSchoolId(schoolId);
+    
+        logger.info(
+          `📊 Fetching payment status distribution for school ${schoolId}`
+        );
+    
+        const distribution =
+          await prisma.payment.groupBy({
+            by: ['status'],
+    
             _count: {
-              id: number;
-            };
+              id: true
+            },
+    
             _sum: {
-              amount: unknown;
-            };
-          }) => ({
-            status: item.status ?? 'unknown',
-        
-            count: item._count.id,
-        
-            totalAmount: Number(item._sum.amount ?? 0),
-          }));
-
-      logger.info(
-        `✅ Payment status distribution fetched for school ${schoolId}`
-      );
-
-      return formattedDistribution;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-
-      logger.error(
-        `Error fetching payment status distribution for school ${schoolId}: ${errorMessage}`
-      );
-
-      throw error;
+              amount: true
+            },
+    
+            where: {
+              school_id: schoolIdBigInt
+            }
+          });
+    
+        const formattedStats = distribution.map((item: {
+          status: string | null;
+          _count: {
+            id: number;
+          };
+          _sum: {
+            amount: unknown;
+          };
+        }) => ({
+          status: item.status ?? 'unknown',
+          count: item._count.id,
+          totalAmount: Number(item._sum.amount ?? 0)
+        }));
+    
+        logger.info(
+          `✅ Payment status distribution fetched for school ${schoolId}`
+        );
+    
+        return formattedStats;
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error';
+    
+        logger.error(
+          `Error fetching payment status distribution for school ${schoolId}: ${errorMessage}`
+        );
+    
+        throw error;
+      }
     }
-  }
 
   /**
    * Get collection efficiency by class.
@@ -928,15 +925,20 @@ static async getDashboardMetrics(schoolId: string) {
         });
 
       const formattedStats =
-        distribution.map((item) => ({
-          status:
-            item.status ?? 'unknown',
-
-          count:
-            item._count.id,
-
-          totalAmount:
-            Number(item._sum.amount ?? 0)
+        distribution.map((item: {
+          status: string | null;
+          _count: {
+            id: number;
+          };
+          _sum: {
+            amount: unknown;
+          };
+        }) => ({
+          status: item.status ?? 'unknown',
+      
+          count: item._count.id,
+      
+          totalAmount: Number(item._sum.amount ?? 0),
         }));
 
       logger.info(
