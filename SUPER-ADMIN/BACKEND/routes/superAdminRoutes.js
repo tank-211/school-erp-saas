@@ -7,6 +7,12 @@ const verifyInternalStaff = require('../src/middleware/verifyInternalStaff');
 const verifySuperAdmin = require('../src/middleware/verifySuperAdmin');
 const { login } = require('../controllers/superAdminAuthController');
 const { getAllSchools, getSchoolById, getStats, createSchool, updateSchool } = require('../controllers/superAdminSchoolController');
+const {
+  getSchoolGateway,
+  saveSchoolGateway,
+  testSchoolGateway,
+  disconnectSchoolGateway,
+} = require('../controllers/schoolPaymentGatewayController');
 const { getAllStaff, createStaff, updateStaff } = require('../controllers/superAdminStaffController');
 const { renewSchoolSubscription, getSchoolRenewals } = require('../controllers/superAdminBillingController');
 const {
@@ -35,6 +41,13 @@ router.options('/schools/:id/renewals', (req, res) => res.sendStatus(204));
 router.get('/schools', verifyInternalStaff, getAllSchools);
 router.post('/schools', verifyInternalStaff, createSchool);
 router.get('/schools/:id', verifyInternalStaff, getSchoolById);
+// Each school's own Razorpay account: any staff can view, only super admins change it
+router.options('/schools/:id/payment-gateway', (req, res) => res.sendStatus(204));
+router.options('/schools/:id/payment-gateway/test', (req, res) => res.sendStatus(204));
+router.get('/schools/:id/payment-gateway', verifyInternalStaff, getSchoolGateway);
+router.put('/schools/:id/payment-gateway', verifySuperAdmin, saveSchoolGateway);
+router.post('/schools/:id/payment-gateway/test', verifySuperAdmin, testSchoolGateway);
+router.delete('/schools/:id/payment-gateway', verifySuperAdmin, disconnectSchoolGateway);
 router.patch('/schools/:id', verifyInternalStaff, updateSchool);
 router.get('/stats', verifyInternalStaff, getStats);
 router.get('/staff', verifyInternalStaff, getAllStaff);

@@ -34,7 +34,13 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '50mb' }));
+// Keep the raw body: Razorpay webhook signatures are computed over the exact bytes
+app.use(express.json({
+  limit: '50mb',
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  },
+}));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/api/fee-structures', feeStructureRoutes);
 // Request logging middleware

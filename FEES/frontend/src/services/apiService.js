@@ -914,3 +914,13 @@ export const findInvoiceByNumber = async (invoiceNumber) => {
     return { success: false, error: formatErrorMessage(error, 'invoice lookup') }
   }
 }
+
+// Whether this school's own Razorpay account is connected (no secrets returned)
+export const getOnlinePaymentStatus = async () => {
+  try {
+    const response = await api.get('/payments/razorpay/status')
+    return { success: true, data: response.data?.data || { enabled: false } }
+  } catch (error) {
+    return { success: false, error: formatErrorMessage(error, 'online payment status') }
+  }
+}

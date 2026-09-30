@@ -4,8 +4,14 @@ import { authenticate } from '../middleware/auth';
 
 const router = Router();
 
-// All routes require authentication
+// Razorpay webhook: called by Razorpay, no login; checked by signature instead
+router.post('/razorpay/webhook/:schoolId', paymentController.razorpayWebhook);
+
+// All other routes require authentication
 router.use(authenticate);
+
+// GET - Can this school take online payments?
+router.get('/razorpay/status', paymentController.razorpayStatus);
 
 // POST - Create Razorpay order
 router.post('/razorpay/create-order', paymentController.createRazorpayOrder);

@@ -69,10 +69,17 @@ const getAllSchools = async (req, res) => {
     });
 
     const today = indiaToday();
+    // Each school's own Razorpay account status (empty if not set up yet)
+    const { gatewayStatusBySchool } = require("./schoolPaymentGatewayController");
+    const gateways = await gatewayStatusBySchool();
 
     return res.json(
       serializeBigInt({
-        schools: schools.map((school) => withAccessState(school, today)),
+        schools: schools.map((school) => ({
+          ...withAccessState(school, today),
+          payment_gateway_status: gateways.get(String(school.id))?.status || "not_connected",
+          payment_gateway_mode: gateways.get(String(school.id))?.mode || null,
+        })),
       })
     );
   } catch (err) {
