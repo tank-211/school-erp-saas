@@ -3,6 +3,7 @@ import { notificationAPI } from '../services/api';
 import './Header.css';
 import { useAuth } from '../components/ProtectedRoute'
 import { useSettings } from "../context/SettingsContext";
+import { useNavigate } from "react-router-dom";
 
 export default function Header({ onAddLead }) {
   const [notifOpen, setNotifOpen] = useState(false);
@@ -11,7 +12,8 @@ export default function Header({ onAddLead }) {
   const [loadingNotif, setLoadingNotif] = useState(true);
   const { logout } = useAuth();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const settings = useSettings();
+  const { settings } = useSettings();
+  const navigate = useNavigate();
   // Clears the session (tokens, user) and returns to the login page
   const handleLogout = () => {
     logout();
@@ -52,7 +54,14 @@ export default function Header({ onAddLead }) {
         <svg className="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
-        <input placeholder="Search leads, parents, students…" />
+        <input
+          placeholder="Search leads by name or phone…"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+              navigate(`/leads?search=${encodeURIComponent(e.currentTarget.value.trim())}`)
+            }
+          }}
+        />
       </div>
 
       <div className="header-right">
@@ -61,10 +70,7 @@ export default function Header({ onAddLead }) {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
           </svg>
-          <span>{settings?.campusname || 'Main Campus'}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+          <span>{settings?.campus || settings?.schoolName || 'Your school'}</span>
         </div>
 
         {/* Add Lead Button */}
@@ -107,7 +113,7 @@ export default function Header({ onAddLead }) {
           <div className="user-avatar">{(user?.name||"U").split(" ").map(word=>word[0]).join("").toUpperCase()}</div>
           <div className="user-info">
             <span className="user-name">{user?.name||"User"}</span>
-            <span className="user-role-tag">{user?.role||"Admin"}</span>
+            <span className="user-role-tag">{user?.role || ""}</span>
             <button onClick={handleLogout} className="logout-btn">Logout</button>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

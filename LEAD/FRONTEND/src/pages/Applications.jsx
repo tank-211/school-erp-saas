@@ -4,7 +4,23 @@ import { useNavigate } from "react-router-dom";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const statusColors = { 'Under Review': { text: '#3b82f6', bg: '#eff6ff' }, Approved: { text: '#10b981', bg: '#d1fae5' }, Waitlisted: { text: '#f59e0b', bg: '#fef3c7' }, Draft: { text: '#94a3b8', bg: '#f1f5f9' }, Rejected: { text: '#ef4444', bg: '#fee2e2' } }
-const feeColors = { 'Paid': { text: '#10b981', bg: '#d1fae5' }, 'Partially Paid': { text: '#f59e0b', bg: '#fef3c7' }, 'Not Paid': { text: '#ef4444', bg: '#fee2e2' } }
+const feeColors = { 'Paid': { text: '#10b981', bg: '#d1fae5' }, 'Partly Paid': { text: '#f59e0b', bg: '#fef3c7' }, 'Not Paid': { text: '#ef4444', bg: '#fee2e2' }, 'Not Invoiced': { text: '#64748b', bg: '#f1f5f9' } }
+
+// Download the listed applications as a CSV file
+const exportCsv = (apps) => {
+  const cols = [['appId', 'Application'], ['name', 'Student'], ['grade', 'Grade'], ['parent', 'Parent'], ['status', 'Status'],
+    ['submitted', 'Created'], ['counselor', 'Counselor'], ['feeStatus', 'Fees'], ['feePaid', 'Paid (₹)'], ['feeTotal', 'Billed (₹)'], ['interview', 'Campus visit']]
+  const cell = (v) => { const t = v === null || v === undefined ? '' : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t }
+  const csv = [cols.map(([, l]) => cell(l)).join(','), ...apps.map((a) => cols.map(([k]) => cell(a[k])).join(','))].join('\n')
+  const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }))
+  const el = document.createElement('a')
+  el.href = url
+  el.download = `applications-${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(el)
+  el.click()
+  el.remove()
+  URL.revokeObjectURL(url)
+}
 const docColors = { Verified: { text: '#10b981', bg: '#d1fae5' }, Uploaded: { text: '#3b82f6', bg: '#eff6ff' }, Draft: { text: '#94a3b8', bg: '#f1f5f9' } }
 
 export default function Applications() {
@@ -78,7 +94,7 @@ const fetchApplications = async () => {
           <h1 className="page-title">Applications</h1>
           <p className="page-sub">Manage admission applications and documentation</p>
         </div>
-        <button className="btn-primary"><DownloadIcon /> Export All</button>
+        <button className="btn-primary" onClick={() => exportCsv(filtered)} disabled={!filtered.length}><DownloadIcon /> Export All</button>
       </div>
 
       {/* Stat Cards */}
@@ -134,7 +150,7 @@ const fetchApplications = async () => {
                 <span><GradeIcon /> {app.grade}</span>
                 <span><UserSmIcon /> Parent: {app.parent}</span>
                 <span><CalIcon /> Submitted: {app.submitted}</span>
-                {app.interview && <span className="interview-tag"><CalIcon /> Interview: {app.interview}</span>}
+                {app.interview && <span className="interview-tag"><CalIcon /> Campus visit: {app.interview}</span>}
                 <span className="app-id-tag">{app.appId}</span>
               </div>
               {/* Documents */}
@@ -172,8 +188,7 @@ const fetchApplications = async () => {
                   <span className="assigned-name">{app.counselor}</span>
                 </div>
                 <div className="app-actions">
-                  <button className="app-action-btn"><UploadIcon /></button>
-                  <button className="app-action-btn"><DownloadIcon /></button>
+                  <button className="app-action-btn" title="Open application" onClick={() => navigate(`/applications/${app.id}`)}>View</button>
                 </div>
               </div>
             </div>

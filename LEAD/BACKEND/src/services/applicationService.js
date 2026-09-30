@@ -22,6 +22,57 @@ const prisma = new PrismaClient();
         }
     });
 
+    // Fees: an application becomes an admission (and a student); that
+    // student's invoices hold what was billed and paid
+    const appIds = applications.map((a) => a.id);
+    const admissions = appIds.length
+      ? await prisma.admission.findMany({
+          where: { school_id, application_id: { in: appIds } },
+          select: { application_id: true, student_id: true },
+        })
+      : [];
+    const studentByApp = new Map(admissions.map((a) => [String(a.application_id), a.student_id]));
+    const studentIds = [...new Set(admissions.map((a) => String(a.student_id)))].map(BigInt);
+    const invoices = studentIds.length
+      ? await prisma.invoice.findMany({
+          where: { school_id, student_id: { in: studentIds }, status: { not: "cancelled" } },
+          select: { student_id: true, total_amount: true, paid_amount: true },
+        })
+      : [];
+    const feesByStudent = new Map();
+    for (const inv of invoices) {
+      const f = feesByStudent.get(String(inv.student_id)) || { total: 0, paid: 0 };
+      f.total += Math.round(Number(inv.total_amount || 0) * 100);
+      f.paid += Math.round(Number(inv.paid_amount || 0) * 100);
+      feesByStudent.set(String(inv.student_id), f);
+    }
+    const feeFor = (app) => {
+      const studentId = studentByApp.get(String(app.id));
+      const f = studentId ? feesByStudent.get(String(studentId)) : null;
+      if (!f || !f.total) return { feeStatus: "Not Invoiced", feePaid: 0, feeTotal: 0 };
+      return {
+        feeStatus: f.paid >= f.total ? "Paid" : f.paid > 0 ? "Partly Paid" : "Not Paid",
+        feePaid: f.paid / 100,
+        feeTotal: f.total / 100,
+      };
+    };
+
+    // Campus visits of the applicant's lead: the next one, else the latest
+    const leadIds = [...new Set(applications.map((a) => a.lead_id).filter(Boolean).map(String))].map(BigInt);
+    const visits = leadIds.length
+      ? await prisma.campus_visit.findMany({
+          where: { school_id, lead_id: { in: leadIds }, status: { not: "cancelled" } },
+          select: { lead_id: true, visit_date: true },
+          orderBy: { visit_date: "asc" },
+        })
+      : [];
+    const today = new Date(new Date().toDateString());
+    const visitFor = (app) => {
+      const mine = visits.filter((v) => String(v.lead_id) === String(app.lead_id));
+      const next = mine.find((v) => new Date(v.visit_date) >= today) || mine[mine.length - 1];
+      return next ? new Date(next.visit_date).toLocaleDateString("en-IN") : null;
+    };
+
     return applications.map(app => ({
         id: app.id.toString(),
 
@@ -48,7 +99,7 @@ const prisma = new PrismaClient();
         submitted:
         new Date(app.created_at).toLocaleDateString(),
 
-        interview: null,
+        interview: visitFor(app),
 
         status:
             app.status === "draft"
@@ -63,11 +114,7 @@ const prisma = new PrismaClient();
           ? "Under Review"
           : app.status,
 
-        feeStatus: "Not Paid",
-
-        feePaid: 0,
-
-        feeTotal:0,
+        ...feeFor(app),
 
         counselor:
         app.app_user?.name || "Unassigned" ,

@@ -6,6 +6,7 @@ import {
   deleteCommunicationService,
   logWhatsAppService,
   logSMSService,
+  listCommunicationsService,
 } from "../services/communicationService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
 import { serializeBigInt } from "../utils/bigintSerializer.js";
@@ -146,5 +147,13 @@ export const logSMS = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+export const listCommunications = async (req, res) => {
+  try {
+    const data = await listCommunicationsService(req.user.schoolId, req.query);
+    res.json(successResponse(serializeBigInt(data), "Communications retrieved"));
+  } catch (error) {
+    res.status(error.statusCode || 500).json(errorResponse(error.message));
   }
 };

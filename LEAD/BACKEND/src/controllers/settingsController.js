@@ -26,13 +26,32 @@ const DEFAULT_SETTINGS = {
 // ---------------- GET SETTINGS ----------------
 export const getSettings = async (req, res) => {
   try {
+    // Start from the school's real details, not placeholders
+    const school = await prisma.school.findUnique({
+      where: { id: BigInt(req.user.schoolId) },
+      select: { name: true, email: true, phone: true, city: true },
+    });
+    const real = {
+      schoolName: school?.name || DEFAULT_SETTINGS.schoolName,
+      email: school?.email || "",
+      phone: school?.phone || "",
+    };
+
     const settings = await prisma.settings.upsert({
       where: { schoolId: req.user.schoolId },
       update: {},
-      create: { schoolId: req.user.schoolId, ...DEFAULT_SETTINGS },
+      create: { schoolId: req.user.schoolId, ...DEFAULT_SETTINGS, ...real, campus: school?.city || null },
     });
 
-    res.json({ success: true, data: settings });
+    // Rows created earlier hold the old placeholders: show the real values instead
+    const shown = {
+      ...settings,
+      schoolName: settings.schoolName === DEFAULT_SETTINGS.schoolName ? real.schoolName : settings.schoolName,
+      email: settings.email === DEFAULT_SETTINGS.email ? real.email : settings.email,
+      phone: settings.phone || real.phone,
+    };
+
+    res.json({ success: true, data: shown });
   } catch (err) {
       console.error("GET SETTINGS ERROR");
       console.error(err);

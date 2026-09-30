@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { createLead } from '../services/api'
 import './AddLeadModal.css'
-import { leadsAPI, usersAPI } from "../services/api";
+import { leadsAPI, usersAPI, reportsAPI } from "../services/api";
 
 const getUserFromToken = () => {
   const token = localStorage.getItem("authToken");
@@ -63,8 +63,20 @@ const initialForm = {
 
 
 
-const GRADES = ['Grade 1','Grade 2','Grade 3','Grade 4','Grade 5','Grade 6','Grade 7','Grade 8','Grade 9','Grade 10','Grade 11','Grade 12']
-const SOURCES = ['Website','Referral','Walk-in','Ads','Social Media','Phone Inquiry','Email Campaign']
+// Columns the bulk import reads (LEAD/BACKEND leadController bulk import)
+const TEMPLATE_HEADERS = ['Student First Name', 'Student Last Name', 'Father Phone', 'Father Email', 'Grade', 'Source', 'Status']
+
+const downloadTemplate = () => {
+  const csv = TEMPLATE_HEADERS.join(',') + '\n'
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'lead-import-template.csv'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
 
 export default function AddLeadModal({ open, onClose }) {
   const [tab, setTab] = useState('manual')
@@ -75,6 +87,14 @@ export default function AddLeadModal({ open, onClose }) {
   const [message, setMessage] = useState(null) // { type: 'success'|'error', text: '...' }
   const [file, setFile] = useState(null)
   const [counselors, setCounselors] = useState([]);
+  // Classes (School Setup) and lead sources, from the school's own data
+  const [lookups, setLookups] = useState({ classes: [], sources: [] });
+  useEffect(() => {
+    if (!open) return;
+    reportsAPI.lookups().then((res) => setLookups(res.data)).catch(() => {});
+  }, [open]);
+  const GRADES = lookups.classes || [];
+  const SOURCES = lookups.sources || [];
 
   const handleBulkUpload = async () => {
   if (!file) {
@@ -194,6 +214,10 @@ export default function AddLeadModal({ open, onClose }) {
     fatherName: `${clean(form.fatherFirstName)} ${clean(form.fatherLastName)}`.trim(),
     fatherPhone: form.fatherPhone?.trim() || undefined,
     fatherEmail: form.fatherEmail?.trim() || undefined,
+    fatherOccupation: clean(form.occupation) || undefined,
+    fatherCompany: clean(form.company) || undefined,
+    motherOccupation: clean(form.motherOccupation) || undefined,
+    motherCompany: clean(form.motherCompany) || undefined,
 
     motherName: motherFullName || undefined,
     motherPhone: clean(form.motherPhone) || undefined,
@@ -201,27 +225,9 @@ export default function AddLeadModal({ open, onClose }) {
 
     source: form.source || undefined,
     notes: form.notes || undefined,
-    assignedTo: form.counselor,
+    assignedTo: form.counselor || undefined,
     status: 'new',
-    
-
-    // 🔥 THIS IS WHAT YOU MISSED
   };
-
-      console.log("FINAL PAYLOAD OBJECT:", leadData)
-      console.log("🔥 schoolId:", leadData.schoolId);
-      console.log("🔥 assignedTo:", leadData.assignedTo);
-      console.log("studentFirstName:", `"${leadData.studentFirstName}"`)
-      console.log("studentLastName:", leadData.studentLastName)
-      console.log("gender:", leadData.gender)
-      console.log("grade:", leadData.grade)
-      console.log("fatherName:", `"${leadData.fatherName}"`)
-      console.log("fatherPhone:", `"${leadData.fatherPhone}"`)
-      console.log("motherName:", `"${leadData.motherName}"`)
-      console.log("motherPhone:", `"${leadData.motherPhone}"`)
-      if (!leadData.fatherName) console.log("❌ fatherName EMPTY")
-      if (!leadData.fatherPhone) console.log("❌ fatherPhone EMPTY")
-      if (!leadData.studentFirstName) console.log("❌ studentFirstName EMPTY")
 
       await createLead(leadData)
       
@@ -248,12 +254,6 @@ export default function AddLeadModal({ open, onClose }) {
     }
   }
 
-  const handleDraft = () => {
-    console.log('Saved as draft:', form)
-    onClose()
-    setForm(initialForm)
-    setErrors({})
-  }
 
   const handleClose = () => {
     onClose()
@@ -458,7 +458,7 @@ export default function AddLeadModal({ open, onClose }) {
                   Browse File
                   <input type="file"accept=".xlsx,.csv"style={{ display: 'none' }}onChange={(e) => {const selected = e.target.files[0];console.log("SELECTED FILE:", selected);setFile(selected);}}/>                </label>
               </div>
-              <div className="bulk-template">
+              <div className="bulk-template" onClick={downloadTemplate} style={{ cursor: 'pointer' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Download sample template
               </div>
@@ -466,7 +466,7 @@ export default function AddLeadModal({ open, onClose }) {
                 <p className="bulk-rules-title">File Requirements</p>
                 <ul>
                   <li>First row must be column headers</li>
-                  <li>Required columns: First Name, Last Name, Grade, Parent Name, Phone, Email</li>
+                  <li>Columns: Student First Name, Student Last Name, Father Phone (required), Father Email, Grade, Source, Status</li>
                   <li>Maximum 500 leads per upload</li>
                 </ul>
               </div>
@@ -485,14 +485,6 @@ export default function AddLeadModal({ open, onClose }) {
             Cancel
           </button>
           <div className="footer-actions">
-            <button 
-              className="btn-draft" 
-              onClick={handleDraft}
-              disabled={loading}
-              style={{ opacity: loading ? 0.6 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}
-            >
-              Save as Draft
-            </button>
             <button 
               className="btn-add-lead" 
               onClick={tab === 'manual' ? handleAddLead : handleBulkUpload}

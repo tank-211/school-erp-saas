@@ -43,6 +43,15 @@ export const createLeadSchema = z.object({
   source: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 
+  // Family details with no column of their own are kept in the lead's notes
+  fatherOccupation: z.string().optional(),
+  fatherCompany: z.string().optional(),
+  motherOccupation: z.string().optional(),
+  motherCompany: z.string().optional(),
+
+  // Counselor to own the lead (a user of the same school); defaults to the creator
+  assignedTo: z.union([z.string(), z.number()]).nullable().optional(),
+
   status: z.enum(["new", "qualified", "lost", "converted"]).optional(),
 });
 

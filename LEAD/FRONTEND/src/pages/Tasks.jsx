@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import './Tasks.css'
-import { taskAPI, leadAPI, userAPI } from '../services/api'
+import { taskAPI, leadsAPI, userAPI } from '../services/api'
 
-const priorityClass = { High: 'badge-red', Medium: 'badge-orange', Low: 'badge-blue' }
+const priorityClass = { high: 'badge-red', medium: 'badge-orange', low: 'badge-blue' }
+
+// Backend task row -> what this page shows
+const formatTask = (task) => ({
+  ...task,
+  dueDate: task.due_date,
+  description: task.task_description,
+  leadId: task.lead_id,
+  assignedTo: task.assigned_to,
+  status: task.is_done ? "completed" : "pending",
+  leadName: task.lead ? [task.lead.first_name, task.lead.last_name].filter(Boolean).join(" ") : "",
+})
 const typeColor = { Email: '#3b82f6', Call: '#2c5648', Tour: '#8b5cf6', Task: '#f59e0b' }
 const statusBorderColor = { completed: '#10b981', overdue: '#ef4444', pending: '#e2e8f0' }
 
@@ -28,6 +39,7 @@ export default function Tasks() {
   const [showModal, setShowModal] = useState(false);
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
+  const assigneeName = (task) => users.find((u) => String(u.id) === String(task.assignedTo))?.name || 'Unassigned';
   const [editingTask, setEditingTask] = useState(null);
   const [formData, setFormData] = useState({
     title: "",
@@ -47,22 +59,13 @@ export default function Tasks() {
         const taskRes = await taskAPI.getTasks();
         console.log("TASKS:", taskRes);
 
-        const formattedTasks = (taskRes.data || []).map(task => ({
-          ...task,
-          dueDate: task.due_date,
-          description: task.task_description,
-          leadId: task.lead_id,
-          assignedTo: task.assigned_to,
-          status: task.is_done ? "completed" : "pending"
-        }));
+        const formattedTasks = (taskRes.data || []).map(formatTask);
 
         setTasks(formattedTasks);
 
           // Leads
-          const leadRes = await leadAPI.getLeads();
-
-          console.log("LEADS RESPONSE:", leadRes);
-          console.log("FIRST LEAD:", leadRes.data[0]);
+          // Most recent 100 leads for the task form
+          const leadRes = await leadsAPI.getAll({ limit: 100 });
 
           setLeads(leadRes.data || []);
 
@@ -146,14 +149,7 @@ export default function Tasks() {
 
       const refreshed = await taskAPI.getTasks();
 
-      const formattedTasks = (refreshed.data || []).map(task => ({
-        ...task,
-        dueDate: task.due_date,
-        description: task.task_description,
-        leadId: task.lead_id,
-        assignedTo: task.assigned_to,
-        status: task.is_done ? "completed" : "pending"
-      }));
+      const formattedTasks = (refreshed.data || []).map(formatTask);
 
       setTasks(formattedTasks);
 
@@ -176,10 +172,6 @@ export default function Tasks() {
     }
   };
 
-  const toggleComplete = (id) => {
-    
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === 'completed' ? 'pending' : 'completed' } : t))
-  }
 
   const statCards = [
     { label: 'Total Tasks', value: counts.total, color: '#3b82f6', bg: '#eff6ff', Icon: TaskIcon },
@@ -216,14 +208,7 @@ export default function Tasks() {
 
     const refreshed = await taskAPI.getTasks();
 
-    const formattedTasks = (refreshed.data || []).map(task => ({
-      ...task,
-      dueDate: task.due_date,
-      description: task.task_description,
-      leadId: task.lead_id,
-      assignedTo: task.assigned_to,
-      status: task.is_done ? "completed" : "pending"
-    }));
+    const formattedTasks = (refreshed.data || []).map(formatTask);
 
     setTasks(formattedTasks);
 
@@ -381,7 +366,7 @@ export default function Tasks() {
 
             {leads.map((lead) => (
               <option key={lead.id} value={lead.id}>
-                {lead.studentFirstName} {lead.studentLastName}
+                {lead.name}{lead.phone ? ` · ${lead.phone}` : ''}
               </option>
             ))}
           </select>
@@ -452,21 +437,19 @@ export default function Tasks() {
 
                   <span className="task-meta-item">
                     <UserSmIcon />
-                    {task.assignedUser?.name}
+                    {assigneeName(task)}
                   </span>
                   <div className="task-meta-row">
-                    <span className="task-type-badge" style={{ background: typeColor[task.type] + '20', color: typeColor[task.type] }}>{task.type}</span>
-                    <span className="task-meta-item"><UserSmIcon />{task.assignedUser?.name}</span>
                     <span className="task-meta-item"><ClockSmIcon/>Due:{new Date(task.dueDate).toLocaleDateString()}</span>{task.followUpDate&&<span className="task-meta-item">📞 Follow-up:{new Date(task.followUpDate).toLocaleDateString()}</span>}
-                    <span className={`badge ${priorityClass[task.priority]}`}>{task.priority} Priority</span>
-                    <span className={`priority-badge ${task.priority?.toLowerCase()}`}>{task.priority}</span>
+                    <span className={`badge ${priorityClass[String(task.priority || '').toLowerCase()] || 'badge-gray'}`}>{task.priority || 'medium'} priority</span>
                     <span className={`task-status ${task.status}`}>{task.status}</span>
-                    <button className="followup-btn" onClick={() => navigate(`/tasks/new?leadId=${task.leadId}`)}>+ Add Follow Up</button>
+                    {task.leadId && (
+                      <button className="followup-btn" onClick={() => {setEditingTask(null);setFormData({title:`Follow up: ${task.leadName || 'lead'}`,description:"",dueDate:"",leadId:String(task.leadId),assignedTo:task.assignedTo ? String(task.assignedTo) : "",priority:"Medium",status:"pending"});setShowModal(true);}}>+ Add Follow Up</button>
+                    )}
                   </div>
                 </div>
                 <div className="task-right">
-                  <button className="task-flag-btn" style={{ color: task.status === 'overdue' ? '#ef4444' : '#94a3b8' }}><FlagIcon /></button>
-                  <button className="task-lead-link" onClick={() => navigate(`/leads?leadId=${task.leadId}`)} style={{background:"none",border:"none",color:"#10b981",cursor:"pointer"}}>View Lead: {task.lead?.studentFirstName}{" "}{task.lead?.studentLastName} →</button>
+                  {task.leadId && <button className="task-lead-link" onClick={() => navigate(`/leads/${task.leadId}`)} style={{background:"none",border:"none",color:"#10b981",cursor:"pointer"}}>View Lead: {task.leadName || `#${task.leadId}`} →</button>}
                   <button onClick={() => deleteTask(task.id)} style={{background:"#ef4444",color:"white",border:"none",padding:"8px 12px",borderRadius:"6px",cursor:"pointer"}}>Delete</button>
                   <button onClick={() => {setEditingTask(task);setFormData({title:task.title,description:task.task_description||"",dueDate:task.dueDate?.split("T")[0],priority:task.priority,status:task.status,leadId:task.leadId,assignedTo:task.assignedTo});setShowModal(true);}} style={{background:"#3b82f6",color:"white",border:"none",padding:"8px 14px",borderRadius:"8px",cursor:"pointer",fontWeight:"600",marginRight:"8px"}}>✏ Edit</button>
                 </div>

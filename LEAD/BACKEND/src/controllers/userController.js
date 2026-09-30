@@ -1,3 +1,4 @@
+import prisma from "../prisma/index.js";
 import { getAllUsersService, inviteUserService, updateUserRoleService, toggleUserStatusService, getCounselorsService } from "../services/userService.js";
 import { serializeBigInt } from "../utils/bigintSerializer.js";
 import { successResponse, errorResponse } from "../utils/response.js";
@@ -31,17 +32,22 @@ res.status(200).json(
 };
 
 export const inviteUser = async (req, res) => {
+  // Only a school admin can add users (the role in the token is checked again below)
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ success: false, message: "Only admins can add users" });
+  }
   try {
-    const user = await inviteUserService(req.body.email, req.user.schoolId);
-
-    res.status(201).json(successResponse(serializeBigInt(user), "User invited"));
-  }catch (error) {
-    console.log("========== INVITE ERROR ==========");
-    console.error(error);
-    console.error(error.message);
-    console.error(error.stack);
-
-    res.status(400).json({
+    const admin = await prisma.user.findFirst({
+      where: { id: BigInt(req.user.id), school_id: BigInt(req.user.schoolId), role: "admin", status: "active" },
+      select: { id: true },
+    });
+    if (!admin) {
+      return res.status(403).json({ success: false, message: "Only admins can add users" });
+    }
+    const user = await inviteUserService(req.body || {}, req.user.schoolId);
+    res.status(201).json(successResponse(serializeBigInt(user), "User added"));
+  } catch (error) {
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message,
     });

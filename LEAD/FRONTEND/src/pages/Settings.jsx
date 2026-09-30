@@ -110,7 +110,6 @@ function ProfileTab() {
       <h3 className="panel-title">Profile Settings</h3>
       <div className="profile-photo-row">
         <div className="profile-avatar">{form.schoolName ? form.schoolName.charAt(0).toUpperCase():"S"}</div>
-        <button className="btn-primary-sm">Upload Logo</button>
       </div>
       <div className="form-row-2">
         <div className="form-group">
@@ -262,18 +261,21 @@ function SecurityTab() {
         }
 
         try {
-          await authFetch('/api/settings/password', {
+          const res = await authFetch('/api/settings/password', {
             method: 'PUT',
             body: JSON.stringify({
               currentPassword,
               newPassword
             })
           })
+          const body = await res.json().catch(() => ({}))
+          if (!res.ok || body.success === false) {
+            throw new Error(body.message || 'Failed to update password')
+          }
 
           alert('Password updated')
         } catch (err) {
-          console.error(err)
-          alert('Failed to update password')
+          alert(err.message || 'Failed to update password')
         }
       }}
       >
@@ -362,11 +364,8 @@ function SystemTab() {
     <div className="settings-panel">
       <h3 className="panel-title">System Settings</h3>
       <div className="form-group">
-        <label className="form-label">Campus</label>
-        <select className="form-input form-select" value={settings.campus || ""} onChange={(e) => handleChange('campus', e.target.value)}>
-          <option>Main Campus</option>
-          <option>Secondary Campus</option>
-        </select>
+        <label className="form-label">Campus / branch name</label>
+        <input className="form-input" placeholder="e.g. Whitefield campus" value={settings.campus || ""} onChange={(e) => handleChange('campus', e.target.value)} />
       </div>
       <div className="form-group">
         <label className="form-label">Language</label>
@@ -432,27 +431,34 @@ useEffect(() => {
         <button
   className="btn-primary"
   onClick={async () => {
-    const email = prompt('Enter user email')
+    const name = prompt('Full name of the new user')
+    if (!name) return
+    const email = prompt('Their email address (they sign in with it)')
     if (!email) return
+    const role = (prompt('Role: counselor, admin or accountant', 'counselor') || '').trim().toLowerCase()
+    if (!role) return
 
     try {
       const res = await authFetch('/api/users/invite', {
         method: 'POST',
-        body: JSON.stringify({ email })
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), role })
       })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body.message || 'Could not add the user')
 
-      if (!res.ok) throw new Error('Invite failed')
-
-      alert('User invited')
+      // Shown once: the admin passes it on; the user changes it after signing in
+      window.prompt(
+        `${body.data.name} was added. Copy this temporary password and give it to them; it will not be shown again:`,
+        body.data.temporaryPassword
+      )
 
       loadUsers()
     } catch (err) {
-      console.error(err)
-      alert('Something went wrong')
+      alert(err.message || 'Could not add the user')
     }
   }}
 >
-  + Invite User
+  + Add User
 </button>
 </div>
 

@@ -1,191 +1,194 @@
-import React from 'react'
-import { RadarChart, Radar, PolarGrid, PolarAngleAxis, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts'
+import React, { useEffect, useMemo, useState } from 'react'
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import './Reports.css'
+import { reportsAPI } from '../../services/api'
+import { pctText, downloadCsv, ReportState, EmptyChart } from './reportUtils'
 
-const statCards = [
-  { label: 'Team Conversion Rate', value: '68.3%', sub: 'Above target (65%)', delta: '+5.2%', color: '#10b981', bg: '#d1fae5', Icon: TargetIcon },
-  { label: 'Avg Response Time', value: '2.8 hrs', sub: 'Below target (4 hrs)', delta: '-0.5h', color: '#3b82f6', bg: '#eff6ff', Icon: ClockIcon },
-  { label: 'Satisfaction Score', value: '4.6/5.0', sub: 'Parent feedback rating', delta: '+0.3', color: '#8b5cf6', bg: '#f5f3ff', Icon: StarIcon },
-  { label: 'Activity Completion', value: '96%', sub: 'Tasks completed on time', delta: '+12%', color: '#f59e0b', bg: '#fef3c7', Icon: TrendIcon },
-]
+const DAY = 24 * 60 * 60 * 1000
+const iso = (d) => new Date(d.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10) // India date
 
-const staffData = [
-  { rank: 1, name: 'Mrs. Sunita Kumar', leads: 187, contacted: 182, contactedPct: '97%', converted: 145, convPct: 78, convColor: '#10b981', avgResp: '2.1 hrs', sat: 4.9, rankColor: '#f59e0b' },
-  { rank: 2, name: 'Mrs. Priya Sharma', leads: 245, contacted: 238, contactedPct: '97%', converted: 178, convPct: 73, convColor: '#3b82f6', avgResp: '2.5 hrs', sat: 4.8, rankColor: '#94a3b8' },
-  { rank: 3, name: 'Mr. Amit Patel', leads: 198, contacted: 185, contactedPct: '93%', converted: 132, convPct: 67, convColor: '#3b82f6', avgResp: '3.2 hrs', sat: 4.5, rankColor: '#f59e0b' },
-  { rank: 4, name: 'Mrs. Neha Joshi', leads: 172, contacted: 160, contactedPct: '93%', converted: 110, convPct: 69, convColor: '#3b82f6', avgResp: '3.8 hrs', sat: 4.4, rankColor: '#94a3b8' },
-  { rank: 5, name: 'Mr. Rajesh Verma', leads: 156, contacted: 142, contactedPct: '91%', converted: 98, convPct: 63, convColor: '#f59e0b', avgResp: '4.1 hrs', sat: 4.3, rankColor: '#94a3b8' },
-]
+// Periods the selector offers, as date ranges
+const PERIODS = {
+  this_month: 'This month',
+  last_month: 'Last month',
+  last_90: 'Last 90 days',
+  last_180: 'Last 6 months',
+  last_365: 'Last 12 months',
+}
+const rangeFor = (key) => {
+  const now = new Date()
+  const ist = new Date(now.getTime() + 5.5 * 60 * 60 * 1000)
+  const y = ist.getUTCFullYear()
+  const m = ist.getUTCMonth()
+  if (key === 'this_month') return { from: iso(new Date(Date.UTC(y, m, 1) - 5.5 * 3600000)), to: iso(now) }
+  if (key === 'last_month') return { from: iso(new Date(Date.UTC(y, m - 1, 1) - 5.5 * 3600000)), to: iso(new Date(Date.UTC(y, m, 0) - 5.5 * 3600000)) }
+  const days = { last_90: 90, last_180: 180, last_365: 365 }[key]
+  return { from: iso(new Date(now.getTime() - days * DAY)), to: iso(now) }
+}
+const hours = (h) => (h === null || h === undefined ? '—' : h < 1 ? `${Math.round(h * 60)} min` : h < 48 ? `${h} hrs` : `${Math.round(h / 24)} days`)
 
-const radarData = [
-  { metric: 'Lead Response Time', actual: 85, target: 80 },
-  { metric: 'Conversion Rate', actual: 68, target: 65 },
-  { metric: 'Customer Satisfaction', actual: 92, target: 85 },
-  { metric: 'Follow-up Rate', actual: 78, target: 80 },
-  { metric: 'Documentation Accuracy', actual: 88, target: 90 },
-  { metric: 'Tour Conversion', actual: 72, target: 75 },
-]
-
-const convTrendData = [
-  { month: 'Aug', leads: 148, converted: 98, rate: 66 },
-  { month: 'Sep', leads: 162, converted: 108, rate: 67 },
-  { month: 'Oct', leads: 132, converted: 88, rate: 67 },
-  { month: 'Nov', leads: 178, converted: 122, rate: 69 },
-  { month: 'Dec', leads: 155, converted: 100, rate: 65 },
-  { month: 'Jan', leads: 195, converted: 140, rate: 72 },
-  { month: 'Feb', leads: 168, converted: 118, rate: 70 },
-]
-
-const activityData = [
-  { label: 'Calls Made', value: 1245, target: 1200, pct: 104, color: '#10b981' },
-  { label: 'Emails Sent', value: 856, target: 900, pct: 95, color: '#f59e0b' },
-  { label: 'Tours Conducted', value: 342, target: 350, pct: 98, color: '#f59e0b' },
-  { label: 'Interviews Done', value: 289, target: 280, pct: 103, color: '#10b981' },
-  { label: 'Follow-ups', value: 567, target: 600, pct: 95, color: '#f59e0b' },
-]
-
-const responseTimeData = [
-  { range: '< 1 hour', count: 450 },
-  { range: '1-4 hours', count: 320 },
-  { range: '4-24 hours', count: 295 },
-  { range: '> 24 hours', count: 130 },
-]
-
+// Counselor performance from the school's leads, contacts, applications and tasks.
 export default function Performance() {
+  const [period, setPeriod] = useState('last_180')
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    reportsAPI.performance(rangeFor(period))
+      .then((res) => setReport(res.data))
+      .catch((err) => setError(err.message || 'Could not load the performance report'))
+      .finally(() => setLoading(false))
+  }, [period])
+
+  const staff = useMemo(
+    () => [...(report?.staff || [])].sort((a, b) => (b.applications - a.applications) || (b.leads - a.leads)),
+    [report],
+  )
+  const k = report?.kpis || {}
+  const statCards = [
+    { label: 'Lead Conversion', value: pctText(k.conversion_rate), sub: `${k.leads ?? 0} leads in period`, Icon: TrendIcon, color: '#10b981', bg: '#f0fdf4' },
+    { label: 'Avg First Response', value: hours(k.avg_response_hours), sub: 'Lead created to first contact', Icon: ClockIcon, color: '#3b82f6', bg: '#eff6ff' },
+    { label: 'Contacted Within 24h', value: pctText(k.contacted_within_24h), sub: 'Of new leads', Icon: StarIcon, color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Follow-ups Done', value: pctText(k.follow_up_completion), sub: 'Tasks due in period', Icon: TargetIcon, color: '#f59e0b', bg: '#fffbeb' },
+  ]
+
+  const exportReport = () => {
+    if (!report) return
+    downloadCsv(`performance-${report.range.from}-to-${report.range.to}.csv`, [
+      { key: 'name', label: 'Staff member' }, { key: 'role', label: 'Role' }, { key: 'leads', label: 'Leads assigned' },
+      { key: 'contacted', label: 'Contacted' }, { key: 'applications', label: 'Applications' }, { key: 'admissions', label: 'Admissions' },
+      { key: 'conversion_rate', label: 'Conversion %' }, { key: 'avg_response_hours', label: 'Avg first response (hrs)' },
+      { key: 'activities', label: 'Contacts made' }, { key: 'tasks_done', label: 'Tasks done' }, { key: 'tasks_total', label: 'Tasks due' },
+    ], staff)
+  }
+
   return (
     <div className="reports-page">
       <div className="reports-header">
         <div>
           <h1 className="page-title">Performance Reports</h1>
-          <p className="page-sub">Team and individual performance analytics</p>
+          <p className="page-sub">Counselor and team performance{report ? `, ${report.range.from} to ${report.range.to}` : ''}</p>
         </div>
         <div className="reports-header-right">
-          <select className="report-period-select"><option>This Month</option><option>Last Month</option><option>This Quarter</option></select>
-          <button className="btn-primary"><DownloadIcon /> Export Report</button>
+          <select className="report-period-select" value={period} onChange={(e) => setPeriod(e.target.value)}>
+            {Object.entries(PERIODS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select>
+          <button className="btn-primary" onClick={exportReport} disabled={!report}><DownloadIcon /> Export Report</button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="report-stats">
-        {statCards.map((c, i) => (
-          <div key={i} className="report-stat-card">
-            <div className="rsc-icon" style={{ background: c.bg, color: c.color }}><c.Icon /></div>
-            <div className="rsc-delta" style={{ color: c.color }}>{c.delta}</div>
-            <div className="rsc-label">{c.label}</div>
-            <div className="rsc-value">{c.value}</div>
-            <div className="rsc-sub">{c.sub}</div>
-          </div>
-        ))}
-      </div>
+      <ReportState loading={loading && !report} error={error} />
 
-      {/* Staff Performance Table */}
-      <div className="staff-table-card chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Staff Performance Comparison</h3>
-          <p className="chart-sub">Individual performance metrics and rankings</p>
-        </div>
-        <table className="staff-table">
-          <thead><tr>
-            <th>RANK</th><th>STAFF MEMBER</th><th>LEADS ASSIGNED</th>
-            <th>CONTACTED</th><th>CONVERTED</th><th>CONVERSION RATE</th>
-            <th>AVG RESPONSE</th><th>SATISFACTION</th>
-          </tr></thead>
-          <tbody>
-            {staffData.map(s => (
-              <tr key={s.rank}>
-                <td><div className="rank-badge" style={{ background: s.rankColor + '20', color: s.rankColor }}>{s.rank}</div></td>
-                <td><span className="staff-name">{s.name}</span></td>
-                <td>{s.leads}</td>
-                <td><div>{s.contacted}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.contactedPct}</div></td>
-                <td>{s.converted}</td>
-                <td>
-                  <div className="conv-bar-wrap">
-                    <div className="conv-bar"><div className="conv-bar-fill" style={{ width: `${s.convPct}%`, background: s.convColor }} /></div>
-                    <span className="conv-pct">{s.convPct}%</span>
-                  </div>
-                </td>
-                <td>{s.avgResp}</td>
-                <td><span className="sat-score">{s.sat}</span></td>
-              </tr>
+      {report && (
+        <>
+          <div className="report-stats">
+            {statCards.map((c, i) => (
+              <div key={i} className="report-stat-card">
+                <div className="rsc-icon" style={{ background: c.bg, color: c.color }}><c.Icon /></div>
+                <div className="rsc-label">{c.label}</div>
+                <div className="rsc-value">{c.value}</div>
+                <div className="rsc-sub">{c.sub}</div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Radar + Conversion Trend */}
-      <div className="charts-row-2">
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Team Performance Radar</h3>
-            <p className="chart-sub">Key metrics vs targets</p>
           </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={radarData}>
-              <PolarGrid stroke="#f1f5f9" />
-              <PolarAngleAxis dataKey="metric" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <Radar name="Actual" dataKey="actual" stroke="#10b981" fill="#10b981" fillOpacity={0.35} />
-              <Radar name="Target" dataKey="target" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.15} strokeDasharray="4 2" />
-              <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
 
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Monthly Conversion Trend</h3>
-            <p className="chart-sub">Lead conversion over time</p>
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={convTrendData} margin={{ top: 10, right: 30, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
-              <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-              <Line yAxisId="left" type="monotone" dataKey="leads" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} name="Total Leads" />
-              <Line yAxisId="left" type="monotone" dataKey="converted" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} name="Converted" />
-              <Line yAxisId="right" type="monotone" dataKey="rate" stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" dot={{ r: 3 }} name="Rate %" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-
-      {/* Activity Completion Metrics */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Activity Completion Metrics</h3>
-          <p className="chart-sub">Task completion vs targets</p>
-        </div>
-        <div className="perf-stats-row">
-          {activityData.map((a, i) => (
-            <div key={i} className="perf-mini-card">
-              <div className="pmc-label">{a.label}</div>
-              <div className="pmc-value">{a.value.toLocaleString()}</div>
-              <div className="pmc-target">Target: {a.target.toLocaleString()} <span style={{ color: a.color, fontWeight: 600 }}>{a.pct}%</span></div>
-              <div className="pmc-bar"><div className="pmc-bar-fill" style={{ width: `${Math.min(a.pct, 100)}%`, background: a.color }} /></div>
+          <div className="staff-table-card chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Staff Performance Comparison</h3>
+              <p className="chart-sub">Leads created in the period, by assigned counselor</p>
             </div>
-          ))}
-        </div>
-      </div>
+            {staff.length ? (
+              <table className="staff-table">
+                <thead><tr>
+                  <th>RANK</th><th>STAFF MEMBER</th><th>LEADS ASSIGNED</th>
+                  <th>CONTACTED</th><th>APPLICATIONS</th><th>CONVERSION RATE</th>
+                  <th>AVG RESPONSE</th><th>FOLLOW-UPS</th>
+                </tr></thead>
+                <tbody>
+                  {staff.map((s, i) => (
+                    <tr key={s.id}>
+                      <td><div className="rank-badge" style={{ background: '#10b98120', color: '#10b981' }}>{i + 1}</div></td>
+                      <td><span className="staff-name">{s.name}</span>{s.role === 'admin' ? <span style={{ color: '#94a3b8', fontSize: 11 }}> (Admin)</span> : null}</td>
+                      <td>{s.leads}</td>
+                      <td>{s.contacted}</td>
+                      <td>{s.applications}{s.admissions ? <span style={{ color: '#94a3b8', fontSize: 11 }}> ({s.admissions} admitted)</span> : null}</td>
+                      <td>
+                        <div className="conv-bar-wrap">
+                          <div className="conv-bar"><div className="conv-bar-fill" style={{ width: `${s.conversion_rate || 0}%`, background: '#10b981' }} /></div>
+                          <span className="conv-pct">{pctText(s.conversion_rate)}</span>
+                        </div>
+                      </td>
+                      <td>{hours(s.avg_response_hours)}</td>
+                      <td>{s.tasks_total ? `${s.tasks_done}/${s.tasks_total}` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <EmptyChart text="No counselors in this school yet." />}
+          </div>
 
-      {/* Response Time Distribution */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Response Time Distribution</h3>
-          <p className="chart-sub">Time to first contact with leads</p>
-        </div>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={responseTimeData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="range" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
-            <Bar dataKey="count" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={80} name="Leads" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+          <div className="charts-row-2">
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">First Response Time</h3>
+                <p className="chart-sub">How soon new leads were first contacted</p>
+              </div>
+              {k.leads ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={report.response_time} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                    <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                    <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={48} name="Leads" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <EmptyChart text="No new leads in this period." />}
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">Monthly Conversion Trend</h3>
+                <p className="chart-sub">Leads created each month and how many applied</p>
+              </div>
+              {report.trend.some((t) => t.leads) ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <LineChart data={report.trend} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                    <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="leads" stroke="#94a3b8" strokeWidth={2} name="Leads" />
+                    <Line type="monotone" dataKey="applications" stroke="#10b981" strokeWidth={2.5} name="Applications" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : <EmptyChart text="No leads in this period." />}
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Contact Activity</h3>
+              <p className="chart-sub">Calls, messages and meetings logged in the period</p>
+            </div>
+            {report.activity.length ? (
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={report.activity} margin={{ top: 10, right: 20, left: -10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                  <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={56} name="Count" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyChart text="No calls, messages or meetings logged in this period." />}
+          </div>
+        </>
+      )}
     </div>
   )
 }
