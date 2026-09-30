@@ -103,6 +103,19 @@ export const getStatsService = async (schoolId) => {
 
   const activeLeads = newLeads + qualifiedLeads;
 
+  // Real "last 30 days" figures for the cards' second line
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [recentLeads, recentActive, recentConverted, recentAdmissions] = await Promise.all([
+    prisma.lead.count({ where: { school_id: schoolId, created_at: { gte: since } } }),
+    prisma.lead.count({
+      where: { school_id: schoolId, created_at: { gte: since }, follow_up_status: { in: [...STATUS_GROUPS.new, ...STATUS_GROUPS.contacted] } },
+    }),
+    prisma.lead.count({
+      where: { school_id: schoolId, created_at: { gte: since }, follow_up_status: { in: STATUS_GROUPS.admitted } },
+    }),
+    prisma.admission.count({ where: { school_id: schoolId, created_at: { gte: since } } }),
+  ]);
+
   const conversionRate =
     totalLeads > 0
       ? ((convertedLeads / totalLeads) * 100).toFixed(1)
@@ -111,19 +124,19 @@ export const getStatsService = async (schoolId) => {
   return {
     totalInquiries: {
       value: totalLeads,
-      delta: totalLeads
+      delta: `+${recentLeads} in 30 days`
     },
     conversionRate: {
       value: `${conversionRate}%`,
-      delta: convertedLeads
+      delta: `${recentConverted} converted in 30 days`
     },
     activeLeads: {
       value: activeLeads,
-      delta: activeLeads
+      delta: `${recentActive} new in 30 days`
     },
     enrolledStudents: {
       value: convertedLeads,
-      delta: convertedLeads
+      delta: `${recentAdmissions} admissions in 30 days`
     }
   };
 };
@@ -209,11 +222,19 @@ export const getStatusDistributionService = async (schoolId) => {
   
 
 export const getTodayOverviewService = async (schoolId) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // "Today" and "this week" in India time
+  const IST = 5.5 * 60 * 60 * 1000;
+  const ist = new Date(Date.now() + IST);
+  const today = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - IST);
 
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+  const weekday = (ist.getUTCDay() + 6) % 7; // Monday = 0
+  const weekStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate() - weekday));
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const toursThisWeek = await prisma.campus_visit.count({
+    where: { school_id: schoolId, visit_date: { gte: weekStart, lt: weekEnd }, status: { not: "cancelled" } },
+  });
 
   const [todayLeads, todayActivities, todayCommunications] =
     await Promise.all([
@@ -255,7 +276,8 @@ export const getTodayOverviewService = async (schoolId) => {
   return {
     callsMade: todayActivities,
     emailsSent: todayCommunications,
-    toursScheduled: todayLeads
+    toursScheduled: toursThisWeek,
+    newLeads: todayLeads
   };
 };
 

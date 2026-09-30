@@ -9,9 +9,17 @@ export default function LeadDetails() {
   const [lead, setLead] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [application, setApplication] = useState([]);
+  const [messages, setMessages] = useState([]);
 
   useEffect(() => {
     fetchLead();
+    // Emails, SMS, WhatsApp and calls with this lead
+    fetch(`${API_URL}/communications/history/${id}?limit=100`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setMessages(data.data?.communications || []))
+      .catch(() => setMessages([]));
   }, [id]);
 
   const fetchLead = async () => {
@@ -29,10 +37,7 @@ export default function LeadDetails() {
 
       const data = await res.json();
 
-      console.log("RAW RESPONSE:", data);
-
       setLead(data.data);
-      console.log(data.data);
       setTasks(data.data.tasks || []);
       setApplication(data.data.application || []);
     } catch (err) {
@@ -40,19 +45,36 @@ export default function LeadDetails() {
     }
   };
 
+  const ACTIVITY_LABEL = {
+    LEAD_CREATED: "Lead created",
+    LEAD_UPDATED: "Lead updated",
+    LEAD_ASSIGNED: "Lead assigned",
+    STAGE_CHANGED: "Stage changed",
+  };
+  // Messages already appear from the communication log; skip their duplicate activity rows
+  const MESSAGE_TYPES = new Set(["email", "sms", "whatsapp", "call"]);
+
   const timeline = [
     ...(lead?.tasks || []).map(task => ({
       type: "task",
-      title: task.title,
-      date: task.createdAt,
+      title: `Task: ${task.title}`,
+      date: task.created_at || task.createdAt,
     })),
 
-    ...(lead?.lead_activity || []).map(activity => ({
-      type: "activity",
-      title: activity.activity_type,
-      date: activity.created_at,
+    ...(lead?.lead_activity || [])
+      .filter(activity => !MESSAGE_TYPES.has(String(activity.activity_type).toLowerCase()))
+      .map(activity => ({
+        type: "activity",
+        title: [ACTIVITY_LABEL[activity.activity_type] || activity.activity_type, activity.notes].filter(Boolean).join(": "),
+        date: activity.created_at,
+      })),
+
+    ...messages.map(m => ({
+      type: m.channel,
+      title: `${String(m.channel || "message").toUpperCase()}${m.subject ? `: ${m.subject}` : m.message ? `: ${m.message.slice(0, 60)}` : ""} (${m.status})`,
+      date: m.created_at,
     })),
-  ].sort((a, b) => new Date(b.date) - new Date(a.date));
+  ].filter(item => item.date).sort((a, b) => new Date(b.date) - new Date(a.date));
 
 
 
@@ -118,11 +140,6 @@ if (!lead) {
           <h3>Parent Information</h3>
 
           <div className="detail-row">
-            <span className="detail-label">Father Name</span>
-            <span className="detail-value">N/A</span>
-          </div>
-
-          <div className="detail-row">
             <span className="detail-label">Phone</span>
             <span className="detail-value">{lead.phone}</span>
           </div>
@@ -130,6 +147,13 @@ if (!lead) {
           <div className="detail-row">
             <span className="detail-label">Email</span>
             <span className="detail-value">{lead.email}</span>
+          </div>
+        </div>
+
+        <div className="lead-details-card">
+          <h3>Notes &amp; Family Details</h3>
+          <div style={{ whiteSpace: "pre-wrap", fontSize: 14, color: "#334155" }}>
+            {lead.notes || "No notes yet."}
           </div>
         </div>
 
@@ -238,6 +262,7 @@ if (!lead) {
           {item.type === "email" && "📧"}
           {item.type === "call" && "📞"}
           {item.type === "whatsapp" && "📱"}
+          {item.type === "sms" && "💬"}
           {item.type === "activity" && "🆕"}
 
           {" "}
@@ -245,7 +270,7 @@ if (!lead) {
         </span>
 
         <span className="detail-value">
-          {new Date(item.date).toLocaleDateString()}
+          {new Date(item.date).toLocaleString("en-IN")}
         </span>
       </div>
     ))

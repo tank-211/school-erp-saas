@@ -3,7 +3,6 @@
  * Provides reusable functions for all backend API calls with JWT authentication
  */
 const API_BASE_URL = import.meta.env.VITE_API_URL;
-console.log("API_URL =", API_BASE_URL);
 // Token management utilities
 export const tokenManager = {
   // Get token from localStorage
@@ -74,7 +73,6 @@ const apiRequest = async (endpoint, options = {}) => {
     headers = {},
     requiresAuth = true,
   } = options;
-  console.log("🚀 API REQUEST BODY:", body);
 
   const url = `${apiConfig.baseURL}${endpoint}`;
   const requestOptions = {
@@ -164,7 +162,6 @@ export const authAPI = {
 
       const result = await response.json();
 
-      console.log("🔥 LOGIN RESPONSE:", result); // 👈 ADD HERE
 
     if (result.success && result.data.token) {
       tokenManager.setToken(
@@ -228,6 +225,20 @@ export const authAPI = {
   },
 };
 
+// Reports and dropdown lookups (the school's own records)
+const query = (params = {}) => {
+  const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const qs = new URLSearchParams(clean).toString();
+  return qs ? `?${qs}` : '';
+};
+
+export const reportsAPI = {
+  lookups: () => apiRequest('/reports/lookups'),
+  sales: (params) => apiRequest(`/reports/sales${query(params)}`),
+  performance: (params) => apiRequest(`/reports/performance${query(params)}`),
+  leads: (params) => apiRequest(`/reports/leads${query(params)}`),
+};
+
 // Dashboard API functions
 export const dashboardAPI = {
   /**
@@ -288,13 +299,6 @@ export const dashboardAPI = {
     return apiRequest('/dashboard/today-overview');
   },
 
-  /**
-   * Fetch recent activities
-   * @returns {Promise} Recent activities data
-   */
-  getRecentActivities: async () => {
-    return apiRequest('/dashboard/recent-activities');
-  },
 };
 
 // Leads API functions
@@ -507,6 +511,9 @@ export const settingsAPI = {
     }),
 };
 export const communicationAPI = {
+  // All messages of the school (?channel=&search=&page=&limit=)
+  list: (params) => apiRequest(`/communications${query(params)}`),
+
   getHistory: (leadId) =>
     apiRequest(`/communications/history/${leadId}`),
 

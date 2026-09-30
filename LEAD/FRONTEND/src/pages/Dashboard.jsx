@@ -122,7 +122,7 @@ export default function Dashboard() {
       {
         label: 'Total Inquiries',
         value: stats.totalInquiries?.value || '0',
-        sub: 'This month',
+        sub: 'All time',
         delta: stats.totalInquiries?.delta || '—',
         color: '#3b82f6',
         bg: '#eff6ff',
@@ -131,7 +131,7 @@ export default function Dashboard() {
       {
         label: 'Conversion Rate',
         value: stats.conversionRate?.value || '0%',
-        sub: 'Last 30 days',
+        sub: 'Leads admitted, all time',
         delta: stats.conversionRate?.delta || '—',
         color: '#10b981',
         bg: '#d1fae5',
@@ -149,7 +149,7 @@ export default function Dashboard() {
       {
         label: 'Enrolled Students',
         value: stats.enrolledStudents?.value || '0',
-        sub: 'This academic year',
+        sub: 'Admitted leads, all time',
         delta: stats.enrolledStudents?.delta || '—',
         color: '#10b981',
         bg: '#d1fae5',
@@ -195,7 +195,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Dashboard</h1>
-          <p className="page-sub">Welcome back, {localStorage.getItem("userName") || "User"}</p>
+          <p className="page-sub">Welcome back{(() => { try { const u = JSON.parse(localStorage.getItem("user") || "null"); return u?.name ? `, ${u.name}` : ""; } catch { return ""; } })()}</p>
         </div>
       </div>
 

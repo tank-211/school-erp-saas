@@ -4,6 +4,7 @@ import {
   logCall,
   logWhatsApp,
   logSMS,
+  listCommunications,
   getCommunicationHistory,
   updateCommunication,
   deleteCommunication,
@@ -16,6 +17,8 @@ import { emailSchema, callSchema } from "../utils/validators.js";
 const router = express.Router();
 
 router.use(authMiddleware);
+// All messages of the school with lead and staff names (?channel=&search=&page=&limit=)
+router.get("/", listCommunications);
 router.post("/email", validate(emailSchema), sendEmail);
 router.post("/call", validate(callSchema), logCall);
 router.post("/whatsapp", logWhatsApp);

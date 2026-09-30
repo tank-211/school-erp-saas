@@ -192,3 +192,65 @@ export const deleteCommunicationService = async (id) => {
 
   return { message: "Communication record deleted successfully" };
 };
+
+// Every communication of the school, newest first, with lead and staff names.
+const CHANNELS = ["email", "sms", "whatsapp", "call"];
+
+export const listCommunicationsService = async (schoolId, query = {}) => {
+  const sid = BigInt(schoolId);
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(query.limit, 10) || 50, 1), 200);
+  const channel = CHANNELS.includes(String(query.channel || "").toLowerCase()) ? String(query.channel).toLowerCase() : null;
+  const search = String(query.search || "").trim();
+
+  const where = {
+    school_id: sid,
+    ...(channel && { channel }),
+    ...(search && {
+      OR: [
+        { subject: { contains: search, mode: "insensitive" } },
+        { message: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+  };
+
+  const [rows, total, byChannel] = await Promise.all([
+    prisma.communication.findMany({ where, orderBy: { created_at: "desc" }, skip: (page - 1) * limit, take: limit }),
+    prisma.communication.count({ where }),
+    prisma.communication.groupBy({ by: ["channel"], where: { school_id: sid }, _count: { _all: true } }),
+  ]);
+
+  const leadIds = [...new Set(rows.filter((r) => r.recipient_type === "lead" && r.recipient_id).map((r) => String(r.recipient_id)))];
+  const userIds = [...new Set(rows.filter((r) => r.created_by).map((r) => String(r.created_by)))];
+  const [leads, users] = await Promise.all([
+    leadIds.length
+      ? prisma.lead.findMany({ where: { school_id: sid, id: { in: leadIds.map(BigInt) } }, select: { id: true, first_name: true, last_name: true, phone: true } })
+      : [],
+    userIds.length
+      ? prisma.user.findMany({ where: { school_id: sid, id: { in: userIds.map(BigInt) } }, select: { id: true, name: true } })
+      : [],
+  ]);
+  const leadById = new Map(leads.map((l) => [String(l.id), l]));
+  const userName = new Map(users.map((u) => [String(u.id), u.name]));
+
+  const counts = { all: 0, email: 0, sms: 0, whatsapp: 0, call: 0 };
+  for (const g of byChannel) {
+    const n = g._count?._all || 0;
+    counts.all += n;
+    if (g.channel in counts) counts[g.channel] += n;
+  }
+
+  return {
+    items: rows.map((r) => {
+      const lead = leadById.get(String(r.recipient_id));
+      return {
+        ...withAliases(r),
+        lead_name: lead ? [lead.first_name, lead.last_name].filter(Boolean).join(" ") : null,
+        lead_phone: lead?.phone || null,
+        created_by_name: userName.get(String(r.created_by)) || null,
+      };
+    }),
+    counts,
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+  };
+};

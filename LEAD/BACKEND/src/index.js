@@ -78,8 +78,11 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/notifications", notificationRoutes);
 import userRoutes from "./routes/userRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
 
 app.use("/api/users", userRoutes);
+// Reports and dropdown lookups, from the school's own records
+app.use("/api/reports", reportRoutes);
 
 // Error handling
 app.use(notFoundHandler);

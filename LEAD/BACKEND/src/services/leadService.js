@@ -30,9 +30,6 @@ export const STATUS_GROUPS = {
   const last_name = data.studentLastName?.trim();
   const fatherName = data.fatherName || "Unknown";
   const phone = data.fatherPhone?.trim();
-  console.log("BODY RECEIVED:", data);
-  console.log("FIRST NAME:", first_name);
-  console.log("LAST NAME:", last_name);
 
   if (!first_name || !last_name) {
     throw new AppError("Student name is required", 400);
@@ -45,13 +42,40 @@ export const STATUS_GROUPS = {
   const academicYear = await prisma.academic_year.findFirst({
     where: {
       school_id: BigInt(data.schoolId),
-      status: "active"
+      OR: [{ status: "active" }, { is_active: true }],
     }
   });
 
   if (!academicYear) {
-    throw new AppError("No active academic year found", 400);
+    throw new AppError("No active academic year found. An admin can set one in School Setup.", 400);
   }
+
+  // The owner must be an active user of the same school
+  let owner = String(userId);
+  if (data.assignedTo !== undefined && data.assignedTo !== null && data.assignedTo !== "") {
+    const user = /^\d+$/.test(String(data.assignedTo))
+      ? await prisma.user.findFirst({
+          where: { id: BigInt(data.assignedTo), school_id: BigInt(data.schoolId), status: "active" },
+          select: { id: true },
+        })
+      : null;
+    if (!user) {
+      throw new AppError("Assigned counselor not found in this school", 400);
+    }
+    owner = String(user.id);
+  }
+
+  // Details without a column of their own go into the notes, so nothing typed is lost
+  const details = [
+    ["Father", [data.fatherName, data.fatherOccupation, data.fatherCompany].filter(Boolean).join(", ")],
+    ["Mother", [data.motherName, data.motherOccupation, data.motherCompany].filter(Boolean).join(", ")],
+    ["Mother phone", data.motherPhone],
+    ["Mother email", data.motherEmail],
+    ["Current school", data.currentSchool],
+    ["Date of birth", data.dob ? String(data.dob).slice(0, 10) : ""],
+    ["Gender", data.gender],
+  ].filter(([, v]) => v && String(v).trim() && String(v).trim() !== "Unknown");
+  const notes = [data.notes, details.map(([k, v]) => `${k}: ${v}`).join("\n")].filter(Boolean).join("\n\n") || null;
 
   const lead = await prisma.lead.create({
   data: {
@@ -73,10 +97,10 @@ export const STATUS_GROUPS = {
       email: data.fatherEmail,
       desired_class: data.grade,
       source: data.source,
-      notes: data.notes,
+      notes,
       follow_up_status:
         allowedStatus.includes(data.status) ? data.status : "pending",
-      assigned_to: String(data.assignedTo || userId),
+      assigned_to: owner,
       created_by: String(userId)
     }
 });
@@ -85,9 +109,7 @@ export const STATUS_GROUPS = {
   const settings = await prisma.settings.findFirst({
      where: { schoolId: Number(data.schoolId)} 
   });
-    console.log("🔥 SETTINGS CHECK:", settings);
   if (settings?.newLead) {
-      console.log("🔥 CREATING NOTIFICATION...");
     await prisma.notification.create({
       
       data: {
@@ -118,7 +140,7 @@ export const STATUS_GROUPS = {
    GET ALL LEADS
 ========================= */
  const getAllLeadsService = async (filters, schoolId) => {
-  const { page = 1, limit = 6, status, source, counselor, date, search } = filters;
+  const { page = 1, limit = 6, status, source, counselor, date, search, grade } = filters;
 
   const where = { school_id: BigInt(schoolId) };
 
@@ -128,6 +150,7 @@ export const STATUS_GROUPS = {
     where.follow_up_status = group ? { in: group } : status;
   }
   if (source) where.source = source;
+  if (grade) where.desired_class = grade;
   if (counselor) where.assigned_to = counselor;
   if (date === "This Week") where.created_at = { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) };
   if (date === "This Month") where.created_at = { gte: new Date(new Date().setMonth(new Date().getMonth() - 1)) };

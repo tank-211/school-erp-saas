@@ -1,191 +1,191 @@
-import React from 'react'
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts'
+import React, { useEffect, useState } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart } from 'recharts'
 import './Reports.css'
+import { reportsAPI } from '../../services/api'
+import { inr, pctText, downloadCsv, ReportState, EmptyChart } from './reportUtils'
 
-const revenueData = [
-  { month: 'Aug 2025', actual: 2950000, target: 3000000 },
-  { month: 'Sep 2025', actual: 3200000, target: 3100000 },
-  { month: 'Oct 2025', actual: 2800000, target: 3050000 },
-  { month: 'Nov 2025', actual: 3400000, target: 3200000 },
-  { month: 'Dec 2025', actual: 3000000, target: 3250000 },
-  { month: 'Jan 2026', actual: 4300000, target: 3800000 },
-  { month: 'Feb 2026', actual: 3300000, target: 3500000 },
-]
-
-const gradeData = [
-  { grade: 'Grade 1', revenue: 280000 },
-  { grade: 'Grade 2', revenue: 320000 },
-  { grade: 'Grade 3', revenue: 290000 },
-  { grade: 'Grade 4', revenue: 350000 },
-  { grade: 'Grade 5', revenue: 420000 },
-  { grade: 'Grade 6', revenue: 310000 },
-  { grade: 'Grade 7', revenue: 260000 },
-  { grade: 'Grade 8', revenue: 390000 },
-  { grade: 'Grade 9', revenue: 180000 },
-]
-
-const sourceData = [
-  { source: 'Website', revenue: '₹86.4L', students: 288, pct: 32 },
-  { source: 'Referral', revenue: '₹64.8L', students: 216, pct: 24 },
-  { source: 'Walk-in', revenue: '₹43.2L', students: 144, pct: 16 },
-  { source: 'Events', revenue: '₹37.8L', students: 126, pct: 14 },
-  { source: 'Phone Inquiry', revenue: '₹21.6L', students: 72, pct: 8 },
-  { source: 'Email Campaign', revenue: '₹16.2L', students: 54, pct: 6 },
-]
-
-const quarterlyData = [
-  { q: 'Q1 2025', new: 148, renewals: 340 },
-  { q: 'Q2 2025', new: 130, renewals: 345 },
-  { q: 'Q3 2025', new: 160, renewals: 360 },
-  { q: 'Q4 2025', new: 150, renewals: 365 },
-]
-
-const statCards = [
-  { label: 'Total Revenue', value: '₹2.33Cr', sub: 'Academic Year 2025-26', delta: '+12.5%', color: '#10b981', bg: '#d1fae5', Icon: RevenueIcon },
-  { label: 'Total Enrollments', value: '778', sub: 'New students enrolled', delta: '+8.3%', color: '#3b82f6', bg: '#eff6ff', Icon: EnrollIcon },
-  { label: 'Avg Monthly Revenue', value: '₹33.3L', sub: 'Per month average', delta: '₹3334K', color: '#8b5cf6', bg: '#f5f3ff', Icon: AvgIcon },
-  { label: 'Target Achievement', value: '101%', sub: 'Of annual target', delta: '101.5%', color: '#f59e0b', bg: '#fef3c7', Icon: TargetIcon },
-]
-
+// Fee collection for an academic year, from the school's invoices and payments.
 export default function SalesReports() {
+  const [yearId, setYearId] = useState('')
+  const [report, setReport] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    reportsAPI.sales({ academic_year_id: yearId })
+      .then((res) => setReport(res.data))
+      .catch((err) => setError(err.message || 'Could not load the sales report'))
+      .finally(() => setLoading(false))
+  }, [yearId])
+
+  const stats = report?.stats || {}
+  const statCards = [
+    { label: 'Fees Collected', value: inr(stats.collected), sub: report?.academic_year?.name || '', delta: stats.growth_vs_previous_year === null || stats.growth_vs_previous_year === undefined ? '' : `${stats.growth_vs_previous_year > 0 ? '+' : ''}${stats.growth_vs_previous_year}% vs ${stats.previous_year}`, Icon: RevenueIcon, color: '#10b981', bg: '#f0fdf4' },
+    { label: 'Students Enrolled', value: String(stats.enrolled_students ?? 0), sub: 'Admissions this year', delta: '', Icon: EnrollIcon, color: '#3b82f6', bg: '#eff6ff' },
+    { label: 'Fees Billed', value: inr(stats.billed), sub: 'Invoices raised', delta: '', Icon: AvgIcon, color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Collection Rate', value: pctText(stats.collection_rate), sub: 'Collected of billed', delta: '', Icon: TargetIcon, color: '#f59e0b', bg: '#fffbeb' },
+  ]
+
+  const exportReport = () => {
+    if (!report) return
+    const rows = [
+      ...report.monthly.map((m) => ({ section: 'Monthly', item: m.month, billed: m.billed, collected: m.collected })),
+      ...report.by_class.map((c) => ({ section: 'By class', item: c.name, collected: c.collected })),
+      ...report.by_source.map((x) => ({ section: 'By lead source', item: x.source, collected: x.collected, students: x.students })),
+      ...Object.entries(report.payment_status).map(([k, v]) => ({ section: 'Invoice status', item: k, invoices: v.count, amount: v.amount })),
+    ]
+    downloadCsv(`sales-report-${report.academic_year?.name || 'year'}.csv`, [
+      { key: 'section', label: 'Section' }, { key: 'item', label: 'Item' }, { key: 'billed', label: 'Billed (₹)' },
+      { key: 'collected', label: 'Collected (₹)' }, { key: 'students', label: 'Students' }, { key: 'invoices', label: 'Invoices' }, { key: 'amount', label: 'Amount (₹)' },
+    ], rows)
+  }
+
+  const status = report?.payment_status || {}
+  const invoiceCount = Object.values(status).reduce((t, v) => t + (v?.count || 0), 0)
+
   return (
     <div className="reports-page">
       <div className="reports-header">
         <div>
           <h1 className="page-title">Sales Reports</h1>
-          <p className="page-sub">Revenue analysis and enrollment metrics</p>
+          <p className="page-sub">Fee collection and enrolment for the academic year</p>
         </div>
         <div className="reports-header-right">
-          <select className="report-period-select"><option>This Academic Year</option><option>Last Year</option></select>
-          <button className="btn-primary"><DownloadIcon /> Export Report</button>
+          <select className="report-period-select" value={yearId || report?.academic_year?.id || ''} onChange={(e) => setYearId(e.target.value)}>
+            {(report?.academic_years || []).map((y) => (
+              <option key={y.id} value={y.id}>{y.name}{y.is_active ? ' (current)' : ''}</option>
+            ))}
+          </select>
+          <button className="btn-primary" onClick={exportReport} disabled={!report || report.empty}><DownloadIcon /> Export Report</button>
         </div>
       </div>
 
-      <div className="report-stats">
-        {statCards.map((c, i) => (
-          <div key={i} className="report-stat-card">
-            <div className="rsc-icon" style={{ background: c.bg, color: c.color }}><c.Icon /></div>
-            <div className="rsc-delta" style={{ color: c.color }}>{c.delta}</div>
-            <div className="rsc-label">{c.label}</div>
-            <div className="rsc-value">{c.value}</div>
-            <div className="rsc-sub">{c.sub}</div>
-          </div>
-        ))}
-      </div>
+      <ReportState loading={loading && !report} error={error} empty={report?.empty} emptyText="No academic year is set up yet. An admin can add one in School Setup." />
 
-      {/* Monthly Revenue vs Target */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Monthly Revenue vs Target</h3>
-          <p className="chart-sub">Revenue performance against monthly targets</p>
-        </div>
-        <ResponsiveContainer width="100%" height={280}>
-          <ComposedChart data={revenueData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/100000).toFixed(0)}L`} />
-            <Tooltip formatter={(v, n) => [`₹${(v/100000).toFixed(1)}L`, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
-            <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
-            <Bar dataKey="actual" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={60} name="Actual Revenue" />
-            <Line type="monotone" dataKey="target" stroke="#f59e0b" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4, fill: '#f59e0b' }} name="Target" />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Revenue by Grade + Lead Source */}
-      <div className="charts-row-2">
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Revenue by Grade</h3>
-            <p className="chart-sub">Enrollment and revenue breakdown</p>
-          </div>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={gradeData} layout="vertical" margin={{ top: 5, right: 20, left: 30, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v/1000}K`} />
-              <YAxis type="category" dataKey="grade" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={v => `₹${(v/100000).toFixed(1)}L`} contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
-              <Bar dataKey="revenue" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={18} name="Revenue" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <h3 className="chart-title">Revenue by Lead Source</h3>
-            <p className="chart-sub">Top performing acquisition channels</p>
-          </div>
-          <div className="source-list">
-            {sourceData.map((s, i) => (
-              <div key={i} className="source-row">
-                <div className="source-info">
-                  <span className="source-name">{s.source}</span>
-                  <div className="source-meta">
-                    <span className="source-rev">{s.revenue}</span>
-                    <span className="source-students">{s.students} students</span>
-                  </div>
-                </div>
-                <div className="source-bar-wrap">
-                  <div className="source-bar"><div className="source-bar-fill" style={{ width: `${s.pct}%` }} /></div>
-                  <span className="source-pct">{s.pct}%</span>
-                </div>
+      {report && !report.empty && (
+        <>
+          <div className="report-stats">
+            {statCards.map((c, i) => (
+              <div key={i} className="report-stat-card">
+                <div className="rsc-icon" style={{ background: c.bg, color: c.color }}><c.Icon /></div>
+                <div className="rsc-delta" style={{ color: c.color }}>{c.delta}</div>
+                <div className="rsc-label">{c.label}</div>
+                <div className="rsc-value">{c.value}</div>
+                <div className="rsc-sub">{c.sub}</div>
               </div>
             ))}
           </div>
-        </div>
-      </div>
 
-      {/* Quarterly Performance */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Quarterly Performance</h3>
-          <p className="chart-sub">New admissions vs renewals</p>
-        </div>
-        <ResponsiveContainer width="100%" height={250}>
-          <AreaChart data={quarterlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-            <defs>
-              <linearGradient id="renewGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.05}/>
-              </linearGradient>
-              <linearGradient id="newGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.05}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="q" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
-            <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
-            <Area type="monotone" dataKey="renewals" stroke="#8b5cf6" fill="url(#renewGrad)" strokeWidth={2} name="Renewals" />
-            <Area type="monotone" dataKey="new" stroke="#10b981" fill="url(#newGrad)" strokeWidth={2} name="New Admissions" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      {/* Payment Status Overview */}
-      <div className="chart-card">
-        <div className="chart-header">
-          <h3 className="chart-title">Payment Status Overview</h3>
-          <p className="chart-sub">Fee collection and payment tracking</p>
-        </div>
-        <div className="payment-status-grid">
-          {[
-            { label: 'Paid in Full',     count: 645, amount: '₹193.5L', pct: '72% of total', accent: '#10b981', bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)' },
-            { label: 'Installment Plan', count: 198, amount: '₹59.4L',  pct: '22% of total', accent: '#3b82f6', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)' },
-            { label: 'Pending Payment',  count: 45,  amount: '₹13.5L',  pct: '5% of total',  accent: '#f59e0b', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)' },
-            { label: 'Overdue',          count: 12,  amount: '₹3.6L',   pct: '1% of total',  accent: '#ef4444', bg: 'linear-gradient(135deg,#fff5f5,#fee2e2)' },
-          ].map((p, i) => (
-            <div key={i} className="payment-card" style={{ background: p.bg, borderLeft: `4px solid ${p.accent}` }}>
-              <div className="pc-label">{p.label}</div>
-              <div className="pc-count" style={{ color: p.accent }}>{p.count}</div>
-              <div className="pc-amount">{p.amount}</div>
-              <div className="pc-pct">{p.pct}</div>
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Monthly Billed vs Collected</h3>
+              <p className="chart-sub">Invoices raised and payments received each month</p>
             </div>
-          ))}
-        </div>
-      </div>
+            {report.monthly.some((m) => m.billed || m.collected) ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={report.monthly} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={inr} />
+                  <Tooltip formatter={(v, n) => [inr(v), n]} contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                  <Legend iconType="square" iconSize={10} wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="billed" fill="#c7d2fe" radius={[5, 5, 0, 0]} maxBarSize={40} name="Billed" />
+                  <Bar dataKey="collected" fill="#10b981" radius={[5, 5, 0, 0]} maxBarSize={40} name="Collected" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : <EmptyChart text="No invoices or payments in this academic year yet." />}
+          </div>
+
+          <div className="charts-row-2">
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">Collected by Class</h3>
+                <p className="chart-sub">Payments by the student's class this year</p>
+              </div>
+              {report.by_class.length ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={report.by_class} layout="vertical" margin={{ top: 5, right: 20, left: 30, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                    <XAxis type="number" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={inr} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                    <Tooltip formatter={(v) => inr(v)} contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                    <Bar dataKey="collected" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={18} name="Collected" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : <EmptyChart text="No payments yet." />}
+            </div>
+
+            <div className="chart-card">
+              <div className="chart-header">
+                <h3 className="chart-title">Collected by Lead Source</h3>
+                <p className="chart-sub">Where paying families first came from</p>
+              </div>
+              {report.by_source.length ? (
+                <div className="source-list">
+                  {report.by_source.map((s) => (
+                    <div key={s.source} className="source-row">
+                      <div className="source-info">
+                        <span className="source-name">{s.source}</span>
+                        <div className="source-meta">
+                          <span className="source-rev">{inr(s.collected)}</span>
+                          <span className="source-students">{s.students} student{s.students === 1 ? '' : 's'}</span>
+                        </div>
+                      </div>
+                      <div className="source-bar-wrap">
+                        <div className="source-bar"><div className="source-bar-fill" style={{ width: `${s.share || 0}%` }} /></div>
+                        <span className="source-pct">{pctText(s.share)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : <EmptyChart text="No payments yet." />}
+            </div>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Quarterly Performance</h3>
+              <p className="chart-sub">New admissions and fees collected per quarter</p>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <ComposedChart data={report.quarterly} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="a" allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="c" orientation="right" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} tickFormatter={inr} />
+                <Tooltip formatter={(v, n) => [n === 'Fees collected' ? inr(v) : v, n]} contentStyle={{ borderRadius: 8, border: '1px solid #e8edf2', fontSize: 12 }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12 }} />
+                <Bar yAxisId="a" dataKey="admissions" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={40} name="New admissions" />
+                <Bar yAxisId="c" dataKey="collected" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} name="Fees collected" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="chart-card">
+            <div className="chart-header">
+              <h3 className="chart-title">Invoice Status</h3>
+              <p className="chart-sub">{invoiceCount} invoice{invoiceCount === 1 ? '' : 's'} raised this academic year</p>
+            </div>
+            <div className="payment-status-grid">
+              {[
+                { key: 'paid', label: 'Paid in Full', accent: '#10b981', bg: 'linear-gradient(135deg,#f0fdf4,#dcfce7)', note: 'collected' },
+                { key: 'partial', label: 'Partly Paid', accent: '#3b82f6', bg: 'linear-gradient(135deg,#eff6ff,#dbeafe)', note: 'still due' },
+                { key: 'unpaid', label: 'Not Paid Yet', accent: '#f59e0b', bg: 'linear-gradient(135deg,#fffbeb,#fef3c7)', note: 'due' },
+                { key: 'overdue', label: 'Overdue', accent: '#ef4444', bg: 'linear-gradient(135deg,#fff5f5,#fee2e2)', note: 'overdue' },
+              ].map((p) => (
+                <div key={p.key} className="payment-card" style={{ background: p.bg, borderLeft: `4px solid ${p.accent}` }}>
+                  <div className="pc-label">{p.label}</div>
+                  <div className="pc-count" style={{ color: p.accent }}>{status[p.key]?.count ?? 0}</div>
+                  <div className="pc-amount">{inr(status[p.key]?.amount)}</div>
+                  <div className="pc-pct">{p.note}{invoiceCount ? ` · ${Math.round(((status[p.key]?.count || 0) / invoiceCount) * 100)}% of invoices` : ''}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

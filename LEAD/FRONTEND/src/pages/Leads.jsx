@@ -1,55 +1,35 @@
 import React, { useState, useEffect } from 'react'
-import { leadsAPI } from '../services/api' // adjust path if needed
+import { leadsAPI, reportsAPI } from '../services/api'
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 const API_URL = import.meta.env.VITE_API_URL;
+// Filter labels -> backend stage (the backend matches every status in the stage)
 const statusMapUIToBackend = {
   New: "new",
+  Contacted: "contacted",
   Qualified: "qualified",
-  Enrolled: "converted",
+  Admitted: "admitted",
   Lost: "lost",
 };
-
-const calculateLeadScore = (lead) => {
-  let score = 0;
-
-  if (lead.fatherPhone) score += 20;
-  if (lead.fatherEmail) score += 20;
-  if (lead.grade) score += 20;
-  if (lead.source) score += 20;
-  if (lead.notes) score += 20;
-
-  return score;
+const STAGE_LABEL = {
+  new: "New", pending: "New", contacted: "Contacted", interested: "Qualified", qualified: "Qualified",
+  converted: "Admitted", admitted: "Admitted", inactive: "Lost", lost: "Lost", "not-interested": "Lost",
 };
 
 const mapLead = (lead) => ({
   id: lead.id,
-
-  name: lead.name || "N/A",
-
-  parent: lead.counselor || "N/A",
-
-  phone: lead.phone || "N/A",
-
-  email: lead.email || "N/A",
-
-  grade: lead.grade || "N/A",
-
+  name: lead.name || "Unnamed lead",
+  phone: lead.phone || "—",
+  email: lead.email || "—",
+  grade: lead.grade || "—",
   source: lead.source || "Unknown",
-
-  status: lead.status || "new",
-
-  assignedTo: lead.counselor || "Unassigned",
-
-  score: calculateLeadScore(lead),
-
-  lastContact:
-    lead.lastContact
-      ? new Date(lead.lastContact).toLocaleDateString()
-      : "N/A",
+  status: STAGE_LABEL[lead.status] || "New",
+  counselor: lead.counselor || "Unassigned",
+  assignedTo: lead.assignedTo ? String(lead.assignedTo) : "",
+  lastContact: lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleDateString("en-IN") : "Not yet",
 });
 
 const mapStatus = (status) => {
@@ -69,16 +49,20 @@ const capitalize = (str) =>
 const formatDate = (date) =>
   new Date(date).toLocaleDateString();
 
-const statusMap = { New: 'badge-blue', Qualified: 'badge-green', Enrolled: 'badge-green', Lost: 'badge-red' }
-const scoreColor = s => s >= 80 ? '#10b981' : s >= 60 ? '#f59e0b' : '#ef4444'
+const statusMap = { New: 'badge-blue', Contacted: 'badge-gray', Qualified: 'badge-green', Admitted: 'badge-green', Lost: 'badge-red' }
 
 export default function Leads() {
   const [viewMode, setViewMode] = useState('grid')
   const [leadsData, setLeadsData] = useState([]);
   const [users, setUsers] = useState([]);
   const [communicationHistory, setCommunicationHistory] = useState({});
-  const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ status: 'All Statuses', source: 'All Sources', tag: 'All Tags', counselor: 'All Counselors', date: 'All Time' })
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '')
+  const [filters, setFilters] = useState({ status: 'All Statuses', source: 'All Sources', grade: 'All Grades', counselor: 'All Counselors', date: 'All Time' })
+  // Sources and classes for the filters, from the school's own data
+  const [lookups, setLookups] = useState({ sources: [], classes: [] })
+  useEffect(() => {
+    reportsAPI.lookups().then((res) => setLookups(res.data)).catch(() => {})
+  }, [])
   const [stats, setStats] = useState({
     total: 0,
     new: 0,
@@ -152,6 +136,10 @@ export default function Leads() {
 
       if (filters.source !== "All Sources") {
           apiFilters.source = filters.source;
+      }
+
+      if (filters.grade !== "All Grades") {
+          apiFilters.grade = filters.grade;
       }
 
       if (filters.counselor !== "All Counselors") {
@@ -232,7 +220,7 @@ const handleAssignLead = async (leadId, userId) => {
   try {
     const token = localStorage.getItem("authToken");
 
-    await fetch(`${API_URL}/leads/${leadId}/assign`, {
+    const res = await fetch(`${API_URL}/leads/${leadId}/assign`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -242,22 +230,26 @@ const handleAssignLead = async (leadId, userId) => {
         assignedTo: Number(userId)
       })
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.message || "Could not assign the lead");
+    }
 
     setLeadsData(prev =>
       prev.map(lead =>
         lead.id === leadId
           ? {
               ...lead,
-              assignedTo: Number(userId),
+              assignedTo: String(userId),
               counselor:
-                users.find(u => u.id === Number(userId))?.name ||
+                users.find(u => String(u.id) === String(userId))?.name ||
                 lead.counselor
             }
           : lead
       )
     );
   } catch (err) {
-    console.error(err);
+    alert(err.message || "Could not assign the lead");
   }
 };
 
@@ -265,18 +257,24 @@ const exportToExcel = async () => {
 
     try {
 
-        const res = await leadsAPI.getAll({
-            limit: 100000
-        });
+        // The list API returns at most 100 per page: fetch every page
+        const all = [];
+        for (let p = 1, pages = 1; p <= pages; p++) {
+            const res = await leadsAPI.getAll({ limit: 100, page: p });
+            all.push(...(res.data || []));
+            pages = res.pagination?.totalPages || 1;
+        }
 
-        const data = res.data.map(lead => ({
+        const data = all.map(lead => ({
             Name: lead.name,
             Phone: lead.phone,
             Email: lead.email,
             Grade: lead.grade,
             Source: lead.source,
             Status: lead.status,
-            Counselor: lead.counselor
+            Counselor: lead.counselor,
+            "Last contacted": lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleDateString("en-IN") : "",
+            Created: lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("en-IN") : ""
         }));
 
         const worksheet =
@@ -333,7 +331,6 @@ return (
         {statCards.map((c, i) => (
           <div key={i} className="lead-stat-card">
             <div className="lsc-icon" style={{ background: c.bg, color: c.color }}><c.Icon /></div>
-            <div className={`lsc-delta ${c.pos ? 'pos' : 'neg'}`}>{c.delta}</div>
             <div className="lsc-label">{c.label}</div>
             <div className="lsc-value" style={{ color: c.color }}>{c.value}</div>
           </div>
@@ -348,8 +345,9 @@ return (
         </div>
         <div className="filter-controls">
           {[
-            { label: 'Status', key: 'status', opts: ['All Statuses', 'New', 'Qualified', 'Enrolled', 'Lost'] },            { label: 'Source', key: 'source', opts: ['All Sources', 'Website', 'Referral', 'Walk-in', 'Ads'] },
-            { label: 'Tag', key: 'tag', opts: ['All Tags'] },
+            { label: 'Status', key: 'status', opts: ['All Statuses', ...Object.keys(statusMapUIToBackend)] },
+            { label: 'Source', key: 'source', opts: ['All Sources', ...(lookups.sources || [])] },
+            { label: 'Grade', key: 'grade', opts: ['All Grades', ...(lookups.classes || [])] },
             { label: 'Counselor', key: 'counselor', opts: ['All Counselors', ...users.map(user => user.name)] },
             { label: 'Date Range', key: 'date', opts: ['All Time', 'This Week', 'This Month'] },
           ].map(f => (
@@ -376,11 +374,8 @@ return (
           {filtered.map(lead=> ( <div id={`lead-${lead.id}`} key={lead.id} className="lead-card-full" onClick={()=>navigate(`/leads/${lead.id}`)} style={{cursor:"pointer",border:lead.id===Number(selectedLeadId)?"3px solid #10b981":""}}>
               <div className="lcf-header">
                 <span className="lcf-name">{lead.name}</span>
-                <span className="lcf-score" style={{ color: scoreColor(lead.score) }}>{lead.score}</span>
-                <button className="lcf-more">⋮</button>
               </div>
               <div className="lcf-grade"><GradeIcon /> {lead.grade}</div>
-              <div className="lcf-parent-label">Parent: {lead.parent}</div>
               <div className="lcf-divider" />
               <div className="lcf-contact">
                 <div className="lcf-row"><PhoneIconSm />{lead.phone}</div>
@@ -439,8 +434,8 @@ return (
         <div className="leads-table-wrap">
           <table className="leads-table">
             <thead><tr>
-              <th>Student / Parent</th><th>Grade</th><th>Contact</th>
-              <th>Source</th><th>Status</th><th>Counselor</th><th>Score</th><th>Last Contact</th><th></th>
+              <th>Student</th><th>Grade</th><th>Contact</th>
+              <th>Source</th><th>Status</th><th>Counselor</th><th>Last Contact</th>
             </tr></thead>
             <tbody>
               {filtered.map(lead => (
@@ -448,17 +443,15 @@ return (
                   <td>
                     <div className="lead-name-cell">
                       <div className="lead-avatar">{(lead.name || "L")[0]}</div>
-                      <div><div className="lead-table-name">{lead.name}</div><div className="lead-table-parent">{lead.parent}</div></div>
+                      <div><div className="lead-table-name">{lead.name}</div></div>
                     </div>
                   </td>
                   <td><span className="badge badge-gray">{lead.grade}</span></td>
                   <td><div style={{ fontSize: 12 }}>{lead.phone}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.email}</div></td>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><span className="src-dot" style={{ background: lead.sourceColor }} />{lead.source}</div></td>
                   <td><span className={`badge ${statusMap[lead.status] || 'badge-gray'}`}>{lead.status}</span></td>
-                  <td><select value={lead.assignedTo||""} onChange={e=>handleAssignLead(lead.id,e.target.value)} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}>{users.map(user=><option key={user.id} value={user.id}>{user.name}</option>)}</select></td>
-                  <td><span style={{ fontWeight: 700, fontSize: 13, color: scoreColor(lead.score), fontFamily: 'var(--font-display)' }}>{lead.score}</span></td>
+                  <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} onChange={e=>handleAssignLead(lead.id,e.target.value)} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{lead.lastContact}</td>
-                  <td><button className="lead-action-btn">⋮</button></td>
                 </tr>
               ))}
             </tbody>

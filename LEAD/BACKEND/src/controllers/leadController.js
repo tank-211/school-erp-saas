@@ -18,8 +18,6 @@ import { serializeBigInt } from "../utils/bigintSerializer.js";
 
 export const createLead = async (req, res) => {
   try {
-    console.log("✅ CONTROLLER HIT, BODY:", req.body);
-
     const { id, schoolId } = req.user;
 
     if (!id) {
@@ -31,7 +29,9 @@ export const createLead = async (req, res) => {
       {
         ...req.body,
         schoolId,
-        assignedTo: id
+        // The counselor chosen in the form; the service checks they belong
+        // to this school, and falls back to the creator when none is chosen
+        assignedTo: req.body.assignedTo,
       },
       id
     );
@@ -50,7 +50,8 @@ export const getLeads = async (req, res) => {
   try {
     const filters = {
       page: parseInt(req.query.page) || 1,
-      limit: parseInt(req.query.limit) || 6,
+      limit: Math.min(parseInt(req.query.limit) || 6, 100),
+      grade: req.query.grade,
       status: req.query.status,
       source: req.query.source,
       counselor: req.query.counselor,
@@ -61,15 +62,28 @@ export const getLeads = async (req, res) => {
 
     const result = await getAllLeadsService(filters, req.user.schoolId);
 
+    // Show counselor names, not user ids
+    const ownerIds = [...new Set(result.leads.map((l) => l.assigned_to).filter((v) => /^\d+$/.test(String(v ?? ""))))];
+    const owners = ownerIds.length
+      ? await prisma.user.findMany({
+          where: { school_id: BigInt(req.user.schoolId), id: { in: ownerIds.map((v) => BigInt(v)) } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const ownerName = new Map(owners.map((u) => [String(u.id), u.name]));
+
     const transformedLeads = result.leads.map((lead) => ({
       id: lead.id,
       name: `${lead.first_name || ""} ${lead.last_name || ""}`.trim(),
       phone: lead.phone || "",
+      email: lead.email || "",
       status: lead.follow_up_status,
       source: lead.source,
       grade: lead.desired_class || "",
       assignedTo: lead.assigned_to,
-      counselor: lead.assigned_to || "Unassigned",
+      counselor: ownerName.get(String(lead.assigned_to)) || "Unassigned",
+      lastContactedAt: lead.last_contacted_at,
+      createdAt: lead.created_at,
     }));
 
     return res.status(200).json(

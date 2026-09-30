@@ -5,7 +5,6 @@ import { useSettings } from "../context/SettingsContext";
 
 export default function Sidebar({ collapsed, onToggle }) {
   const { settings } = useSettings();
-  console.log("SIDEBAR SETTINGS:", settings);
   const location = useLocation()
   const reportsActive = location.pathname.startsWith('/reports')
   const [reportsExpanded, setReportsExpanded] = useState(reportsActive)
@@ -40,9 +39,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       {/* Campus Selector */}
       {!collapsed && (
         <div className="campus-selector">
-          <select>
-            <option>{settings?.campusName||"Main Campus"}</option>
-          </select>
+          <div style={{ fontWeight: 600 }}>{settings?.campus || settings?.schoolName || 'Your school'}</div>
           <span className="campus-location">{settings?.timezone || 'Asia/Kolkata'}</span>
         </div>
       )}
@@ -148,7 +145,6 @@ export default function Sidebar({ collapsed, onToggle }) {
             </div>
           )}
         </div>
-        {!collapsed && <button className="switch-role-btn">Switch Role</button>}
       </div>
     </aside>
   )
