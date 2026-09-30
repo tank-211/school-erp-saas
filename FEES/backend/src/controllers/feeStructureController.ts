@@ -26,15 +26,15 @@ export const createFeeStructure = asyncHandler(
       amount,
       dueDate,
       description,
-    } = req.body;
+    } = req.body || {};
 
     const structure = await feeStructureService.createFeeStructure({
       schoolId: req.user!.schoolId,
       academicYearId,
       classId,
       feeType,
-      amount: Number(amount),
-      dueDate: dueDate ? new Date(dueDate) : undefined,
+      amount,
+      dueDate,
       description,
     });
 
@@ -55,19 +55,11 @@ export const updateFeeStructure = asyncHandler(
       id,
       req.user!.schoolId,
       {
-        feeType: req.body.feeType,
-        amount:
-          req.body.amount !== undefined
-            ? Number(req.body.amount)
-            : undefined,
-        dueDate:
-          req.body.dueDate !== undefined
-            ? req.body.dueDate
-              ? new Date(req.body.dueDate)
-              : null
-            : undefined,
-        description: req.body.description,
-        isActive: req.body.isActive,
+        feeType: req.body?.feeType,
+        amount: req.body?.amount,
+        dueDate: req.body?.dueDate,
+        description: req.body?.description,
+        isActive: req.body?.isActive,
       }
     );
 
