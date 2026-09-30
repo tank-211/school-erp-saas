@@ -3,6 +3,7 @@ import * as communicationQueries from '../db/queries/communicationQueries.js';
 import { sendMailWithGmail } from '../config/mailer.js';
 
 let schedulerTask = null;
+const MAX_LATE_MS = 24 * 60 * 60 * 1000;
 let isRunning = false;
 
 const parseRecipients = (recipients) =>
@@ -32,6 +33,13 @@ const processPendingScheduledEmails = async () => {
 
     for (const scheduledEmail of dueEmails) {
       const recipientList = parseRecipients(scheduledEmail.recipients);
+
+      // Not sent more than a day late (e.g. emails that piled up while the job
+      // was not running): marked expired so nobody gets a stale message
+      if (new Date(scheduledEmail.scheduled_at).getTime() < Date.now() - MAX_LATE_MS) {
+        await communicationQueries.updateScheduledEmailStatus(scheduledEmail.id, 'expired');
+        continue;
+      }
 
       try {
         if (!scheduledEmail.recipient_id || !scheduledEmail.recipient_type) {
@@ -83,3 +91,6 @@ export const startScheduledEmailJob = () => {
 
   return schedulerTask;
 };
+
+// For tests
+export { processPendingScheduledEmails };
