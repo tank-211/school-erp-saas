@@ -6,10 +6,15 @@ const login = async (req, res) => {
   try {
     console.log("=== LOGIN START ===");
 
-    const { email, password } = req.body;
+    // Tolerate stray spaces and capital letters (autofill, phone keyboards)
+    const email = String(req.body?.email || '').trim();
+    const password = String(req.body?.password || '');
+    if (!email || !password) {
+      return res.status(400).json({ error: "Enter your email and password." });
+    }
 
-    const staff = await prisma.service_provider_staff.findUnique({
-      where: { email },
+    const staff = await prisma.service_provider_staff.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
       select: {
         id: true,
         full_name: true,
