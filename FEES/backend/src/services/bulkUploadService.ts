@@ -99,7 +99,11 @@ export class BulkUploadService {
       } catch (error: any) {
         errors.push({
           row,
-          error: error.message,
+          // The same fee type can exist only once per class and academic year
+          error:
+            error?.code === 'P2002'
+              ? `${row.feeType || row.fee_type || 'General Fee'} already exists for ${row.className || row.class_name || 'this class'} in this academic year. Use a different fee type name, or change the existing fee.`
+              : error.message,
         });
       }
     }
