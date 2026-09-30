@@ -47,12 +47,12 @@ function SPDashboard() {
     <section>
       <h1 className="sp-title">Dashboard</h1>
       <p className="sp-subtitle">
-        Real-time platform overview for school operations.
+        Platform overview. Dates follow the India calendar, as the school apps do.
       </p>
 
       {error && <div className="sp-error">{error}</div>}
 
-      <div className="sp-grid sp-grid-4" style={{ marginTop: "16px" }}>
+      <div className="sp-grid sp-grid-3" style={{ marginTop: "16px" }}>
         <article className="sp-card">
           <p className="sp-kpi-label">Total Schools</p>
           <p className="sp-kpi-value">{stats.total_schools || 0}</p>
@@ -60,6 +60,12 @@ function SPDashboard() {
         <article className="sp-card">
           <p className="sp-kpi-label">Active Schools</p>
           <p className="sp-kpi-value">{stats.active_schools || 0}</p>
+          <p className="sp-subtle-copy">Can sign in today</p>
+        </article>
+        <article className="sp-card">
+          <p className="sp-kpi-label">Expired</p>
+          <p className="sp-kpi-value">{stats.expired_schools || 0}</p>
+          <p className="sp-subtle-copy">Blocked until renewed</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Suspended</p>
@@ -109,10 +115,15 @@ function SPDashboard() {
           <div className="sp-dashboard-list">
             {schoolUserCounts.slice(0, 6).map((item) => (
               <div key={item.school_id} className="sp-dashboard-list-item">
-                <span>School #{item.school_id}</span>
+                <span>{item.school_name || `School #${item.school_id}`}</span>
                 <strong>{item.total_users}</strong>
               </div>
             ))}
+            {schoolUserCounts.length > 6 && (
+              <Link className="sp-subtle-copy" to="/sp-control-portal/users">
+                {schoolUserCounts.length - 6} more schools in User Management
+              </Link>
+            )}
             {!schoolUserCounts.length && (
               <p className="sp-empty">No user counts available yet.</p>
             )}

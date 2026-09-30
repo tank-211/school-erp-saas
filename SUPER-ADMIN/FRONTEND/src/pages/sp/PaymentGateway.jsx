@@ -171,19 +171,25 @@ function PaymentGateway() {
           <div>
             <h2>Razorpay</h2>
             <p>
-              Platform-level Razorpay configuration for the multi-school
-              payment architecture.
+              Platform Razorpay keys. "Test Connection" checks them with
+              Razorpay directly.
             </p>
           </div>
 
+          {/* "Connected" only after Razorpay accepted the keys in a test */}
           <span
             className={`sp-status ${
-              isConfigured
+              gateway?.status === "connected"
                 ? "sp-status-active"
                 : "sp-status-inactive"
             }`}
           >
-            {isConfigured ? "Configured" : "Not Configured"}
+            {{
+              connected: `Connected${gateway?.connected_at ? ` · ${new Date(gateway.connected_at).toLocaleDateString("en-IN")}` : ""}`,
+              configured: "Saved · not tested",
+              invalid_credentials: "Keys rejected by Razorpay",
+              disabled: "Disabled",
+            }[gateway?.status] || "Not configured"}
           </span>
         </div>
 
@@ -216,7 +222,7 @@ function PaymentGateway() {
                 type="text"
                 value={form.client_id}
                 onChange={handleChange}
-                placeholder="Enter Razorpay platform client ID"
+                placeholder="rzp_test_... or rzp_live_..."
               />
             </div>
 
@@ -269,32 +275,15 @@ function PaymentGateway() {
       </div>
 
       <div className="sp-card">
-        <h2>Multi-School Payment Architecture</h2>
+        <h2>Where these keys are used</h2>
 
         <p>
-          Each school will eventually have its own Razorpay payment
-          connection. The platform configuration above is separate
-          from individual school payment accounts.
+          Student fee payments in the Fees app currently use the Razorpay
+          keys set on the Fees server (RAZORPAY_KEY_ID and
+          RAZORPAY_KEY_SECRET) and the checkout key in the Fees website's
+          settings, not the keys saved here. Switching the Fees app to these
+          keys changes live checkout, so it is a separate, planned step.
         </p>
-
-        <div className="sp-info-list">
-          <div>
-            <strong>Platform</strong>
-            <span>Super Admin payment configuration</span>
-          </div>
-
-          <div>
-            <strong>School</strong>
-            <span>Individual school's Razorpay connection</span>
-          </div>
-
-          <div>
-            <strong>FEES</strong>
-            <span>
-              Handles student invoices and payment processing
-            </span>
-          </div>
-        </div>
       </div>
     </div>
   );

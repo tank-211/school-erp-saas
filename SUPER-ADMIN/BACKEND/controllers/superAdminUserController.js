@@ -77,6 +77,19 @@ const createUser = async (req, res) => {
       });
     }
 
+    // Same rules as school onboarding: the school apps sign in by email alone
+    // and LEAD rejects passwords shorter than 8 characters
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: "Password must be at least 8 characters." });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return res.status(400).json({ error: "Enter a valid email address." });
+    }
+    if (!/^\d+$/.test(String(school_id))) {
+      return res.status(400).json({ error: "Invalid school." });
+    }
+
     const schoolId = BigInt(school_id);
 
     // Verify school exists
@@ -104,10 +117,10 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Check email
+    // Check email (stored lowercase, so compare lowercase)
     const existingUser = await prisma.app_user.findUnique({
       where: {
-        email,
+        email: cleanEmail,
       },
       select: {
         id: true,
@@ -126,7 +139,7 @@ const createUser = async (req, res) => {
       data: {
         school_id: schoolId,
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password_hash: passwordHash,
         role,
         status,
@@ -375,9 +388,9 @@ const resetUserPassword = async (req, res) => {
       });
     }
 
-    if (String(password).length < 6) {
+    if (String(password).length < 8) {
       return res.status(400).json({
-        error: "Password must be at least 6 characters.",
+        error: "Password must be at least 8 characters.",
       });
     }
 

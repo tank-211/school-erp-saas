@@ -19,8 +19,10 @@ superAdminApi.interceptors.request.use((config) => {
   return config
 })
 
+// Most endpoints answer { error }, the payment gateway ones { message }
 const getErrorMessage = (error, fallback) => {
-  return error?.response?.data?.error || fallback
+  const data = error?.response?.data
+  return data?.error || data?.message || fallback
 }
 
 const createServiceError = (error, fallback) => {
@@ -128,12 +130,30 @@ export const superAdminService = {
     }
   },
 
+  async updateStaff(id, data) {
+    try {
+      const response = await superAdminApi.patch(`/staff/${id}`, data)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to update staff member.')
+    }
+  },
+
   async createStaff(data) {
     try {
       const response = await superAdminApi.post('/staff', data)
       return response.data
     } catch (error) {
       throw createServiceError(error, 'Failed to create staff member.')
+    }
+  },
+
+  async getSchool(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}`)
+      return response.data.school || null
+    } catch (error) {
+      throw createServiceError(error, 'Failed to load school.')
     }
   },
 

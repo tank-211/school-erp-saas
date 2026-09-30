@@ -198,6 +198,10 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.sp-grid-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .sp-card {
   background: rgba(30, 41, 59, 0.92);
   border: 1px solid rgba(71, 85, 105, 0.65);
@@ -328,7 +332,8 @@
     position: static;
   }
 
-  .sp-grid-4 {
+  .sp-grid-4,
+  .sp-grid-3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -338,7 +343,8 @@
     padding: 18px;
   }
 
-  .sp-grid-4 {
+  .sp-grid-4,
+  .sp-grid-3 {
     grid-template-columns: 1fr;
   }
 }

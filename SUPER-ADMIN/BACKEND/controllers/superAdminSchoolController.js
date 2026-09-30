@@ -44,6 +44,22 @@ const isValidDateString = (value) =>
   /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) && !Number.isNaN(new Date(value).getTime());
 
 // GET /api/super-admin/schools — Fetch all schools
+// Access state as the school apps see it: suspended, expired (after the India
+// date of expiry_date), expiring within 30 days, or active.
+const withAccessState = (school, today = indiaToday()) => {
+  const expiry = school.expiry_date ? new Date(school.expiry_date) : null;
+  const status = String(school.status || "").toLowerCase();
+  const suspended = school.is_active === false || status === "suspended" || status === "inactive";
+  const expired = Boolean(expiry && expiry < today);
+  const soon = Boolean(expiry && !expired && expiry <= new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000));
+  return {
+    ...school,
+    is_expired: expired,
+    is_expiring_soon: soon,
+    access_state: suspended ? "suspended" : expired ? "expired" : soon ? "expiring_soon" : "active",
+  };
+};
+
 const getAllSchools = async (req, res) => {
   try {
     const schools = await prisma.school.findMany({
@@ -52,24 +68,11 @@ const getAllSchools = async (req, res) => {
       },
     });
 
-    const today = new Date();
-
-    const mappedSchools = schools.map((school) => {
-      const expiry = school.expiry_date;
-
-      return {
-        ...school,
-        is_expired: expiry ? expiry < today : false,
-        is_expiring_soon: expiry
-          ? expiry >= today &&
-            expiry <= new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)
-          : false,
-      };
-    });
+    const today = indiaToday();
 
     return res.json(
       serializeBigInt({
-        schools: mappedSchools,
+        schools: schools.map((school) => withAccessState(school, today)),
       })
     );
   } catch (err) {
@@ -78,120 +81,106 @@ const getAllSchools = async (req, res) => {
   }
 };
 
-// GET /api/super-admin/stats — Dashboard summary metrics
-const getStats = async (req, res) => {
-  console.log(">>> getStats() called");
+// GET /api/super-admin/schools/:id — one school with its access state and user count
+const getSchoolById = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const thirtyDaysLater = new Date(today);
-    thirtyDaysLater.setDate(thirtyDaysLater.getDate() + 30);
-
-    console.log("1");
-    const totalSchools = await prisma.school.count();
-
-    console.log("2");
-    const activeSchools = await prisma.school.count({
-      where: {
-        is_active: true,
-      },
-    });
-
-    console.log("3");
-    const suspendedSchools = await prisma.school.count({
-      where: {
-        status: "suspended",
-      },
-    });
-
-    console.log("4");
-    const expiredSchools = await prisma.school.count({
-      where: {
-        expiry_date: {
-          lt: today,
-        },
-      },
-    });
-
-    console.log("5");
-    const expiringSoonSchools = await prisma.school.count({
-      where: {
-        expiry_date: {
-          gte: today,
-          lte: thirtyDaysLater,
-        },
-      },
-    });
-
-    console.log("6");
-    const totalActiveStudents = await prisma.student.count({
-      where: {
-        status: "active",
-      },
-    });
-
-    console.log("7");
-    const expiringSchools = await prisma.school.findMany({
-      where: {
-        expiry_date: {
-          gte: today,
-          lte: thirtyDaysLater,
-        },
-      },
-      select: {
-        id: true,
-        name: true,
-        plan_type: true,
-        is_active: true,
-        expiry_date: true,
-      },
-      orderBy: {
-        expiry_date: "asc",
-      },
-    });
-
-    console.log("8");
-    const schoolUsers = await prisma.app_user.groupBy({
-      by: ["school_id"],
-      _count: {
-        id: true,
-      },
-      orderBy: {
-        school_id: "asc",
-      },
-    });
-
-    console.log("9");
-
-      return res.json(
-    serializeBigInt({
-      stats: {
-        total_schools: totalSchools,
-        active_schools: activeSchools,
-        suspended_schools: suspendedSchools,
-        expired_schools: expiredSchools,
-        expiring_soon_schools: expiringSoonSchools,
-        total_active_students: totalActiveStudents,
-      },
-
-      expiring_schools: expiringSchools,
-
-      school_user_counts: schoolUsers.map((item) => ({
-        school_id: item.school_id,
-        total_users: item._count.id,
-      })),
-    })
-  );
+    if (!/^\d+$/.test(String(req.params.id || ""))) {
+      return res.status(400).json({ error: "Invalid school id." });
+    }
+    const id = BigInt(req.params.id);
+    const [school, users, students] = await Promise.all([
+      prisma.school.findUnique({ where: { id } }),
+      prisma.app_user.count({ where: { school_id: id } }),
+      prisma.student.count({ where: { school_id: id, status: "active" } }),
+    ]);
+    if (!school) {
+      return res.status(404).json({ error: "School not found." });
+    }
+    return res.json(serializeBigInt({ school: { ...withAccessState(school), user_count: users, active_students: students } }));
   } catch (err) {
-    console.error("========== GET STATS ERROR ==========");
-    console.error(err);
-    console.error("Message:", err.message);
-    console.error("Stack:", err.stack);
+    console.error("Get school error:", err.message);
+    return res.status(500).json({ error: "Failed to fetch school." });
+  }
+};
 
-    return res.status(500).json({
-      error: err.message,
-    });
+// GET /api/super-admin/stats — Dashboard summary metrics
+// India calendar date as midnight UTC, matching how DATE columns come back and
+// the rule the school apps use to block expired schools (utils/schoolAccess).
+const indiaToday = () => {
+  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+  return new Date(`${ymd}T00:00:00.000Z`);
+};
+
+const getStats = async (req, res) => {
+  try {
+    const today = indiaToday();
+    const thirtyDaysLater = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    // Null-safe: in SQL "is_active <> false" and "status NOT IN (...)" drop NULL rows
+    const notSuspended = {
+      AND: [
+        { OR: [{ is_active: true }, { is_active: null }] },
+        { OR: [{ status: null }, { status: { notIn: ["suspended", "inactive"] } }] },
+      ],
+    };
+    const notExpired = { OR: [{ expiry_date: null }, { expiry_date: { gte: today } }] };
+
+    const [
+      totalSchools,
+      activeSchools,
+      suspendedSchools,
+      expiredSchools,
+      expiringSoonSchools,
+      totalActiveStudents,
+      expiringSchools,
+      schoolUsers,
+      schoolNames,
+    ] = await Promise.all([
+      prisma.school.count(),
+      // Usable today: not suspended and not past its expiry date
+      prisma.school.count({ where: { AND: [notSuspended, notExpired] } }),
+      prisma.school.count({ where: { OR: [{ is_active: false }, { status: { in: ["suspended", "inactive"] } }] } }),
+      // Expired but not suspended (those are counted above)
+      prisma.school.count({ where: { AND: [notSuspended, { expiry_date: { lt: today } }] } }),
+      prisma.school.count({ where: { AND: [notSuspended, { expiry_date: { gte: today, lte: thirtyDaysLater } }] } }),
+      prisma.student.count({ where: { status: "active" } }),
+      prisma.school.findMany({
+        where: { AND: [notSuspended, { expiry_date: { gte: today, lte: thirtyDaysLater } }] },
+        select: { id: true, name: true, plan_type: true, is_active: true, expiry_date: true },
+        orderBy: { expiry_date: "asc" },
+      }),
+      prisma.app_user.groupBy({
+        by: ["school_id"],
+        _count: { id: true },
+      }),
+      prisma.school.findMany({ select: { id: true, name: true } }),
+    ]);
+
+    const nameOf = new Map(schoolNames.map((s) => [String(s.id), s.name]));
+
+    return res.json(
+      serializeBigInt({
+        stats: {
+          total_schools: totalSchools,
+          active_schools: activeSchools,
+          suspended_schools: suspendedSchools,
+          expired_schools: expiredSchools,
+          expiring_soon_schools: expiringSoonSchools,
+          total_active_students: totalActiveStudents,
+        },
+        expiring_schools: expiringSchools,
+        // Largest schools first, with their names
+        school_user_counts: schoolUsers
+          .map((item) => ({
+            school_id: item.school_id,
+            school_name: nameOf.get(String(item.school_id)) || null,
+            total_users: item._count.id,
+          }))
+          .sort((a, b) => b.total_users - a.total_users),
+      })
+    );
+  } catch (err) {
+    console.error("Get stats error:", err.message);
+    return res.status(500).json({ error: "Failed to load platform statistics." });
   }
 };
 
@@ -454,4 +443,4 @@ const updateSchool = async (req, res) => {
   }
 };
 
-module.exports = { getAllSchools, getStats, createSchool, updateSchool, defaultAcademicYear, trialEndDate };
+module.exports = { getAllSchools, getSchoolById, getStats, createSchool, updateSchool, defaultAcademicYear, trialEndDate };
