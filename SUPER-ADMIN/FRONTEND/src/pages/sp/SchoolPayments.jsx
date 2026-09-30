@@ -96,10 +96,10 @@ function SchoolPayments() {
             <p className="sp-subtle-copy">Last tested {new Date(gateway.last_tested_at).toLocaleString("en-IN")}</p>
           )}
 
-          <form className="sp-form" onSubmit={save} style={{ marginTop: 12 }}>
+          <form className="sp-form" onSubmit={save} autoComplete="off" style={{ marginTop: 12 }}>
             <label className="sp-label" htmlFor="key_id">
               Key ID
-              <input id="key_id" className="sp-input" value={form.key_id} onChange={set("key_id")} placeholder="rzp_live_... or rzp_test_..." required />
+              <input id="key_id" className="sp-input" autoComplete="off" spellCheck={false} value={form.key_id} onChange={set("key_id")} placeholder="rzp_live_... or rzp_test_..." required />
             </label>
             <label className="sp-label" htmlFor="key_secret">
               Key Secret
@@ -107,7 +107,7 @@ function SchoolPayments() {
                 id="key_secret"
                 className="sp-input"
                 type="password"
-                autoComplete="off"
+                autoComplete="new-password"
                 value={form.key_secret}
                 onChange={set("key_secret")}
                 placeholder={gateway?.has_key_secret ? "Saved · enter only to replace" : "From the school's Razorpay dashboard"}
@@ -119,7 +119,7 @@ function SchoolPayments() {
                 id="webhook_secret"
                 className="sp-input"
                 type="password"
-                autoComplete="off"
+                autoComplete="new-password"
                 value={form.webhook_secret}
                 onChange={set("webhook_secret")}
                 placeholder={gateway?.has_webhook_secret ? "Saved · enter only to replace" : "The secret you set when adding the webhook"}
