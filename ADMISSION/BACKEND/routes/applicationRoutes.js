@@ -110,6 +110,7 @@ router.patch(
 );
 
 router.patch('/:id/approve', applicationController.approveApplication);
+router.patch('/:id/reject', applicationController.rejectApplication);
 
 /**
  * DELETE /api/applications/:id

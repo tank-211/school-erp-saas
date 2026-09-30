@@ -5,7 +5,7 @@
  */
 
 import express from 'express';
-import { login, signup, me, superAdminLogin } from '../controllers/authController.js';
+import { login, signup, me, superAdminLogin, changePassword } from '../controllers/authController.js';
 import { authMiddleware, isAdmin, requireSchool } from '../middleware/auth.js';
 import { createLoginLimiter } from '../utils/loginLimiter.js';
 const router = express.Router();
@@ -37,5 +37,8 @@ router.post('/signup', authMiddleware, requireSchool, isAdmin, signup);
  * Requires JWT token
  */
 router.get('/me', authMiddleware, me);
+
+// Signed-in user changes their own password (current password required)
+router.post('/change-password', authMiddleware, requireSchool, changePassword);
 
 export default router;

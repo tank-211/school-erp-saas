@@ -5,6 +5,8 @@ import { fetchEmailLogs, fetchEmailStats } from "../services/emailService.js";
 import {
   fetchAllCommunicationRecipients,
   fetchCampaigns,
+  createCampaign,
+  sendCampaignNow,
   sendComposeEmail,
   fetchSmsLogs,
   fetchWhatsappLogs,
@@ -38,6 +40,7 @@ export function Communication() {
   const [tab, setTab] = useState("email");
   const [compose, setCompose] = useState(false);
   const [campaign, setCampaign] = useState(false);
+  const [campaignNotice, setCampaignNotice] = useState("");
 
   const [emailLogs, setEmailLogs] = useState([]);
   const [emailStats, setEmailStats] = useState({
@@ -159,20 +162,15 @@ export function Communication() {
 
     try {
       const config = getAxiosConfig();
-      const [smsRes, waRes, emailStatsRes] = await Promise.all([
-        axios.get("/api/sms/logs", config),
-        axios.get("/api/whatsapp/logs", config),
+      const [channelRes, emailStatsRes] = await Promise.all([
+        axios.get("/api/communication/channel-stats", config),
         axios.get("/api/email/stats", config),
       ]);
 
-      const smsList = Array.isArray(smsRes?.data?.data) ? smsRes.data.data : [];
-      const whatsappList = Array.isArray(waRes?.data?.data)
-        ? waRes.data.data
-        : [];
-
+      // Only messages that actually went out are counted
       setStats({
-        smsCount: smsList.length,
-        whatsappCount: whatsappList.length,
+        smsCount: Number(channelRes?.data?.data?.sms || 0),
+        whatsappCount: Number(channelRes?.data?.data?.whatsapp || 0),
         emailCount: Number(emailStatsRes?.data?.data?.total_emails || 0),
       });
     } catch (err) {
@@ -485,6 +483,15 @@ export function Communication() {
       </div>
 
       {/* Tab content */}
+      {campaignNotice && (
+        <div
+          style={{ background: "#eef2ff", border: "1px solid #c7d2fe", color: "#3730a3", borderRadius: 10, padding: "10px 14px", marginBottom: 16, fontSize: 14, display: "flex", justifyContent: "space-between", gap: 12 }}
+        >
+          <span>{campaignNotice}</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setCampaignNotice("")}>Dismiss</button>
+        </div>
+      )}
+
       {tab !== "campaigns" ? (
         <div className="flex gap-5" style={{ flexWrap: "wrap" }}>
           {/* Messages */}
@@ -656,7 +663,7 @@ export function Communication() {
             <div className="card-title"></div>
             <button
               className="btn btn-primary"
-              onClick={() => setCampaign(true)}
+              onClick={() => setCampaign({})}
             >
               <Plus size={15} /> Create Campaign
             </button>
@@ -667,18 +674,15 @@ export function Communication() {
                 <tr>
                   <th>Campaign Name</th>
                   <th>Type</th>
-                  <th>Audience</th>
-                  <th>Sent</th>
-                  <th>Opened</th>
-                  <th>Clicked</th>
                   <th>Status</th>
-                  <th>Date</th>
+                  <th>Created</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {campaignData.length === 0 && (
                   <tr>
-                    <td colSpan="8" style={{ textAlign: "center" }}>
+                    <td colSpan="5" style={{ textAlign: "center" }}>
                       <p>No Campaigns data found</p>
                     </td>
                   </tr>
@@ -693,12 +697,6 @@ export function Communication() {
                         {String(c.channel).toUpperCase()}
                       </span>
                     </td>
-                    <td style={{ textTransform: "capitalize" }}>
-                      {c.audience_type || "-"}
-                    </td>
-                    <td>-</td>
-                    <td>-</td>
-                    <td>-</td>
                     <td>
                       <span
                         className={`badge ${statusColor(c.status)}`}
@@ -709,6 +707,16 @@ export function Communication() {
                     </td>
                     <td style={{ fontSize: 13, color: "var(--gray-500)" }}>
                       {new Date(c.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      {c.status !== "running" && (
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => setCampaign({ existing: c })}
+                        >
+                          Send
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -1059,77 +1067,140 @@ export function Communication() {
         </div>
       )}
 
-      {/* Create Campaign Modal */}
+      {/* Create / send campaign */}
       {campaign && (
-        <div className="modal-backdrop" onClick={() => setCampaign(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div>
-                <div className="modal-title">Create Campaign</div>
-                <div style={{ fontSize: 13, color: "var(--gray-500)" }}>
-                  Set up a new communication campaign
-                </div>
-              </div>
-              <button
-                className="btn btn-ghost btn-icon"
-                onClick={() => setCampaign(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="modal-body space-y-4">
-              <div className="form-group">
-                <label className="form-label">
-                  Campaign Name <span className="req">*</span>
-                </label>
-                <input
-                  className="form-input"
-                  placeholder="Enter campaign name"
-                />
-              </div>
-              <div className="form-group">
-                <label className="form-label">
-                  Channel <span className="req">*</span>
-                </label>
-                <select className="form-select">
-                  <option value="">Select channel</option>
-                  <option>Email</option>
-                  <option>SMS</option>
-                  <option>WhatsApp</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">
-                  Audience Filter <span className="req">*</span>
-                </label>
-                <select className="form-select">
-                  <option value="">Select audience</option>
-                  <option>All Leads</option>
-                  <option>New Leads</option>
-                  <option>Interested</option>
-                  <option>All Parents</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Schedule</label>
-                <select className="form-select">
-                  <option>Send immediately</option>
-                  <option>Schedule for later</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-3">
-                <button
-                  className="btn btn-outline"
-                  onClick={() => setCampaign(false)}
-                >
-                  Cancel
-                </button>
-                <button className="btn btn-primary">Create Campaign</button>
-              </div>
+        <CampaignModal
+          existing={campaign.existing || null}
+          onClose={() => setCampaign(false)}
+          onDone={(message) => {
+            setCampaign(false);
+            setCampaignNotice(message);
+            fetchAllData();
+            fetchStats();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const AUDIENCES = [
+  { value: "lead", label: "All leads" },
+  { value: "parent", label: "All parents" },
+  { value: "student", label: "All students" },
+];
+
+// Creates a campaign and/or sends it. Email goes through the school mailbox;
+// SMS and WhatsApp report clearly when no provider is connected.
+function CampaignModal({ existing, onClose, onDone }) {
+  const [form, setForm] = useState({
+    name: existing?.name || "",
+    channel: existing?.channel || "email",
+    audience_type: "lead",
+    subject: "",
+    message: "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const set = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const run = async (send) => {
+    setError("");
+    if (!existing && !form.name.trim()) return setError("Campaign name is required");
+    if (send && !form.message.trim()) return setError("Message is required");
+    if (send && form.channel === "email" && !form.subject.trim()) return setError("Subject is required for email");
+    setBusy(true);
+    try {
+      let target = existing;
+      if (!target) {
+        target = await createCampaign({
+          name: form.name.trim(),
+          channel: form.channel,
+          audience_type: form.audience_type,
+        });
+      }
+      if (!send) return onDone(`Campaign "${target.name}" saved as a draft.`);
+      const result = await sendCampaignNow(target.id, {
+        audience_type: form.audience_type,
+        subject: form.subject.trim(),
+        message: form.message.trim(),
+      });
+      const failed = result?.failed_count || 0;
+      const firstError = (result?.results || []).find((r) => r.error)?.error;
+      onDone(
+        failed
+          ? `Sent to ${result.sent_count} of ${result.total_recipients}. ${failed} failed${firstError ? `: ${firstError}` : "."}`
+          : `Sent to all ${result?.sent_count || 0} recipients.`,
+      );
+    } catch (err) {
+      setError(err.message || "Campaign failed");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">{existing ? `Send "${existing.name}"` : "Create Campaign"}</div>
+            <div style={{ fontSize: 13, color: "var(--gray-500)" }}>
+              {existing ? "Choose who receives it and write the message" : "Set up a new communication campaign"}
             </div>
           </div>
+          <button className="btn btn-ghost btn-icon" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
-      )}
+        <div className="modal-body space-y-4">
+          {error && <div style={{ color: "var(--red)", fontSize: 13 }}>{error}</div>}
+          {!existing && (
+            <>
+              <div className="form-group">
+                <label className="form-label">Campaign Name <span className="req">*</span></label>
+                <input className="form-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Open house invite" />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Channel <span className="req">*</span></label>
+                <select className="form-select" value={form.channel} onChange={(e) => set("channel", e.target.value)}>
+                  <option value="email">Email</option>
+                  <option value="sms">SMS</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+              </div>
+            </>
+          )}
+          <div className="form-group">
+            <label className="form-label">Audience <span className="req">*</span></label>
+            <select className="form-select" value={form.audience_type} onChange={(e) => set("audience_type", e.target.value)}>
+              {AUDIENCES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
+            </select>
+          </div>
+          {form.channel === "email" && (
+            <div className="form-group">
+              <label className="form-label">Subject</label>
+              <input className="form-input" value={form.subject} onChange={(e) => set("subject", e.target.value)} />
+            </div>
+          )}
+          <div className="form-group">
+            <label className="form-label">Message</label>
+            <textarea className="form-textarea" rows={5} value={form.message} onChange={(e) => set("message", e.target.value)} />
+          </div>
+          {form.channel !== "email" && (
+            <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
+              SMS and WhatsApp need a messaging provider. Until one is connected, sends are recorded as failed.
+            </div>
+          )}
+          <div className="flex justify-end gap-3">
+            {!existing && (
+              <button className="btn btn-outline" disabled={busy} onClick={() => run(false)}>Save draft</button>
+            )}
+            <button className="btn btn-primary" disabled={busy} onClick={() => run(true)}>
+              {busy ? "Working..." : existing ? "Send now" : "Create & send"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

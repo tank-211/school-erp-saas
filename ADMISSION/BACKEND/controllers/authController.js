@@ -8,6 +8,7 @@ import { getJwtSecret } from '../utils/jwtSecret.js';
 import bcrypt from 'bcryptjs';
 import * as authQueries from '../db/queries/authQueries.js';
 import { getSchoolAccess, denySchoolAccess } from '../utils/schoolAccess.js';
+import { recordAudit } from '../utils/audit.js';
 
 /**
  * login(req, res, next)
@@ -123,6 +124,15 @@ export const login = async (req, res, next) => {
       getJwtSecret(),
       { expiresIn: '24h' }
     );
+
+    await recordAudit(req, {
+      action: 'auth.login',
+      entity: 'app_user',
+      entityId: user.id,
+      schoolId: user.school_id,
+      userId: user.id,
+      summary: `${user.email} signed in`,
+    });
 
     // Return token and user info
     res.status(200).json({
@@ -266,6 +276,44 @@ export const me = async (req, res, next) => {
   });
   } catch (error) {
     console.error('Get me error:', error);
+    next(error);
+  }
+};
+
+/**
+ * changePassword(req, res)
+ * POST /api/auth/change-password  { current_password, new_password }
+ * The signed-in user changes their own password after proving the current one.
+ */
+export const changePassword = async (req, res, next) => {
+  try {
+    const current = String(req.body?.current_password || '');
+    const next_ = String(req.body?.new_password || '');
+    if (!current || !next_) {
+      return res.status(400).json({ success: false, message: 'Current and new password are required' });
+    }
+    if (next_.length < 8) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 8 characters' });
+    }
+    if (next_ === current) {
+      return res.status(400).json({ success: false, message: 'New password must be different from the current one' });
+    }
+
+    const user = await prisma.app_user.findFirst({
+      where: { id: BigInt(req.user.id), school_id: req.schoolId, status: 'active' },
+      select: { id: true, password_hash: true },
+    });
+    if (!user || !(await bcrypt.compare(current, user.password_hash))) {
+      return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    await prisma.app_user.update({
+      where: { id: user.id },
+      data: { password_hash: await bcrypt.hash(next_, 10), updated_at: new Date() },
+    });
+    await recordAudit(req, { action: 'user.password_changed', entity: 'app_user', entityId: user.id, summary: 'Changed own password' });
+    res.json({ success: true, message: 'Password changed' });
+  } catch (error) {
     next(error);
   }
 };

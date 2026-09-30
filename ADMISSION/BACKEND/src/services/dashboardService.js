@@ -1,508 +1,335 @@
-import prisma from '../../src/lib/prisma.js';
+/**
+ * src/services/dashboardService.js
+ *
+ * Dashboard and Reports figures for ONE school (the caller's, from the token).
+ * Every function takes the school id and an optional period:
+ *   week | month | quarter | year | all   (India calendar; "all" = no start)
+ */
+import prisma from '../lib/prisma.js';
 
-const safeNumber = (value) => {
-  if (value === null || value === undefined) return 0;
-  return Number(value);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const IST_OFFSET_MS = 330 * 60 * 1000;
+
+// Lead statuses (LEAD module vocabulary) that still need work
+const OPEN_LEAD_STATUSES = ['new', 'pending', 'contacted', 'interested', 'qualified'];
+const CLOSED_LEAD_STATUSES = ['admitted', 'converted', 'lost', 'inactive', 'not-interested', 'not_interested'];
+// Payments that did not bring money in
+const NOT_COLLECTED = ['cancelled', 'failed', 'refunded'];
+
+/** Today's India calendar date as { y, m (0-11), d }. */
+const indiaToday = (now = new Date()) => {
+  const shifted = new Date(now.getTime() + IST_OFFSET_MS);
+  return { y: shifted.getUTCFullYear(), m: shifted.getUTCMonth(), d: shifted.getUTCDate(), dow: shifted.getUTCDay() };
+};
+/** Midnight India time of the given India date, as a UTC instant. */
+const indiaMidnight = (y, m, d) => new Date(Date.UTC(y, m, d) - IST_OFFSET_MS);
+
+/** Start instant of a reporting period, or null for "all". */
+export const periodStart = (period, now = new Date()) => {
+  const { y, m, d, dow } = indiaToday(now);
+  switch (period) {
+    case 'week': return indiaMidnight(y, m, d - ((dow + 6) % 7)); // Monday
+    case 'month': return indiaMidnight(y, m, 1);
+    case 'quarter': return indiaMidnight(y, m - (m % 3), 1);
+    case 'year': return indiaMidnight(y, 0, 1);
+    default: return null;
+  }
 };
 
-const startOfMonth = (date) =>
-  new Date(date.getFullYear(), date.getMonth(), 1);
+const sid = (schoolId) => BigInt(schoolId);
+const since = (field, start) => (start ? { [field]: { gte: start } } : {});
 
-const getLastSixMonths = () => {
-  const months = [];
+/** "+12%" / "-5%" / "0%"; null when there is no previous figure to compare. */
+const change = (current, previous) => {
+  if (!previous) return current ? null : '0%';
+  const pct = Math.round(((current - previous) / previous) * 100);
+  return `${pct >= 0 ? '+' : ''}${pct}%`;
+};
 
-  const now = new Date();
+/** This month and last month, India calendar. */
+const monthWindows = (now = new Date()) => {
+  const { y, m } = indiaToday(now);
+  return {
+    thisStart: indiaMidnight(y, m, 1),
+    lastStart: indiaMidnight(y, m - 1, 1),
+  };
+};
 
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(
-      now.getFullYear(),
-      now.getMonth() - i,
-      1
-    );
-
-    months.push(date);
-  }
-
-  return months;
+const collectedAmount = async (schoolId, from, to) => {
+  const agg = await prisma.payment.aggregate({
+    _sum: { amount: true },
+    where: {
+      school_id: sid(schoolId),
+      NOT: { status: { in: NOT_COLLECTED } },
+      ...(from || to ? { payment_date: { ...(from && { gte: from }), ...(to && { lt: to }) } } : {}),
+    },
+  });
+  return Number(agg._sum.amount || 0);
 };
 
 const dashboardService = {
-  async getTotalInquiries(schoolId) {
-    try {
-      const total = await prisma.lead.count({
-        where: {
-          school_id: BigInt(schoolId),
-        },
-      });
+  /**
+   * Headline cards. Values are for the period; the *Change fields compare
+   * this calendar month with last month (null when there is nothing to compare).
+   */
+  async getStats(schoolId, period = 'all') {
+    const school = sid(schoolId);
+    const start = periodStart(period);
+    const { thisStart, lastStart } = monthWindows();
 
-      console.log('[Dashboard] getTotalInquiries:', total);
+    const [
+      totalInquiries,
+      leadsWithApplication,
+      activeLeads,
+      enrolledStudents,
+      pendingApplications,
+      approvedApplications,
+      feesCollected,
+      inquiriesThisMonth,
+      inquiriesLastMonth,
+      enrolledThisMonth,
+      enrolledLastMonth,
+      feesThisMonth,
+      feesLastMonth,
+    ] = await Promise.all([
+      prisma.lead.count({ where: { school_id: school, ...since('created_at', start) } }),
+      prisma.application.findMany({
+        where: { school_id: school, lead_id: { not: null }, ...(start && { lead: { created_at: { gte: start } } }) },
+        select: { lead_id: true },
+        distinct: ['lead_id'],
+      }),
+      prisma.lead.count({ where: { school_id: school, follow_up_status: { in: OPEN_LEAD_STATUSES } } }),
+      prisma.admission.count({ where: { school_id: school, is_completed: true, ...since('admission_date', start) } }),
+      prisma.application.count({ where: { school_id: school, status: { in: ['submitted', 'under_review'] } } }),
+      prisma.application.count({ where: { school_id: school, status: 'approved', ...since('updated_at', start) } }),
+      collectedAmount(schoolId, start, null),
+      prisma.lead.count({ where: { school_id: school, created_at: { gte: thisStart } } }),
+      prisma.lead.count({ where: { school_id: school, created_at: { gte: lastStart, lt: thisStart } } }),
+      prisma.admission.count({ where: { school_id: school, is_completed: true, admission_date: { gte: thisStart } } }),
+      prisma.admission.count({ where: { school_id: school, is_completed: true, admission_date: { gte: lastStart, lt: thisStart } } }),
+      collectedAmount(schoolId, thisStart, null),
+      collectedAmount(schoolId, lastStart, thisStart),
+    ]);
 
-      return safeNumber(total);
-    } catch (err) {
-      console.error('Error in getTotalInquiries:', err);
-      throw err;
-    }
+    const converted = new Set(leadsWithApplication.map((a) => String(a.lead_id))).size;
+    const conversionRate = totalInquiries ? Math.round((converted / totalInquiries) * 1000) / 10 : 0;
+
+    return {
+      period,
+      totalInquiries,
+      totalInquiriesChange: change(inquiriesThisMonth, inquiriesLastMonth),
+      conversionRate,
+      conversionRateChange: null,
+      activeLeads,
+      activeLeadsChange: null,
+      enrolledStudents,
+      enrolledStudentsChange: change(enrolledThisMonth, enrolledLastMonth),
+      pendingApplications,
+      pendingApplicationsChange: null,
+      // Approved applications waiting for admission. Offer letters are tracked
+      // separately once admission offers exist.
+      offersSent: approvedApplications,
+      offersSentChange: null,
+      feesCollected,
+      feesCollectedChange: change(feesThisMonth, feesLastMonth),
+    };
   },
 
-  async getConversionRate(schoolId) {
-    try {
-      const schoolIdBigInt = BigInt(schoolId);
+  /**
+   * Cumulative funnel: a lead counts in every stage it has reached, so a lead
+   * that enrolled also counts as contacted, interested, visited and applied.
+   */
+  async getFunnel(schoolId, period = 'all') {
+    const school = sid(schoolId);
+    const start = periodStart(period);
 
-      const totalLeads = await prisma.lead.count({
-        where: {
-          school_id: schoolIdBigInt,
-        },
-      });
-
-      if (totalLeads === 0) {
-        console.log('[Dashboard] getConversionRate:', 0);
-        return 0;
-      }
-
-      const convertedLeads =
-        await prisma.application.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-            lead_id: {
-              not: null,
-            },
-          },
-          select: {
-            lead_id: true,
-          },
-          distinct: ['lead_id'],
-        });
-
-      const rate =
-        (convertedLeads.length / totalLeads) * 100;
-
-      const roundedRate =
-        Math.round(rate * 100) / 100;
-
-      console.log(
-        '[Dashboard] getConversionRate:',
-        roundedRate
-      );
-
-      return safeNumber(roundedRate);
-    } catch (err) {
-      console.error('Error in getConversionRate:', err);
-      throw err;
+    const leads = await prisma.lead.findMany({
+      where: { school_id: school, ...since('created_at', start) },
+      select: { id: true, follow_up_status: true, last_contacted_at: true },
+    });
+    const ids = leads.map((l) => l.id);
+    if (!ids.length) {
+      return { inquiry: 0, contacted: 0, interested: 0, visit: 0, applied: 0, enrolled: 0 };
     }
-  },
 
-  async getActiveLeads(schoolId) {
-    try {
-      const total = await prisma.lead.count({
-        where: {
-          school_id: BigInt(schoolId),
-          follow_up_status: {
-            in: [
-              'pending',
-              'contacted',
-              'interested',
-            ],
-          },
-        },
-      });
+    const [visits, applications, admissions] = await Promise.all([
+      prisma.campus_visit.findMany({
+        where: { school_id: school, lead_id: { in: ids }, NOT: { status: { in: ['cancelled', 'no_show'] } } },
+        select: { lead_id: true },
+      }),
+      prisma.application.findMany({
+        where: { school_id: school, lead_id: { in: ids } },
+        select: { id: true, lead_id: true },
+      }),
+      prisma.admission.findMany({
+        where: { school_id: school, is_completed: true, OR: [{ lead_id: { in: ids } }, { application: { lead_id: { in: ids } } }] },
+        select: { lead_id: true, application_id: true },
+      }),
+    ]);
 
-      console.log('[Dashboard] getActiveLeads:', total);
-
-      return safeNumber(total);
-    } catch (err) {
-      console.error('Error in getActiveLeads:', err);
-      throw err;
-    }
-  },
-
-  async getEnrolledStudents(schoolId) {
-    try {
-      const total = await prisma.application.count({
-        where: {
-          school_id: BigInt(schoolId),
-          status: 'approved',
-        },
-      });
-
-      console.log(
-        '[Dashboard] getEnrolledStudents:',
-        total
-      );
-
-      return safeNumber(total);
-    } catch (err) {
-      console.error(
-        'Error in getEnrolledStudents:',
-        err
-      );
-      throw err;
-    }
-  },
-
-  async getPendingApplications(schoolId) {
-    try {
-      const total = await prisma.application.count({
-        where: {
-          school_id: BigInt(schoolId),
-          status: 'in_progress',
-        },
-      });
-
-      console.log(
-        '[Dashboard] getPendingApplications:',
-        total
-      );
-
-      return safeNumber(total);
-    } catch (err) {
-      console.error(
-        'Error in getPendingApplications:',
-        err
-      );
-      throw err;
-    }
-  },
-
-  async getOffersSent(schoolId) {
-    try {
-      const total = await prisma.application.count({
-        where: {
-          school_id: BigInt(schoolId),
-          status: 'approved',
-        },
-      });
-
-      console.log('[Dashboard] getOffersSent:', total);
-
-      return safeNumber(total);
-    } catch (err) {
-      console.error('Error in getOffersSent:', err);
-      throw err;
-    }
-  },
-
-  async getFeesCollected(schoolId) {
-    try {
-      const payments = await prisma.payment.findMany({
-        where: {
-          school_id: BigInt(schoolId),
-          status: 'successful',
-        },
-        select: {
-          amount: true,
-        },
-      });
-
-      const total = payments.reduce(
-        (sum, payment) =>
-          sum + Number(payment.amount || 0),
-        0
-      );
-
-      console.log(
-        '[Dashboard] getFeesCollected:',
-        total
-      );
-
-      return safeNumber(total);
-    } catch (err) {
-      console.error(
-        'Error in getFeesCollected:',
-        err
-      );
-      throw err;
-    }
-  },
-
-  async getMonthlyTrend(schoolId) {
-    try {
-      const schoolIdBigInt = BigInt(schoolId);
-      const months = getLastSixMonths();
-
-      const firstMonth = startOfMonth(months[0]);
-      const nextMonth = new Date(
-        months[5].getFullYear(),
-        months[5].getMonth() + 1,
-        1
-      );
-
-      const [leads, admissions] =
-        await Promise.all([
-          prisma.lead.findMany({
-            where: {
-              school_id: schoolIdBigInt,
-              created_at: {
-                gte: firstMonth,
-                lt: nextMonth,
-              },
-            },
-            select: {
-              created_at: true,
-            },
-          }),
-
-          prisma.admission.findMany({
-            where: {
-              school_id: schoolIdBigInt,
-              admission_date: {
-                gte: firstMonth,
-                lt: nextMonth,
-              },
-              status: 'active',
-            },
-            select: {
-              admission_date: true,
-            },
-          }),
-        ]);
-
-      const rows = months.map((month) => {
-        const year = month.getFullYear();
-        const monthNumber = month.getMonth();
-
-        const inquiries = leads.filter((lead) => {
-          if (!lead.created_at) return false;
-
-          const date = new Date(lead.created_at);
-
-          return (
-            date.getFullYear() === year &&
-            date.getMonth() === monthNumber
-          );
-        }).length;
-
-        const enrollments = admissions.filter(
-          (admission) => {
-            if (!admission.admission_date) {
-              return false;
-            }
-
-            const date = new Date(
-              admission.admission_date
-            );
-
-            return (
-              date.getFullYear() === year &&
-              date.getMonth() === monthNumber
-            );
-          }
-        ).length;
-
-        return {
-          month: month.toLocaleString('en-US', {
-            month: 'short',
-          }),
-          inquiries,
-          enrollments,
-        };
-      });
-
-      console.log(
-        '[Dashboard] getMonthlyTrend:',
-        rows.length,
-        'months fetched'
-      );
-
-      return rows;
-    } catch (err) {
-      console.error(
-        'Error in getMonthlyTrend:',
-        err
-      );
-      throw err;
-    }
-  },
-
-  async getGradeDistribution(schoolId) {
-    try {
-      const schoolIdBigInt = BigInt(schoolId);
-
-      const classes =
-        await prisma.school_class.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-          },
-          select: {
-            id: true,
-            class_name: true,
-            class_numeric_value: true,
-          },
-          orderBy: [
-            {
-              class_numeric_value: 'asc',
-            },
-            {
-              class_name: 'asc',
-            },
-          ],
-        });
-
-      const admissions =
-        await prisma.admission.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-            status: {
-              in: ['active', 'submitted'],
-            },
-          },
-          select: {
-            class_id: true,
-          },
-        });
-
-      const counts = new Map();
-
-      for (const admission of admissions) {
-        const key = String(admission.class_id);
-
-        counts.set(
-          key,
-          (counts.get(key) || 0) + 1
-        );
-      }
-
-      return classes
-        .filter(
-          (schoolClass) =>
-            counts.get(String(schoolClass.id)) > 0
-        )
-        .map((schoolClass) => ({
-          label: schoolClass.class_name,
-          value:
-            counts.get(
-              String(schoolClass.id)
-            ) || 0,
-        }));
-    } catch (err) {
-      console.error(
-        'Error in getGradeDistribution:',
-        err
-      );
-      throw err;
-    }
-  },
-
-  async getCounselorPerformance(schoolId) {
-    try {
-      const schoolIdBigInt = BigInt(schoolId);
-
-      const users =
-        await prisma.app_user.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-            status: 'active',
-            role: {
-              in: ['counselor', 'admin'],
-            },
-          },
-          select: {
-            id: true,
-            name: true,
-          },
-        });
-
-      const leads =
-        await prisma.lead.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-            assigned_to: {
-              not: null,
-            },
-          },
-          select: {
-            id: true,
-            assigned_to: true,
-          },
-        });
-
-      const applications =
-        await prisma.application.findMany({
-          where: {
-            school_id: schoolIdBigInt,
-            lead_id: {
-              not: null,
-            },
-          },
-          select: {
-            lead_id: true,
-          },
-          distinct: ['lead_id'],
-        });
-
-      const convertedLeadIds = new Set(
-        applications
-          .map((application) =>
-            application.lead_id
-              ? String(application.lead_id)
-              : null
-          )
-          .filter(Boolean)
-      );
-
-      const performance = users
-        .map((user) => {
-          const userId = String(user.id);
-          const userName = String(user.name || '');
-
-          const assignedLeads = leads.filter(
-            (lead) => {
-              const assignedTo =
-                lead.assigned_to
-                  ? String(lead.assigned_to)
-                  : '';
-
-              return (
-                assignedTo === userId ||
-                assignedTo === userName
-              );
-            }
-          );
-
-          const conversions =
-            assignedLeads.filter((lead) =>
-              convertedLeadIds.has(
-                String(lead.id)
-              )
-            ).length;
-
-          const leadCount =
-            assignedLeads.length;
-
-          if (leadCount === 0) {
-            return null;
-          }
-
-          const pct = Math.round(
-            (conversions / leadCount) * 100
-          );
-
-          return {
-            id: String(user.id),
-            name: user.name,
-            leads: leadCount,
-            conversions,
-            pct,
-          };
-        })
+    const appLead = new Map(applications.map((a) => [String(a.id), String(a.lead_id)]));
+    const visited = new Set(visits.map((v) => String(v.lead_id)));
+    const applied = new Set(applications.map((a) => String(a.lead_id)));
+    const enrolled = new Set(
+      admissions
+        .map((a) => (a.lead_id ? String(a.lead_id) : appLead.get(String(a.application_id))))
         .filter(Boolean)
-        .sort((a, b) =>
-          b.pct - a.pct ||
-          b.conversions - a.conversions ||
-          b.leads - a.leads ||
-          String(a.name).localeCompare(
-            String(b.name)
-          )
-        )
-        .slice(0, 6);
+    );
 
-      return performance;
-    } catch (err) {
-      console.error(
-        'Error in getCounselorPerformance:',
-        err
-      );
-      throw err;
+    const counts = { inquiry: leads.length, contacted: 0, interested: 0, visit: 0, applied: 0, enrolled: 0 };
+    for (const lead of leads) {
+      const key = String(lead.id);
+      const status = String(lead.follow_up_status || '').toLowerCase();
+      const isEnrolled = enrolled.has(key) || ['admitted', 'converted'].includes(status);
+      const isApplied = isEnrolled || applied.has(key);
+      const isVisited = isApplied || visited.has(key);
+      const isInterested = isVisited || ['interested', 'qualified'].includes(status);
+      const isContacted = isInterested || Boolean(lead.last_contacted_at) || !['new', 'pending', ''].includes(status);
+      if (isContacted) counts.contacted += 1;
+      if (isInterested) counts.interested += 1;
+      if (isVisited) counts.visit += 1;
+      if (isApplied) counts.applied += 1;
+      if (isEnrolled) counts.enrolled += 1;
     }
+    return counts;
+  },
+
+  /** Inquiries and completed admissions per month (India calendar). */
+  async getMonthlyTrend(schoolId, period = 'all') {
+    const school = sid(schoolId);
+    const monthsBack = { quarter: 3, year: 12 }[period] || 6;
+    const { y, m } = indiaToday();
+    const months = Array.from({ length: monthsBack }, (_, i) => {
+      const idx = m - (monthsBack - 1 - i);
+      return { start: indiaMidnight(y, idx, 1), end: indiaMidnight(y, idx + 1, 1), date: new Date(Date.UTC(y, idx, 1)) };
+    });
+    const from = months[0].start;
+
+    const [leads, admissions] = await Promise.all([
+      prisma.lead.findMany({ where: { school_id: school, created_at: { gte: from } }, select: { created_at: true } }),
+      prisma.admission.findMany({
+        where: { school_id: school, is_completed: true, admission_date: { gte: from } },
+        select: { admission_date: true },
+      }),
+    ]);
+
+    const inMonth = (value, month) => {
+      if (!value) return false;
+      const t = new Date(value).getTime();
+      return t >= month.start.getTime() && t < month.end.getTime();
+    };
+    return months.map((month) => ({
+      month: month.date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' }),
+      year: month.date.getUTCFullYear(),
+      inquiries: leads.filter((l) => inMonth(l.created_at, month)).length,
+      enrollments: admissions.filter((a) => inMonth(a.admission_date, month)).length,
+    }));
+  },
+
+  /** Completed admissions per class. */
+  async getGradeDistribution(schoolId, period = 'all') {
+    const school = sid(schoolId);
+    const start = periodStart(period);
+    const [classes, admissions] = await Promise.all([
+      prisma.school_class.findMany({
+        where: { school_id: school },
+        select: { id: true, class_name: true, class_numeric_value: true },
+        orderBy: [{ class_numeric_value: 'asc' }, { class_name: 'asc' }],
+      }),
+      prisma.admission.findMany({
+        where: { school_id: school, is_completed: true, ...since('admission_date', start) },
+        select: { class_id: true },
+      }),
+    ]);
+    const counts = new Map();
+    for (const a of admissions) counts.set(String(a.class_id), (counts.get(String(a.class_id)) || 0) + 1);
+    return classes
+      .filter((c) => counts.get(String(c.id)))
+      .map((c) => ({ label: c.class_name, value: counts.get(String(c.id)) }));
+  },
+
+  /** Leads assigned to each counselor/admin and how many reached an application. */
+  async getCounselorPerformance(schoolId, period = 'all') {
+    const school = sid(schoolId);
+    const start = periodStart(period);
+    const [users, leads, applications] = await Promise.all([
+      prisma.app_user.findMany({
+        where: { school_id: school, status: 'active', role: { in: ['counselor', 'admin'] } },
+        select: { id: true, name: true },
+      }),
+      prisma.lead.findMany({
+        where: { school_id: school, assigned_to: { not: null }, ...since('created_at', start) },
+        select: { id: true, assigned_to: true },
+      }),
+      prisma.application.findMany({
+        where: { school_id: school, lead_id: { not: null } },
+        select: { lead_id: true },
+        distinct: ['lead_id'],
+      }),
+    ]);
+    const converted = new Set(applications.map((a) => String(a.lead_id)));
+    return users
+      .map((user) => {
+        // lead.assigned_to holds the user id as text (older rows may hold the name)
+        const mine = leads.filter((l) => [String(user.id), String(user.name || '')].includes(String(l.assigned_to)));
+        if (!mine.length) return null;
+        const conversions = mine.filter((l) => converted.has(String(l.id))).length;
+        return {
+          id: String(user.id),
+          name: user.name,
+          leads: mine.length,
+          conversions,
+          pct: Math.round((conversions / mine.length) * 100),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.pct - a.pct || b.conversions - a.conversions || b.leads - a.leads)
+      .slice(0, 8);
+  },
+
+  /**
+   * Open leads with no contact for `days` or more (last contact, else last
+   * update, else creation), oldest first.
+   */
+  async getInactivityAlerts(schoolId, days = 7, limit = 10) {
+    const cutoff = new Date(Date.now() - days * DAY_MS);
+    const leads = await prisma.lead.findMany({
+      where: {
+        school_id: sid(schoolId),
+        NOT: { follow_up_status: { in: CLOSED_LEAD_STATUSES } },
+      },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        desired_class: true,
+        follow_up_status: true,
+        inactivity_reason: true,
+        last_contacted_at: true,
+        updated_at: true,
+        created_at: true,
+      },
+    });
+    return leads
+      .map((l) => {
+        const last = l.last_contacted_at || l.updated_at || l.created_at;
+        const idle = last ? Math.floor((Date.now() - new Date(last).getTime()) / DAY_MS) : null;
+        return { lead: l, last, idle };
+      })
+      .filter((x) => x.last && new Date(x.last) <= cutoff)
+      .sort((a, b) => new Date(a.last) - new Date(b.last))
+      .slice(0, limit)
+      .map(({ lead, last, idle }) => ({
+        lead_id: String(lead.id),
+        name: [lead.first_name, lead.last_name].filter(Boolean).join(' '),
+        grade: lead.desired_class || null,
+        status: lead.follow_up_status || 'new',
+        reason:
+          lead.inactivity_reason ||
+          (lead.last_contacted_at ? `No contact for ${idle} days` : `Not contacted since added ${idle} days ago`),
+        last_activity_at: last,
+        days_inactive: idle,
+      }));
   },
 };
 

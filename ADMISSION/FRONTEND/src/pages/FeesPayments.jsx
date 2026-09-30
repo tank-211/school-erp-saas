@@ -14,6 +14,8 @@ import {
   getFeeTransactions,
   getAdmissionsWithoutFees,
   assignAdmissionFees,
+  getUninvoicedFees,
+  generateInvoice,
 } from "../services/feeService";
 import { useAuth } from "../context/AuthContext.jsx";
 import "../style.css";
@@ -48,6 +50,7 @@ export function FeesPayments() {
   const [pendingError, setPendingError] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -253,7 +256,7 @@ export function FeesPayments() {
           },
           {
             label: "This Month",
-            value: "₹0.0L",
+            value: formatCurrency(stats.this_month_amount || 0),
             icon: CheckCircle,
             color: "var(--purple-bg)",
             ic: "var(--purple)",
@@ -279,7 +282,7 @@ export function FeesPayments() {
       <div className="card">
         <div className="card-header">
           <div className="card-title">Payment Transactions</div>
-          <button className="btn btn-primary btn-sm">
+          <button className="btn btn-primary btn-sm" onClick={() => setShowGenerate(true)}>
             <Plus size={14} /> Generate Invoice
           </button>
         </div>
@@ -356,6 +359,116 @@ export function FeesPayments() {
               )}
             </tbody>
           </table>
+        </div>
+      </div>
+      {showGenerate && (
+        <GenerateInvoiceModal
+          onClose={() => setShowGenerate(false)}
+          onDone={(message) => {
+            setShowGenerate(false);
+            setNotice({ ok: true, text: message });
+            loadData();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// Bills a student's assigned fees that are not on an invoice yet.
+function GenerateInvoiceModal({ onClose, onDone }) {
+  const [students, setStudents] = useState(null);
+  const [error, setError] = useState("");
+  const [studentId, setStudentId] = useState("");
+  const [selected, setSelected] = useState([]);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    getUninvoicedFees()
+      .then(setStudents)
+      .catch((err) => setError(err.message));
+  }, []);
+
+  const student = students?.find((s) => s.student_id === studentId);
+  const total = (student?.fees || [])
+    .filter((f) => selected.includes(f.fee_structure_id))
+    .reduce((sum, f) => sum + Math.round(Number(f.amount) * 100), 0) / 100;
+
+  const pickStudent = (id) => {
+    setStudentId(id);
+    const next = students.find((s) => s.student_id === id);
+    setSelected((next?.fees || []).map((f) => f.fee_structure_id));
+  };
+
+  const toggle = (id) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const submit = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      const result = await generateInvoice({
+        student_id: Number(studentId),
+        fee_structure_ids: selected.map(Number),
+      });
+      onDone(`Invoice ${result.data?.invoice_number || ""} created for ${student.student_name}.`);
+    } catch (err) {
+      setError(err.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50, padding: 16 }}
+      onClick={onClose}
+    >
+      <div className="card" style={{ width: "100%", maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className="card-header">
+          <div className="card-title">Generate Invoice</div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>Close</button>
+        </div>
+        <div className="card-body">
+          {error && <div style={noticeStyle(false)}>{error}</div>}
+          {!students && !error && <div className="text-muted">Loading...</div>}
+          {students && !students.length && (
+            <div className="text-muted">
+              Every assigned fee is already invoiced. Fees are assigned when an admission is completed, or from "Admissions without fees".
+            </div>
+          )}
+          {students?.length > 0 && (
+            <>
+              <label className="form-label">Student</label>
+              <select className="form-select" value={studentId} onChange={(e) => pickStudent(e.target.value)}>
+                <option value="">Select student</option>
+                {students.map((s) => (
+                  <option key={s.student_id} value={s.student_id}>
+                    {s.student_name}{s.admission_number ? ` (${s.admission_number})` : ""}
+                  </option>
+                ))}
+              </select>
+              {student && (
+                <div style={{ marginTop: 16 }}>
+                  {student.fees.map((f) => (
+                    <label key={f.fee_structure_id} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--border, #e5e7eb)", fontSize: 14 }}>
+                      <span>
+                        <input type="checkbox" checked={selected.includes(f.fee_structure_id)} onChange={() => toggle(f.fee_structure_id)} style={{ marginRight: 8 }} />
+                        {f.fee_type}
+                      </span>
+                      <span>₹{Number(f.amount).toLocaleString("en-IN")}</span>
+                    </label>
+                  ))}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontWeight: 600 }}>
+                    <span>Total</span>
+                    <span>₹{total.toLocaleString("en-IN")}</span>
+                  </div>
+                  <button className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} disabled={!selected.length || saving} onClick={submit}>
+                    {saving ? "Creating..." : "Create invoice"}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

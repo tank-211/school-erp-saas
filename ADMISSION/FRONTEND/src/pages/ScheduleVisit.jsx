@@ -10,6 +10,9 @@ import {
   Loader,
 } from "lucide-react";
 import counselingService from "../services/counselingService";
+import { fetchSchoolCounselors } from "../services/schoolService";
+import { useSchoolSetup } from "../hooks/useSchoolSetup";
+import { useAuth } from "../context/AuthContext.jsx";
 import "../style.css";
 
 const areas = [
@@ -24,13 +27,8 @@ const areas = [
   "Auditorium",
 ];
 
-const guides = [
-  "Priya Sharma",
-  "Amit Patel",
-  "Neha Kumar",
-  "Rahul Singh",
-  "Anjali Gupta",
-];
+// Tour time slots offered on the form
+const TIME_SLOTS = ["09:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "02:00 PM", "03:00 PM", "04:00 PM"];
 
 // Helper: Convert "10:00 AM" to "10:00"
 const convertTo24Hour = (timeStr) => {
@@ -53,6 +51,13 @@ const calculateEndTime = (startTime) => {
 
 export function ScheduleVisit() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { classNames } = useSchoolSetup();
+  // Staff who can guide a tour (counselors and admins of this school)
+  const [guides, setGuides] = useState([]);
+  useEffect(() => {
+    if (user?.school_id) fetchSchoolCounselors(user.school_id).then(setGuides);
+  }, [user?.school_id]);
   const [form, setForm] = useState({
     parentName: "",
     studentName: "",
@@ -218,7 +223,7 @@ export function ScheduleVisit() {
       </button>
       <h1 className="page-title mb-1">Schedule Campus Visit</h1>
       <p className="page-sub mb-5">
-        Arrange a personalized tour of Sacred Tree International School
+        Arrange a personalized campus tour
       </p>
 
       {error && (
@@ -365,24 +370,9 @@ export function ScheduleVisit() {
                   onChange={(e) => set("grade", e.target.value)}
                 >
                   <option value="">Select grade</option>
-                  {[
-                    "Nursery",
-                    "LKG",
-                    "UKG",
-                    "Grade 1",
-                    "Grade 2",
-                    "Grade 3",
-                    "Grade 4",
-                    "Grade 5",
-                    "Grade 6",
-                    "Grade 7",
-                    "Grade 8",
-                    "Grade 9",
-                    "Grade 10",
-                    "Grade 11",
-                    "Grade 12",
-                  ].map((g) => (
-                    <option key={g}>{g}</option>
+                  {/* Classes from School Setup; keep a lead's grade even if it is not one of them */}
+                  {[...new Set([...classNames, ...(form.grade ? [form.grade] : [])])].map((g) => (
+                    <option key={g} value={g}>{g}</option>
                   ))}
                 </select>
               </div>
@@ -433,16 +423,8 @@ export function ScheduleVisit() {
                   required
                 >
                   <option value="">Select time slot</option>
-                  {[
-                    "09:00 AM",
-                    "10:00 AM",
-                    "11:00 AM",
-                    "12:00 PM",
-                    "02:00 PM",
-                    "03:00 PM",
-                    "04:00 PM",
-                  ].map((t) => (
-                    <option key={t}>{getSlotInfo(t)}</option>
+                  {TIME_SLOTS.map((t) => (
+                    <option key={t} value={t}>{getSlotInfo(t)}</option>
                   ))}
                 </select>
               </div>
@@ -469,9 +451,11 @@ export function ScheduleVisit() {
                 value={form.guide}
                 onChange={(e) => set("guide", e.target.value)}
               >
-                <option value="">Select guide</option>
+                <option value="">Me (the person scheduling)</option>
                 {guides.map((g) => (
-                  <option key={g}>{g}</option>
+                  <option key={g.id} value={g.id}>
+                    {g.name}{g.role === "admin" ? " (admin)" : ""}
+                  </option>
                 ))}
               </select>
             </div>

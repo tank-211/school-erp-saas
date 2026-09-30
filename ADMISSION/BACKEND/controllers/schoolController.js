@@ -6,6 +6,8 @@ export {
   getSchoolById,
   createSchool,
   getSchoolCounselors,
+  getOwnSchool,
+  updateOwnSchool,
 };
 
 // Every route runs after authMiddleware + requireSchool (routes/schoolRoutes.js),
@@ -111,12 +113,14 @@ const getSchoolCounselors = async (req, res) => {
     const counselors = await prisma.app_user.findMany({
       where: {
         school_id: req.schoolId,
-        role: 'counselor',
+        // Admins guide tours and take leads too
+        role: { in: ['counselor', 'admin'] },
         status: 'active'
       },
       select: {
         id: true,
-        name: true
+        name: true,
+        role: true
       },
       orderBy: {
         name: 'asc'
@@ -138,3 +142,75 @@ const getSchoolCounselors = async (req, res) => {
     });
   }
 };
+
+// Fields a school admin may change about their own school. The name, plan,
+// status and expiry are managed by Super Admin.
+const EDITABLE_SCHOOL_FIELDS = {
+  email: 100,
+  phone: 20,
+  address: 1000,
+  city: 100,
+  state: 100,
+  postal_code: 20,
+  country: 100,
+  principal_name: 150,
+};
+
+const schoolProfile = (school) => ({
+  id: String(school.id),
+  name: school.name,
+  email: school.email,
+  phone: school.phone,
+  address: school.address,
+  city: school.city,
+  state: school.state,
+  postal_code: school.postal_code,
+  country: school.country,
+  principal_name: school.principal_name,
+  plan_type: school.plan_type,
+  expiry_date: school.expiry_date,
+});
+
+// GET /api/schools/me
+async function getOwnSchool(req, res) {
+  try {
+    const school = await prisma.school.findUnique({ where: { id: req.schoolId } });
+    if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+    res.json({ success: true, data: schoolProfile(school) });
+  } catch (error) {
+    console.error('Get own school error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to load school details' });
+  }
+}
+
+// PUT /api/schools/me  (school admin)
+async function updateOwnSchool(req, res) {
+  const data = {};
+  for (const [field, max] of Object.entries(EDITABLE_SCHOOL_FIELDS)) {
+    if (req.body?.[field] === undefined) continue;
+    const value = req.body[field] === null ? '' : String(req.body[field]).trim();
+    if (value.length > max) {
+      return res.status(400).json({ success: false, message: `${field.replace('_', ' ')} must be ${max} characters or fewer` });
+    }
+    data[field] = value || null;
+  }
+  if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+    return res.status(400).json({ success: false, message: 'Contact email is not valid' });
+  }
+  if (!Object.keys(data).length) {
+    return res.status(400).json({ success: false, message: 'Nothing to update' });
+  }
+  try {
+    const school = await prisma.school.update({
+      where: { id: req.schoolId },
+      data: { ...data, updated_at: new Date(), updated_by: String(req.user.email || req.user.id).slice(0, 100) },
+    });
+    res.json({ success: true, message: 'School details saved', data: schoolProfile(school) });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ success: false, message: 'Another school already uses this contact email' });
+    }
+    console.error('Update own school error:', error.message);
+    res.status(500).json({ success: false, message: 'Failed to save school details' });
+  }
+}

@@ -53,7 +53,7 @@ export function InvoiceDetail() {
     return (
       <div className="page">
         <div className="error-message">{error}</div>
-        <button className="btn btn-outline" onClick={() => navigate("/fees")}>
+        <button className="btn btn-outline" onClick={() => navigate("/fees-payments")}>
           <ArrowLeft size={16} /> Back to Fees
         </button>
       </div>
@@ -64,7 +64,7 @@ export function InvoiceDetail() {
     return (
       <div className="page">
         <div className="error-message">Invoice not found</div>
-        <button className="btn btn-outline" onClick={() => navigate("/fees")}>
+        <button className="btn btn-outline" onClick={() => navigate("/fees-payments")}>
           <ArrowLeft size={16} /> Back to Fees
         </button>
       </div>
@@ -100,7 +100,7 @@ export function InvoiceDetail() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <button className="btn btn-outline" onClick={() => navigate("/fees")}>
+          <button className="btn btn-outline" onClick={() => navigate("/fees-payments")}>
             <ArrowLeft size={16} /> Back to Fees
           </button>
           <h1 className="page-title">Invoice Details</h1>

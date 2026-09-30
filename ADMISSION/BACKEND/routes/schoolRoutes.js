@@ -1,6 +1,6 @@
 import express from 'express';
-import { getAllSchools, getSchoolById, createSchool, getSchoolCounselors } from '../controllers/schoolController.js';
-import { authMiddleware, requireSchool } from '../middleware/auth.js';
+import { getAllSchools, getSchoolById, createSchool, getSchoolCounselors, getOwnSchool, updateOwnSchool } from '../controllers/schoolController.js';
+import { authMiddleware, requireSchool, isAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -10,6 +10,10 @@ router.use(authMiddleware, requireSchool);
 
 // Get the caller's own school (kept as a list for response compatibility)
 router.get('/', getAllSchools);
+
+// The caller's own school: read for anyone, edit contact details for admins
+router.get('/me', getOwnSchool);
+router.put('/me', isAdmin, updateOwnSchool);
 
 // Get school by ID (own school only)
 router.get('/:id', getSchoolById);

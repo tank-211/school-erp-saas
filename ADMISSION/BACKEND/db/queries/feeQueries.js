@@ -21,138 +21,34 @@ const serializeBigInt = (value) => {
 export const getDashboardStats = async (school_id) => {
   const schoolId = BigInt(school_id);
 
-  console.log("💰 [FEES] Checking school:", schoolId.toString());
+  // First day of the current month in India (payment_date is a DATE column)
+  const [year, month] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
+    .format(new Date())
+    .split('-')
+    .map(Number);
+  const monthStart = new Date(Date.UTC(year, month - 1, 1));
 
-  // Completed admissions
-  const admissions = await prisma.admission.findMany({
-    where: {
-      school_id: schoolId,
-      is_completed: true,
-    },
-    select: {
-      id: true,
-      student_id: true,
-      academic_year_id: true,
-      class_id: true,
-      section_id: true,
-      status: true,
-      is_completed: true,
-    },
-    orderBy: {
-      created_at: "desc",
-    },
-  });
-
-  console.log(
-    "🎓 [FEES] COMPLETED ADMISSIONS:",
-    admissions.map((item) => ({
-      id: item.id.toString(),
-      student_id: item.student_id?.toString(),
-      academic_year_id: item.academic_year_id?.toString(),
-      class_id: item.class_id?.toString(),
-      section_id: item.section_id?.toString(),
-      status: item.status,
-      is_completed: item.is_completed,
-    }))
-  );
-
-  // Fee structures for this school
-  const feeStructures = await prisma.fee_structure.findMany({
-    where: {
-      school_id: schoolId,
-      is_active: true,
-    },
-    include: {
-      school_class: true,
-      academic_year: true,
-    },
-    orderBy: {
-      created_at: "desc",
-    },
-  });
-
-  console.log(
-    "📋 [FEES] ACTIVE FEE STRUCTURES:",
-    feeStructures.map((item) => ({
-      id: item.id.toString(),
-      school_id: item.school_id.toString(),
-      academic_year_id: item.academic_year_id.toString(),
-      class_id: item.class_id.toString(),
-      fee_type: item.fee_type,
-      amount: item.amount?.toString(),
-      due_date: item.due_date,
-      class_name: item.school_class?.class_name,
-    }))
-  );
-
-  // Existing assignments
-  const assignments = await prisma.student_fee_assignment.findMany({
-    where: {
-      school_id: schoolId,
-    },
-    include: {
-      fee_structure: true,
-    },
-  });
-
-  console.log(
-    "💵 [FEES] FEE ASSIGNMENTS:",
-    assignments.map((item) => ({
-      id: item.id.toString(),
-      student_id: item.student_id.toString(),
-      admission_id: item.admission_id.toString(),
-      fee_structure_id: item.fee_structure_id.toString(),
-      amount: item.amount?.toString(),
-      final_amount: item.final_amount?.toString(),
-      status: item.status,
-    }))
-  );
-
-  // Existing invoices
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      school_id: schoolId,
-    },
-    select: {
-      id: true,
-      student_id: true,
-      invoice_number: true,
-      total_amount: true,
-      paid_amount: true,
-      pending_amount: true,
-      status: true,
-    },
-  });
-
-  console.log(
-    "🧾 [FEES] INVOICES:",
-    invoices.map((item) => ({
-      id: item.id.toString(),
-      student_id: item.student_id.toString(),
-      invoice_number: item.invoice_number,
-      total_amount: item.total_amount?.toString(),
-      paid_amount: item.paid_amount?.toString(),
-      pending_amount: item.pending_amount?.toString(),
-      status: item.status,
-    }))
-  );
-
-  // Dashboard stats
-  const stats = await prisma.invoice.aggregate({
-    where: {
-      school_id: schoolId,
-    },
-    _sum: {
-      total_amount: true,
-      paid_amount: true,
-      pending_amount: true,
-    },
-  });
+  const [stats, thisMonth] = await Promise.all([
+    prisma.invoice.aggregate({
+      where: { school_id: schoolId },
+      _sum: { total_amount: true, paid_amount: true, pending_amount: true },
+    }),
+    // Same rule as the FEES app: every payment that is not cancelled counts
+    prisma.payment.aggregate({
+      where: {
+        school_id: schoolId,
+        payment_date: { gte: monthStart },
+        status: { not: 'cancelled' },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
 
   return {
     total_amount: Number(stats._sum.total_amount || 0),
     paid_amount: Number(stats._sum.paid_amount || 0),
     pending_amount: Number(stats._sum.pending_amount || 0),
+    this_month_amount: Number(thisMonth._sum.amount || 0),
   };
 };
 

@@ -90,7 +90,6 @@ export function CreateApplication() {
           lead: selected,
           manualEntryMode: !selected,
           academicYear: form.year,
-          admissionType: form.type,
           resumed: result.resumed,
         },
       });
@@ -321,23 +320,6 @@ export function CreateApplication() {
               </div>
 
               {/* Admission Type */}
-              <div className="form-group">
-                <label className="form-label">
-                  Admission Type <span className="req">*</span>
-                </label>
-                <select
-                  className="form-select"
-                  value={form.type}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, type: e.target.value }))
-                  }
-                >
-                  <option value="new">New Admission</option>
-                  <option value="transfer">Transfer</option>
-                  <option value="sibling">Sibling Admission</option>
-                  <option value="re-admission">Re-admission</option>
-                </select>
-              </div>
             </div>
           </div>
         </div>

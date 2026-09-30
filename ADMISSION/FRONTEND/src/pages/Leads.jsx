@@ -12,6 +12,7 @@ import {
 import "../style.css";
 import { getAllLeads } from "../services/leadService.js";
 import { getToken } from "../utils/authToken.js";
+import { useSchoolSetup } from "../hooks/useSchoolSetup";
 
 const statusConfig = {
   pending: { label: "Pending", cls: "badge-gray" },
@@ -30,6 +31,7 @@ export function Leads() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [grade, setGrade] = useState("all");
+  const { classNames } = useSchoolSetup();
   const [showStatusDrop, setShowStatusDrop] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
 
@@ -236,16 +238,7 @@ export function Leads() {
               onChange={(e) => setGrade(e.target.value)}
             >
               <option value="all">All Grades</option>
-              {[
-                "Grade 1",
-                "Grade 2",
-                "Grade 3",
-                "Grade 4",
-                "Grade 5",
-                "Grade 6",
-                "Grade 7",
-                "Grade 8",
-              ].map((g) => (
+              {classNames.map((g) => (
                 <option key={g}>{g}</option>
               ))}
             </select>

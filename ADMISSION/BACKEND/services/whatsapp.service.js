@@ -117,8 +117,8 @@ export const sendWhatsapp = async (schoolId, userId, payload) => {
         channel: 'whatsapp',
         subject: null,
         message,
-        status: dispatchResult.status || 'sent',
-        sent_at: dispatchResult.sent_at || new Date(),
+        status: dispatchResult.status || 'failed',
+        sent_at: dispatchResult.sent_at || null,
         created_by: String(userId),
       },
 
@@ -135,6 +135,11 @@ export const sendWhatsapp = async (schoolId, userId, payload) => {
         created_by: true,
       },
     });
+
+  if (dispatchResult.status === 'failed') {
+    // The attempt is kept in the log as 'failed'; tell the user why
+    throw new AppError(dispatchResult.error || 'WhatsApp could not be sent', 503);
+  }
 
   return {
     ...communicationLog,

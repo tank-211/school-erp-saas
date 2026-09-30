@@ -9,6 +9,7 @@ router.use(authMiddleware, requireSchool);
 
 // Any school user can read the setup (forms need the years, classes and sections)
 router.get('/overview', setup.getSetupOverview);
+router.get('/seat-capacity', setup.getSeatCapacity);
 
 // Changes are for school admins only (isAdmin re-checks the role in the database)
 router.post('/academic-years', isAdmin, setup.createAcademicYear);

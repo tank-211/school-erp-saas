@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import * as adminQueries from '../db/queries/adminQueries.js';
 import * as authQueries from '../db/queries/authQueries.js';
 import prisma from '../src/lib/prisma.js';
+import { recordAudit } from '../utils/audit.js';
 
 export const getUsers = async (req, res, next) => {
   try {
@@ -36,6 +37,11 @@ export const createUser = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Administrative roles must be provisioned by the Service Provider' });
     }
 
+    // Staff roles a school admin may create (other checks treat roles by exact name)
+    if (!['counselor', 'accountant'].includes(role)) {
+      return res.status(400).json({ success: false, message: 'Role must be counselor or accountant' });
+    }
+
     const existingUser = await authQueries.getUserByEmail(email);
     if (existingUser) {
       return res.status(409).json({ success: false, message: 'Email already registered' });
@@ -48,6 +54,7 @@ export const createUser = async (req, res, next) => {
       school_id, name, email, password_hash, role
     });
 
+    await recordAudit(req, { action: 'user.created', entity: 'app_user', entityId: newUser.id, summary: `Created ${role} ${email}` });
     res.status(201).json({ success: true, data: newUser, message: 'User created successfully' });
   } catch(err) {
     next(err);
@@ -72,6 +79,7 @@ export const updatePassword = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'User not found or you do not have permission to modify this user' });
     }
     
+    await recordAudit(req, { action: 'user.password_reset', entity: 'app_user', entityId: id, summary: `Reset password of user ${id}` });
     res.status(200).json({ success: true, message: 'Password updated successfully' });
   } catch(err) {
     next(err);
@@ -93,6 +101,7 @@ export const deleteUser = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'User not found or you do not have permission to delete this user' });
     }
 
+    await recordAudit(req, { action: 'user.deleted', entity: 'app_user', entityId: id, summary: `Deleted user ${id}` });
     res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch(err) {
     next(err);

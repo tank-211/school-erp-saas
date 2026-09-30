@@ -7,6 +7,11 @@
 
 import prisma from '../../src/lib/prisma.js';
 
+// campus_visit.start_time / end_time are TIME columns: Prisma needs a Date
+// (the date part is ignored), not the "HH:MM" text the forms send.
+export const toTimeValue = (hhmm) =>
+  hhmm instanceof Date ? hhmm : new Date(`1970-01-01T${String(hhmm).slice(0, 5)}:00.000Z`);
+
 /**
  * getDashboardStats(schoolId, counselorId)
  * Get dashboard statistics: assigned leads count, upcoming visits, pending tasks
@@ -18,9 +23,11 @@ import prisma from '../../src/lib/prisma.js';
 export const getDashboardStats = async (schoolId, counselorId) => {
   const [assignedLeads, upcomingVisits, pendingTasks] =
     await Promise.all([
+      // Leads assigned to this counselor (lead.assigned_to holds the user id as text)
       prisma.lead.count({
         where: {
-          school_id: BigInt(schoolId)
+          school_id: BigInt(schoolId),
+          assigned_to: String(counselorId)
         }
       }),
 
@@ -110,9 +117,12 @@ export const searchLeads = async (
 ) => {
   const searchText = query?.trim() || '';
 
-  return await prisma.lead.findMany({
+  const leads = await prisma.lead.findMany({
     where: {
       school_id: BigInt(schoolId),
+
+      // No search text: the counselor's own leads (lead.assigned_to holds the user id)
+      ...(!searchText && { assigned_to: String(counselorId) }),
 
       ...(searchText && {
         OR: [
@@ -161,6 +171,29 @@ export const searchLeads = async (
 
     take: 20
   });
+
+  // Next scheduled follow-up per lead, from the activity log
+  const today = new Date(new Date().toISOString().slice(0, 10));
+  const upcoming = leads.length
+    ? await prisma.lead_activity.findMany({
+        where: { lead_id: { in: leads.map((l) => l.id) }, next_follow_up_date: { gte: today } },
+        orderBy: { next_follow_up_date: 'asc' },
+        select: { lead_id: true, activity_type: true, next_follow_up_date: true },
+      })
+    : [];
+  const nextByLead = new Map();
+  for (const a of upcoming) {
+    if (!nextByLead.has(String(a.lead_id))) nextByLead.set(String(a.lead_id), a);
+  }
+
+  return leads.map((lead) => {
+    const next = nextByLead.get(String(lead.id));
+    return {
+      ...lead,
+      next_follow_up_date: next?.next_follow_up_date || null,
+      next_action: next?.activity_type || null,
+    };
+  });
 };
 
 /**
@@ -179,7 +212,7 @@ export const createCampusVisit = async (data) => {
       school_id: BigInt(data.school_id),
       assigned_to: BigInt(data.assigned_to),
       visit_date: new Date(data.visit_date),
-      start_time: data.start_time,
+      start_time: toTimeValue(data.start_time),
       status: {
         notIn: ['cancelled', 'no_show']
       }
@@ -187,7 +220,9 @@ export const createCampusVisit = async (data) => {
   });
 
   if (existingVisit) {
-    throw new Error('Counselor is already booked for this time slot');
+    const error = new Error('This guide is already booked for this time slot');
+    error.code = 'DOUBLE_BOOKING';
+    throw error;
   }
 
   return await prisma.campus_visit.create({
@@ -206,8 +241,8 @@ export const createCampusVisit = async (data) => {
 
       visit_date: new Date(data.visit_date),
 
-      start_time: data.start_time,
-      end_time: data.end_time,
+      start_time: toTimeValue(data.start_time),
+      end_time: toTimeValue(data.end_time),
 
       visit_type: data.visit_type || null,
 
@@ -304,13 +339,14 @@ export const updateCampusVisit = async (
       }),
 
       ...(updates.start_time !== undefined && {
-        start_time: updates.start_time
+        start_time: toTimeValue(updates.start_time)
       }),
 
       ...(updates.end_time !== undefined && {
-        end_time: updates.end_time
+        end_time: toTimeValue(updates.end_time)
       }),
 
+      // assigned_to is validated by the controller (same school, active staff)
       ...(updates.assigned_to !== undefined && {
         assigned_to: BigInt(updates.assigned_to)
       }),
@@ -389,7 +425,8 @@ export const getTimeSlotAvailability = async (
   const grouped = {};
 
   visits.forEach((visit) => {
-    const key = visit.start_time.toISOString();
+    // TIME column: Prisma returns 1970-01-01THH:MM:00Z; the page works in "HH:MM"
+    const key = new Date(visit.start_time).toISOString().slice(11, 16);
 
     grouped[key] = (grouped[key] || 0) + 1;
   });
@@ -480,7 +517,7 @@ export const updateVisitStatus = async (
     where: {
       id: BigInt(id),
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId)
+      ...(counselorId !== null && { assigned_to: BigInt(counselorId) })
     },
     data: {
       status,

@@ -10,12 +10,13 @@ import "../style.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-const processSteps = [
-  { label: "Application Approved", done: true },
-  { label: "Payment Confirmed", done: true },
-  { label: "Student ID Generated", done: true },
-  { label: "Class Assigned", done: true },
-  { label: "Parent Portal Activated", done: false },
+// Stages of the admission journey, counted from real records
+const pipelineStages = [
+  { key: "approved_awaiting_admission", label: "Approved, admission not started" },
+  { key: "admissions_in_progress", label: "Admission form in progress" },
+  { key: "enrolled", label: "Enrolled" },
+  { key: "students_invoiced", label: "Fees invoiced (students)" },
+  { key: "students_with_dues", label: "Students with fees due" },
 ];
 
 export function Enrollment() {
@@ -402,36 +403,19 @@ export function Enrollment() {
 
           <div className="card-header">
             <div className="card-title">
-              Enrollment Process
+              Enrollment Pipeline
             </div>
           </div>
 
           <div className="card-body">
 
-            {processSteps.map((s, i) => (
-              <div
-                className="enroll-step"
-                key={i}
-              >
-
-                <div
-                  className={`enroll-step-icon ${
-                    s.done
-                      ? "done"
-                      : "todo"
-                  }`}
-                >
-                  {s.done ? (
-                    <CheckCircle size={16} />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-
-                <span className="enroll-step-label">
-                  {s.label}
+            {pipelineStages.map((stage, i) => (
+              <div className="enroll-step" key={stage.key}>
+                <div className="enroll-step-icon todo">{i + 1}</div>
+                <span className="enroll-step-label" style={{ flex: 1 }}>
+                  {stage.label}
                 </span>
-
+                <strong>{enrollmentStats.pipeline?.[stage.key] ?? "—"}</strong>
               </div>
             ))}
 

@@ -13,6 +13,7 @@ import {
   Save,
 } from "lucide-react";
 import { getToken } from "../utils/authToken.js";
+import { useSchoolSetup } from "../hooks/useSchoolSetup";
 import "../style.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -72,10 +73,18 @@ const emptyAcademic = {
   marks_percentage: "",
   board_name: "CBSE",
   academic_year: "",
+  admission_type: "new",
   additional_qualifications: "",
   extracurricular_activities: "",
   achievements: "",
 };
+
+const ADMISSION_TYPES = [
+  { value: "new", label: "New admission" },
+  { value: "transfer", label: "Transfer" },
+  { value: "sibling", label: "Sibling" },
+  { value: "re-admission", label: "Re-admission" },
+];
 
 const DOCUMENT_LABELS = {
   birth_certificate: "Birth Certificate",
@@ -218,7 +227,13 @@ function openPreview(record, label = "Document") {
   );
 }
 
+// A value saved earlier that is no longer in the list stays selectable
+const withCurrent = (list, current) =>
+  current && !list.includes(current) ? [current, ...list] : list;
+
 export function AdmissionResume() {
+  // Classes and academic years come from School Setup
+  const { classNames, years } = useSchoolSetup();
   const { id: admissionId } = useParams();
   const navigate = useNavigate();
 
@@ -348,6 +363,8 @@ export function AdmissionResume() {
           academicData.board_name || "CBSE",
         academic_year:
           academicData.academic_year || "",
+        admission_type:
+          admissionResult.admission?.admission_type || "new",
         additional_qualifications:
           academicData.additional_qualifications || "",
         extracurricular_activities:
@@ -598,6 +615,9 @@ export function AdmissionResume() {
 
           academic_year:
             academic.academic_year || null,
+
+          admission_type:
+            academic.admission_type || "new",
 
           additional_qualifications:
             academic.additional_qualifications ||
@@ -1167,7 +1187,7 @@ export function AdmissionResume() {
 
         <div className="card-body">
           <div className="grid-2">
-            {renderInput(
+            {renderSelect(
               "Desired Class *",
               academic.desired_class,
               (value) =>
@@ -1175,8 +1195,21 @@ export function AdmissionResume() {
                   "desired_class",
                   value
                 ),
-              "text",
-              "Example: Class 3"
+              [
+                { value: "", label: "Select class" },
+                ...withCurrent(classNames, academic.desired_class).map((name) => ({ value: name, label: name })),
+              ]
+            )}
+
+            {renderSelect(
+              "Admission Type",
+              academic.admission_type,
+              (value) =>
+                updateAcademic(
+                  "admission_type",
+                  value
+                ),
+              ADMISSION_TYPES
             )}
 
             {renderInput(
@@ -1238,7 +1271,7 @@ export function AdmissionResume() {
               ]
             )}
 
-            {renderInput(
+            {renderSelect(
               "Academic Year",
               academic.academic_year,
               (value) =>
@@ -1246,8 +1279,10 @@ export function AdmissionResume() {
                   "academic_year",
                   value
                 ),
-              "text",
-              "Example: 2026-27"
+              [
+                { value: "", label: "Select academic year" },
+                ...withCurrent(years.map((y) => y.year_name), academic.academic_year).map((name) => ({ value: name, label: name })),
+              ]
             )}
 
             {renderInput(

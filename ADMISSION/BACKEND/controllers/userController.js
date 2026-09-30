@@ -4,6 +4,7 @@ import * as authQueries from '../db/queries/authQueries.js';
 import prisma from '../src/lib/prisma.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
 import { ASSIGNABLE_ROLES } from './authController.js';
+import { recordAudit } from '../utils/audit.js';
 
 // All handlers run after authMiddleware + requireSchool, so req.schoolId is the
 // caller's school (BigInt) taken from the token.
@@ -49,6 +50,7 @@ export const createUser = async (req, res, next) => {
     });
 
     const { password_hash: _omit, ...safeUser } = newUser;
+    await recordAudit(req, { action: 'user.created', entity: 'app_user', entityId: safeUser.id, summary: `Created user ${safeUser.email || ''}` });
     res.status(201).json({ success: true, data: serializeBigInt(safeUser), message: 'User created successfully' });
   } catch(err) {
     next(err);
@@ -102,6 +104,12 @@ export const resetPassword = async (req, res, next) => {
 
     await userQueries.updatePassword(targetId, password_hash);
 
+    await recordAudit(req, {
+      action: isSelf ? 'user.password_changed' : 'user.password_reset',
+      entity: 'app_user',
+      entityId: targetId,
+      summary: isSelf ? 'Changed own password' : `Reset password of user ${targetId}`,
+    });
     res.status(200).json({ success: true, message: 'Password updated successfully' });
   } catch(err) {
     next(err);

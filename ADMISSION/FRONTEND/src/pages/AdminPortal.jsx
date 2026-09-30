@@ -32,7 +32,7 @@ export function AdminPortal() {
     name: "",
     email: "",
     password: "",
-    role: "staff(counselor)",
+    role: "counselor",
   });
   const [resetPassword, setResetPassword] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
@@ -70,7 +70,7 @@ export function AdminPortal() {
         name: "",
         email: "",
         password: "",
-        role: "staff(counselor)",
+        role: "counselor",
       });
       loadUsers();
       showToast("User Created successfully!");
@@ -384,8 +384,8 @@ export function AdminPortal() {
                     setNewUser({ ...newUser, role: e.target.value })
                   }
                 >
-                  <option value="staff(counselor)">Staff (Counselor)</option>
-                  <option value="staff(accountant)">Staff (Accountant)</option>
+                  <option value="counselor">Counselor</option>
+                  <option value="accountant">Accountant</option>
                 </select>
               </div>
               <div

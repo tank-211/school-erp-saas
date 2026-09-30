@@ -27,6 +27,7 @@ export function Counseling() {
   const [futureVisits, setFutureVisits] = useState([]);
   const [missedVisits, setMissedVisits] = useState([]);
   const [editingVisit, setEditingVisit] = useState(null);
+  const [reschedule, setReschedule] = useState({ date: "", time: "", error: "", saving: false });
   const [assignedLeads, setAssignedLeads] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -135,14 +136,14 @@ export function Counseling() {
           id: lead.lead_id || lead.id,
           name: lead.student_name || "Unknown",
           grade: lead.desired_class || "N/A",
-          priority: lead.follow_up_status === "hot" ? "high" : "medium",
-          nextAction: "Follow-up",
-          dueDate: lead.created_at
-            ? new Date(lead.created_at).toLocaleDateString("en-US", {
+          status: lead.follow_up_status || "new",
+          nextAction: lead.next_action ? `Next: ${lead.next_action}` : "No follow-up scheduled",
+          dueDate: lead.next_follow_up_date
+            ? new Date(lead.next_follow_up_date).toLocaleDateString("en-US", {
                 month: "short",
                 day: "numeric",
               })
-            : "Today",
+            : "",
           phone: lead.phone,
           email: lead.email,
           parentName: lead.parent_name,
@@ -188,7 +189,7 @@ export function Counseling() {
   // ── Action Handlers ────────────────────────────────────────
   const handleMarkVisited = async (visitId) => {
     try {
-      await counselingService.updateVisitStatus(visitId, "visited");
+      await counselingService.updateVisitStatus(visitId, "completed");
       refreshVisits(false);
     } catch (err) {
       alert("Failed to update status");
@@ -238,7 +239,10 @@ export function Counseling() {
         <button
           className="btn btn-sm"
           style={{ background: "#3b82f6", color: "white", padding: "6px 8px" }}
-          onClick={() => setEditingVisit(visit)}
+          onClick={() => {
+            setReschedule({ date: "", time: "", error: "", saving: false });
+            setEditingVisit(visit);
+          }}
           title="Reschedule"
         >
           <Edit size={14} />
@@ -280,14 +284,14 @@ export function Counseling() {
             id: lead.lead_id,
             name: lead.student_name || "Unknown",
             grade: lead.desired_class || "N/A",
-            priority: lead.follow_up_status === "hot" ? "high" : "medium",
-            nextAction: "Follow-up",
-            dueDate: lead.created_at
-              ? new Date(lead.created_at).toLocaleDateString("en-US", {
+            status: lead.follow_up_status || "new",
+            nextAction: lead.next_action ? `Next: ${lead.next_action}` : "No follow-up scheduled",
+            dueDate: lead.next_follow_up_date
+              ? new Date(lead.next_follow_up_date).toLocaleDateString("en-US", {
                   month: "short",
                   day: "numeric",
                 })
-              : "Today",
+              : "",
             phone: lead.phone,
             email: lead.email,
             parentName: lead.parent_name,
@@ -409,7 +413,7 @@ export function Counseling() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">Today's Tours</div>
+          <div className="stat-label">Upcoming Tours</div>
           <div className="stat-value" style={{ color: "var(--blue)" }}>
             {dashboardStats.upcomingVisits}
           </div>
@@ -455,11 +459,7 @@ export function Counseling() {
                       <div className="assigned-lead-name">{lead.name}</div>
                       <div className="assigned-lead-grade">{lead.grade}</div>
                     </div>
-                    <span
-                      className={`badge ${lead.priority === "high" ? "badge-red" : "badge-yellow"}`}
-                    >
-                      {lead.priority}
-                    </span>
+                    <span className="badge badge-gray">{lead.status}</span>
                   </div>
                   <div className="assigned-lead-action">
                     <CheckSquare size={14} />
@@ -588,13 +588,60 @@ export function Counseling() {
             maxWidth: "90%"
           }}>
             <h3 style={{ marginTop: 0 }}>Reschedule Visit</h3>
-            <p>Reschedule modal for {editingVisit.student}. Integration to edit page goes here.</p>
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
-              <button 
+            <p style={{ fontSize: 13, color: "var(--gray-500)" }}>{editingVisit.student}</p>
+            {reschedule.error && (
+              <div style={{ padding: 8, background: "#fee2e2", color: "#991b1b", borderRadius: 6, fontSize: 13, marginBottom: 10 }}>
+                {reschedule.error}
+              </div>
+            )}
+            <div className="form-group" style={{ marginBottom: 10 }}>
+              <label className="form-label">New date</label>
+              <input
+                className="form-input"
+                type="date"
+                min={new Date().toISOString().split("T")[0]}
+                value={reschedule.date}
+                onChange={(e) => setReschedule((r) => ({ ...r, date: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">New start time</label>
+              <input
+                className="form-input"
+                type="time"
+                value={reschedule.time}
+                onChange={(e) => setReschedule((r) => ({ ...r, time: e.target.value }))}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: "20px" }}>
+              <button className="btn btn-outline" onClick={() => setEditingVisit(null)} disabled={reschedule.saving}>
+                Cancel
+              </button>
+              <button
                 className="btn btn-primary"
-                onClick={() => setEditingVisit(null)}
+                disabled={reschedule.saving || !reschedule.date || !reschedule.time}
+                onClick={async () => {
+                  // Visits last one hour, like new bookings
+                  const [h, m] = reschedule.time.split(":").map(Number);
+                  const end = `${String((h + 1) % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+                  try {
+                    setReschedule((r) => ({ ...r, saving: true, error: "" }));
+                    const res = await counselingService.updateCampusVisit(editingVisit.id, {
+                      visit_date: reschedule.date,
+                      start_time: reschedule.time,
+                      end_time: end,
+                    });
+                    if (res && res.success === false) throw new Error(res.message || "Could not reschedule");
+                    setEditingVisit(null);
+                    refreshVisits(false);
+                  } catch (err) {
+                    setReschedule((r) => ({ ...r, error: err.message || "Could not reschedule" }));
+                  } finally {
+                    setReschedule((r) => ({ ...r, saving: false }));
+                  }
+                }}
               >
-                Close
+                {reschedule.saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>

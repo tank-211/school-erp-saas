@@ -50,6 +50,9 @@ const isPlainObject = (value) => {
 };
 
 const signDeep = (value, depth = 0) => {
+  // Prisma ids are BigInt, which JSON cannot encode (res.json would throw):
+  // send them as strings, like serializeBigInt does.
+  if (typeof value === 'bigint') return value.toString();
   if (depth > 12 || value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map((item) => signDeep(item, depth + 1));
   // Leave Date, Prisma Decimal, Buffer etc. untouched so their toJSON still applies
