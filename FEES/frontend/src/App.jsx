@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import BulkUpload from './pages/BulkUpload'
+import FeeStructures from './pages/FeeStructures'
 import ExportReport from './pages/ExportReport'
 import Fees from './pages/Fees'
 import Invoice from './pages/Invoice'
@@ -26,6 +27,7 @@ function App() {
             <MainLayout><Dashboard /></MainLayout>
           </ProtectedRoute>
         )} />
+        <Route path="/fee-structures" element={<ProtectedRoute><MainLayout><FeeStructures /></MainLayout></ProtectedRoute>} />
         <Route path="/bulk-upload" element={<ProtectedRoute><MainLayout><BulkUpload /></MainLayout></ProtectedRoute>} />
         <Route path="/export-report" element={<ProtectedRoute><MainLayout><ExportReport /></MainLayout></ProtectedRoute>} />
         <Route path="/fees" element={<ProtectedRoute><MainLayout><Fees /></MainLayout></ProtectedRoute>} />

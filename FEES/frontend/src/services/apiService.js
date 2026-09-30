@@ -463,6 +463,22 @@ export const fetchSchoolProfile = () => getData('/school/profile', 'school detai
 // Classes with sections, and academic years, for filters
 export const fetchSchoolLookups = () => getData('/school/lookups', 'classes and years')
 
+// ==================== FEE STRUCTURES ====================
+// A school's fees per class and academic year (the price list admissions are billed from)
+const sendData = async (method, url, body, label) => {
+  try {
+    const response = await api.request({ method, url, data: body })
+    return { success: true, data: response.data?.data ?? response.data, message: response.data?.message }
+  } catch (error) {
+    return { success: false, error: formatErrorMessage(error, label), details: error }
+  }
+}
+
+export const fetchFeeStructures = () => getData('/fee-structures', 'fee structures')
+export const createFeeStructure = (data) => sendData('post', '/fee-structures', data, 'saving the fee')
+export const updateFeeStructure = (id, data) => sendData('patch', `/fee-structures/${id}`, data, 'saving the fee')
+export const deleteFeeStructure = (id) => sendData('delete', `/fee-structures/${id}`, undefined, 'deleting the fee')
+
 // Student totals plus collections today and this month
 export const fetchStudentStats = () => getData('/students/stats', 'student statistics')
 

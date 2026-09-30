@@ -12,6 +12,7 @@ import {
   ClipboardList,
   DollarSign,
   Upload,
+  Layers,
   RefreshCw,
   PenTool,
   Clock,
@@ -34,6 +35,7 @@ const mainMenuItems = [
     icon: DollarSign,
     path: '#',
     subItems: [
+      { label: 'Fee Structure', icon: Layers, path: '/fee-structures' },
       { label: 'Bulk Upload', icon: Upload, path: '/bulk-upload' },
       { label: 'Refund Management', icon: RefreshCw, path: '/refund-management' },
     ],
