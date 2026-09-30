@@ -235,6 +235,7 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
             id: true,
             first_name: true,
             last_name: true,
+            admission_number: true,
 
             parent_detail: {
               select: {
@@ -254,6 +255,12 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
         section: {
           select: {
             section_name: true,
+          },
+        },
+
+        application: {
+          select: {
+            status: true,
           },
         },
 
@@ -277,6 +284,25 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
         skip: safeOffset,
       }),
     ]);
+
+    // Fee position per student (invoices), for the enrollment checklist
+    const studentIds = [...new Set(admissions.map((a) => a.student_id).filter(Boolean))];
+    const invoices = studentIds.length
+      ? await prisma.invoice.findMany({
+          where: { school_id: schoolIdBigInt, student_id: { in: studentIds } },
+          select: { student_id: true, total_amount: true, pending_amount: true },
+        })
+      : [];
+    const feesByStudent = new Map();
+    for (const inv of invoices) {
+      const key = String(inv.student_id);
+      const f = feesByStudent.get(key) || { invoices: 0, total: 0, pending: 0 };
+      f.invoices += 1;
+      f.total += Number(inv.total_amount || 0);
+      f.pending += Number(inv.pending_amount || 0);
+      feesByStudent.set(key, f);
+    }
+
     return {
       data: admissions.map((admission) => {
         const student = admission.student;
@@ -301,9 +327,10 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
       currentStep = 'parent';
     }
 
-    const isCompleted =
-      admission.status === 'submitted' ||
-      admission.status === 'admission_completed';
+    // Completing an admission sets is_completed (status stays "active")
+    const isCompleted = admission.is_completed === true;
+    const fees = feesByStudent.get(String(admission.student_id));
+    const feeStatus = !fees ? 'none' : fees.pending <= 0 ? 'paid' : fees.pending < fees.total ? 'partial' : 'unpaid';
 
     return {
       admission_id: admission.id.toString(),
@@ -332,6 +359,20 @@ export const getAdmissions = async (schoolId, limit = 10, offset = 0) => {
       section: admission.section?.section_name || null,
 
       parent_contact: parent?.phone || 'N/A',
+
+      admission_number: student?.admission_number || null,
+      application_status: admission.application?.status || null,
+      fee_status: feeStatus,
+      fees_pending: fees ? Math.round(fees.pending * 100) / 100 : 0,
+      // Real enrollment checklist for this admission
+      steps: {
+        application_approved: ['approved', 'admission_started', 'admission_completed'].includes(admission.application?.status) || !admission.application_id,
+        form_completed: isCompleted,
+        fees_invoiced: Boolean(fees),
+        fees_paid: feeStatus === 'paid',
+        student_id_issued: Boolean(student?.admission_number),
+        class_assigned: Boolean(admission.class_id && admission.section_id),
+      },
 
       submitted_date: admission.created_at
         ? admission.created_at.toISOString().split('T')[0]
@@ -1195,10 +1236,35 @@ export const getEnrollmentStats = async (schoolId) => {
     })
   ]);
 
+  // Where students are in the admission journey, from real records
+  const [approvedWaiting, invoicedStudents, unpaidStudents] = await Promise.all([
+    // Approved applications that have no admission yet
+    prisma.application.count({
+      where: { school_id: schoolIdBigInt, status: 'approved' },
+    }),
+    prisma.invoice.findMany({
+      where: { school_id: schoolIdBigInt },
+      select: { student_id: true },
+      distinct: ['student_id'],
+    }),
+    prisma.invoice.findMany({
+      where: { school_id: schoolIdBigInt, pending_amount: { gt: 0 }, status: { not: 'cancelled' } },
+      select: { student_id: true },
+      distinct: ['student_id'],
+    }),
+  ]);
+
   return {
     totalEnrolled,
     thisMonth,
-    processing
+    processing,
+    pipeline: {
+      approved_awaiting_admission: approvedWaiting,
+      admissions_in_progress: processing,
+      enrolled: totalEnrolled,
+      students_invoiced: invoicedStudents.length,
+      students_with_dues: unpaidStudents.length,
+    },
   };
 };
 

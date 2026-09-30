@@ -15,8 +15,9 @@ const getDecodedUserFromToken = (token) => {
   }
 
   return {
-    id: payload.id ?? null,
-    school_id: payload.school_id ?? null,
+    // School tokens carry userId/schoolId; accept both spellings
+    id: payload.id ?? payload.userId ?? null,
+    school_id: payload.school_id ?? payload.schoolId ?? null,
     email: payload.email ?? null,
     role: payload.role ?? null,
   };

@@ -1,125 +1,141 @@
-import { useState } from "react";
-import { Shield, Users, FileText, Lock, Key, AlertTriangle } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import axios from "axios";
+import { Shield, Users, FileText, LogIn } from "lucide-react";
+import { getAuthHeader } from "../utils/authToken";
 import "../style.css";
 
-const roles = [
-  { id:1, name:"Super Admin",       users:2, permissions:"Full Access"          },
-  { id:2, name:"Admission Officer", users:5, permissions:"Manage Applications"  },
-  { id:3, name:"Counselor",         users:8, permissions:"Manage Leads"         },
-  { id:4, name:"Finance",           users:3, permissions:"View Payments"        },
-];
-const logs = [
-  { id:1, user:"Admin",        action:"Application Approved",  time:"2 hours ago", ip:"192.168.1.1"  },
-  { id:2, user:"Priya Sharma", action:"Lead Status Updated",   time:"5 hours ago", ip:"192.168.1.5"  },
-  { id:3, user:"Finance Team", action:"Payment Recorded",      time:"1 day ago",   ip:"192.168.1.10" },
-];
+const PAGE_SIZE = 25;
+
+const formatTime = (value) => (value ? new Date(value).toLocaleString() : "");
 
 export function Security() {
-  const [twoFA, setTwoFA]     = useState(true);
-  const [session, setSession] = useState(true);
+  const [overview, setOverview] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [error, setError] = useState("");
+  const [loadingLogs, setLoadingLogs] = useState(true);
+
+  useEffect(() => {
+    axios
+      .get("/api/security/overview", { headers: getAuthHeader() })
+      .then((res) => setOverview(res.data?.data || null))
+      .catch((err) => setError(err.response?.data?.message || err.message || "Failed to load security overview"));
+  }, []);
+
+  const loadLogs = useCallback(async (p) => {
+    try {
+      setLoadingLogs(true);
+      const res = await axios.get("/api/security/audit-logs", {
+        headers: getAuthHeader(),
+        params: { page: p, limit: PAGE_SIZE },
+      });
+      setLogs(res.data?.data || []);
+      setTotal(res.data?.pagination?.total || 0);
+    } catch (err) {
+      setError(err.response?.data?.message || err.message || "Failed to load the audit log");
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLogs(page);
+  }, [page, loadLogs]);
+
+  const pages = Math.max(Math.ceil(total / PAGE_SIZE), 1);
+  const cards = [
+    { label: "Staff Accounts", value: overview?.total_users, icon: Users, color: "var(--blue-bg)", ic: "var(--blue)" },
+    { label: "Active Accounts", value: overview?.active_users, icon: Shield, color: "var(--green-bg)", ic: "var(--green)" },
+    { label: "Audit Entries", value: overview?.audit_total, icon: FileText, color: "var(--purple-bg)", ic: "var(--purple)" },
+    { label: "Sign-ins (7 days)", value: overview?.logins_last_7_days, icon: LogIn, color: "var(--orange-bg)", ic: "var(--orange)" },
+  ];
 
   return (
     <div className="page">
       <div className="page-header">
-        <div><h1 className="page-title">Security & Compliance</h1><p className="page-sub">Manage roles, permissions, and audit logs</p></div>
+        <div><h1 className="page-title">Security & Compliance</h1><p className="page-sub">Staff accounts and who did what</p></div>
       </div>
 
-      <div className="grid-4 mb-5">
-        {[
-          { label:"Total Users",  value:"18",    icon:Users,    color:"var(--blue-bg)",   ic:"var(--blue)"   },
-          { label:"Active Roles", value:"4",     icon:Shield,   color:"var(--green-bg)",  ic:"var(--green)"  },
-          { label:"Audit Logs",   value:"1,234", icon:FileText, color:"var(--purple-bg)", ic:"var(--purple)" },
-          { label:"2FA Enabled",  value:"15",    icon:Lock,     color:"var(--orange-bg)", ic:"var(--orange)" },
-        ].map((s,i)=>{const Icon=s.icon;return(
-          <div className="stat-card" key={i}>
-            <div className="stat-wide">
-              <div className="stat-icon" style={{background:s.color}}><Icon size={20} style={{color:s.ic}}/></div>
-              <div><div className="stat-label">{s.label}</div><div className="stat-value">{s.value}</div></div>
+      {error && (
+        <div style={{ marginBottom: 16, padding: 12, background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 6, color: "#991b1b" }}>{error}</div>
+      )}
+
+      <div className="grid-4" style={{ marginBottom: 20 }}>
+        {cards.map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <div className="stat-card" key={i}>
+              <div className="stat-wide">
+                <div className="stat-icon" style={{ background: s.color }}><Icon size={20} style={{ color: s.ic }} /></div>
+                <div><div className="stat-label">{s.label}</div><div className="stat-value">{s.value ?? "—"}</div></div>
+              </div>
             </div>
-          </div>
-        );})}
+          );
+        })}
       </div>
 
-      <div className="grid-2 mb-5">
-        {/* Role Management */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Role Management</div>
-            <button className="btn btn-primary btn-sm">Add Role</button>
-          </div>
-          <div className="table-wrap">
-            <table className="table">
-              <thead><tr><th>Role Name</th><th>Users</th><th>Permissions</th><th>Actions</th></tr></thead>
-              <tbody>
-                {roles.map(r=>(
-                  <tr key={r.id}>
-                    <td className="td-bold">{r.name}</td>
-                    <td><span className="badge badge-gray">{r.users}</span></td>
-                    <td style={{fontSize:13,color:"var(--gray-500)"}}>{r.permissions}</td>
-                    <td><button className="btn btn-ghost btn-sm">Edit</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Staff by Role</div>
+            <div className="card-sub">Accounts are added in Admin Dashboard → Users</div>
           </div>
         </div>
-
-        {/* Security Settings */}
-        <div className="card">
-          <div className="card-header"><div className="card-title">Security Settings</div></div>
-          <div className="card-body">
-            <div className="security-setting-row">
-              <div className="security-setting-info">
-                <Key size={18} className="security-setting-icon"/>
-                <div>
-                  <div className="security-setting-name">Two-Factor Authentication</div>
-                  <div className="security-setting-desc">Require 2FA for all users</div>
-                </div>
-              </div>
-              <label className="toggle"><input type="checkbox" checked={twoFA} onChange={e=>setTwoFA(e.target.checked)}/><span className="toggle-slider"/></label>
-            </div>
-            <div className="security-setting-row">
-              <div className="security-setting-info">
-                <Lock size={18} className="security-setting-icon"/>
-                <div>
-                  <div className="security-setting-name">Data Encryption</div>
-                  <div className="security-setting-desc">Encrypt sensitive data at rest</div>
-                </div>
-              </div>
-              <span className="badge badge-green">Active</span>
-            </div>
-            <div className="security-setting-row">
-              <div className="security-setting-info">
-                <AlertTriangle size={18} className="security-setting-icon"/>
-                <div>
-                  <div className="security-setting-name">Session Timeout</div>
-                  <div className="security-setting-desc">Auto logout after 30 minutes</div>
-                </div>
-              </div>
-              <label className="toggle"><input type="checkbox" checked={session} onChange={e=>setSession(e.target.checked)}/><span className="toggle-slider"/></label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Audit Logs */}
-      <div className="card">
-        <div className="card-header"><div className="card-title">Audit Logs</div></div>
         <div className="table-wrap">
           <table className="table">
-            <thead><tr><th>User</th><th>Action</th><th>Timestamp</th><th>IP Address</th></tr></thead>
+            <thead><tr><th>Role</th><th>Accounts</th><th>Active</th></tr></thead>
             <tbody>
-              {logs.map(l=>(
-                <tr key={l.id}>
-                  <td className="td-bold">{l.user}</td>
-                  <td>{l.action}</td>
-                  <td style={{fontSize:13,color:"var(--gray-500)"}}>{l.time}</td>
-                  <td className="td-mono">{l.ip}</td>
+              {(overview?.roles || []).map((r) => (
+                <tr key={r.role}>
+                  <td className="td-bold">{r.label}</td>
+                  <td><span className="badge badge-gray">{r.users}</span></td>
+                  <td><span className="badge badge-green">{r.active}</span></td>
                 </tr>
               ))}
+              {overview && !overview.roles.length && (
+                <tr><td colSpan={3} style={{ textAlign: "center", color: "var(--gray-500)" }}>No staff accounts yet.</td></tr>
+              )}
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">Audit Log</div>
+            <div className="card-sub">Sign-ins, user changes, application decisions, admissions and school setup changes</div>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr><th>User</th><th>Action</th><th>Details</th><th>Time</th><th>IP Address</th></tr></thead>
+            <tbody>
+              {logs.map((l) => (
+                <tr key={l.id}>
+                  <td className="td-bold">{l.user}</td>
+                  <td><span className="badge badge-blue">{l.action}</span></td>
+                  <td style={{ fontSize: 13, color: "var(--gray-600)" }}>{l.summary || `${l.entity} ${l.entity_id}`}</td>
+                  <td style={{ fontSize: 13, color: "var(--gray-500)" }}>{formatTime(l.created_at)}</td>
+                  <td className="td-mono">{l.ip_address || "—"}</td>
+                </tr>
+              ))}
+              {!loadingLogs && logs.length === 0 && (
+                <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--gray-500)" }}>Nothing recorded yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {total > PAGE_SIZE && (
+          <div className="card-body" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 13, color: "var(--gray-500)" }}>Page {page} of {pages} · {total} entries</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn btn-outline btn-sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button>
+              <button className="btn btn-outline btn-sm" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Next</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { resetSchoolSetupCache } from "../hooks/useSchoolSetup";
 import {
   CalendarDays, CheckCircle, Circle, GraduationCap, Layers, Pencil, Plus, Trash2, X,
 } from "lucide-react";
@@ -319,6 +320,8 @@ export function SchoolSetup() {
   const load = useCallback(async () => {
     try {
       setError("");
+      // Dropdowns elsewhere cache classes and years; make them re-read
+      resetSchoolSetupCache();
       setData(await fetchSetupOverview());
     } catch (err) {
       setError(err.message);

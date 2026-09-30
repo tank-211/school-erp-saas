@@ -92,7 +92,8 @@ export const assignAdmissionFees = async (tx, { schoolId, admissionId, actor }) 
         concession_percentage: 0,
         concession_amount: 0,
         final_amount: structure.amount,
-        status: 'pending',
+        // Billed on the invoice created just below (or nothing to bill when the total is 0)
+        status: 'invoiced',
       },
     });
   }
@@ -155,4 +156,47 @@ export const describeFeeResult = (fees) => {
     return `Invoice ${fees.invoice_number} created for Rs ${fees.total_amount} (${fees.fee_types.join(', ')}).`;
   }
   return `Fees assigned (${fees.fee_types.join(', ')}); the total is 0, so no invoice was created.`;
+};
+
+/**
+ * Fee assignments of the school that have not been billed on any invoice yet.
+ *
+ * status 'invoiced' marks billed assignments. Assignments created by the
+ * admission link before that status existed are still 'pending' although they
+ * were billed straight away: those are recognised by the "Admission fees: ..."
+ * invoice for the same student created at (almost) the same time.
+ */
+const LINK_WINDOW_MS = 5 * 60 * 1000;
+
+export const findUninvoicedAssignments = async (db, schoolId, { studentId } = {}) => {
+  const sid = BigInt(schoolId);
+  const assignments = await db.student_fee_assignment.findMany({
+    where: {
+      school_id: sid,
+      ...(studentId ? { student_id: BigInt(studentId) } : {}),
+      OR: [{ status: 'pending' }, { status: null }],
+    },
+    include: { fee_structure: true },
+    orderBy: { id: 'asc' },
+  });
+  if (!assignments.length) return [];
+
+  const linkInvoices = await db.invoice.findMany({
+    where: {
+      school_id: sid,
+      student_id: { in: [...new Set(assignments.map((a) => a.student_id))] },
+      notes: { startsWith: 'Admission fees:' },
+    },
+    select: { student_id: true, created_at: true },
+  });
+
+  return assignments.filter((a) => {
+    const created = a.created_at ? new Date(a.created_at).getTime() : null;
+    if (created === null) return true;
+    return !linkInvoices.some((inv) => {
+      if (String(inv.student_id) !== String(a.student_id) || !inv.created_at) return false;
+      const gap = new Date(inv.created_at).getTime() - created;
+      return gap >= -LINK_WINDOW_MS && gap <= LINK_WINDOW_MS;
+    });
+  });
 };

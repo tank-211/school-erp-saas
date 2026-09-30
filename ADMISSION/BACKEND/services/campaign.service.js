@@ -2,6 +2,9 @@ import prisma from '../src/lib/prisma.js';
 import AppError from '../utils/appError.js';
 import { sendSMS } from '../utils/smsSender.js';
 import { sendWhatsApp } from '../utils/whatsappSender.js';
+import { sendMailWithGmail } from '../config/mailer.js';
+
+const MAX_RECIPIENTS = 500;
 
 const VALID_CHANNELS = new Set(['email', 'sms', 'whatsapp']);
 const VALID_AUDIENCE_TYPES = new Set(['lead', 'student', 'parent']);
@@ -50,9 +53,10 @@ const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) =>
 
     const result = await sendSMS(recipient.phone, normalizedPayload.message);
     return {
-      status: result.status || 'sent',
+      status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
-      sent_at: result.sent_at || new Date(),
+      sent_at: result.sent_at || null,
+      error: result.error || null,
     };
   }
 
@@ -63,9 +67,10 @@ const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) =>
 
     const result = await sendWhatsApp(recipient.phone, normalizedPayload.message);
     return {
-      status: result.status || 'sent',
+      status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
-      sent_at: result.sent_at || new Date(),
+      sent_at: result.sent_at || null,
+      error: result.error || null,
     };
   }
 
@@ -73,17 +78,17 @@ const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) =>
     return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient email is missing' };
   }
 
-  console.log('Email sent:', {
-    to: recipient.email,
-    subject: normalizedPayload.subject,
-    message: normalizedPayload.message,
-  });
-
-  return {
-    status: 'sent',
-    provider_message_id: `email-${Date.now()}`,
-    sent_at: new Date(),
-  };
+  // Real email through the school's configured mailbox (same as Compose)
+  try {
+    const info = await sendMailWithGmail({
+      to: recipient.email,
+      subject: normalizedPayload.subject,
+      text: normalizedPayload.message,
+    });
+    return { status: 'sent', provider_message_id: info?.messageId || null, sent_at: new Date() };
+  } catch (error) {
+    return { status: 'failed', provider_message_id: null, sent_at: null, error: error.message };
+  }
 };
 
 export const createCampaign = async (schoolId, payload) => {
@@ -105,7 +110,7 @@ export const createCampaign = async (schoolId, payload) => {
         school_id: BigInt(schoolId),
         name,
         channel: payload.channel,
-        audience_type: payload.audience_type,
+        // The campaign table has no audience column: the audience is chosen when sending
         status: 'draft',
 
         start_date: payload.start_date
@@ -162,8 +167,7 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
     throw new AppError('Campaign not found', 404);
   }
 
-  const audienceType =
-    campaign.audience_type || payload.audience_type;
+  const audienceType = payload.audience_type;
 
   assertAudienceType(audienceType);
   assertChannel(campaign.channel);
@@ -236,6 +240,12 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
       404
     );
   }
+  if (recipients.length > MAX_RECIPIENTS) {
+    throw new AppError(
+      `This audience has ${recipients.length} recipients; campaigns can send to at most ${MAX_RECIPIENTS} at a time`,
+      400
+    );
+  }
 
   // Mark campaign as running
   await prisma.campaign.update({
@@ -247,8 +257,10 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
     },
   });
 
-  const sendResults = await Promise.all(
-    recipients.map(async (recipient) => {
+  // One at a time: mail providers reject bursts of parallel sends
+  const sendResults = [];
+  for (const recipient of recipients) {
+    sendResults.push(await (async () => {
       const recipientName = [
         recipient.first_name,
         recipient.last_name,
@@ -268,7 +280,6 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
       const communication = await prisma.communication_log.create({
         data: {
           school_id: schoolIdBigInt,
-          campaign_id: parsedCampaignId,
 
           recipient_type: audienceType,
           recipient_id: recipient.id,
@@ -280,7 +291,7 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
 
           status: dispatch.status,
 
-          sent_at: dispatch.sent_at || new Date(),
+          sent_at: dispatch.sent_at || null,
 
           created_by: userId
             ? BigInt(userId)
@@ -306,8 +317,8 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
           dispatch.provider_message_id || null,
         error: dispatch.error || null,
       };
-    })
-  );
+    })());
+  }
 
   const sentCount = sendResults.filter(
     (item) => item.status === 'sent'

@@ -6,9 +6,10 @@ import { getAuthHeader } from '../utils/authToken';
  * Fetch dashboard stats (inquiries, conversion, leads, etc.)
  * GET /api/dashboard
  */
-export async function getDashboardStats(signal) {
+export async function getDashboardStats(signal, period) {
   const { data } = await axios.get('/api/dashboard', {
     signal,
+    params: period ? { period } : undefined,
     headers: getAuthHeader() || undefined,
   });
   return data;
@@ -18,9 +19,10 @@ export async function getDashboardStats(signal) {
  * Fetch funnel data (inquiry, contacted, interested, etc.)
  * GET /api/dashboard/funnel
  */
-export async function getFunnelData(signal) {
+export async function getFunnelData(signal, period) {
   const { data } = await axios.get('/api/dashboard/funnel', {
     signal,
+    params: period ? { period } : undefined,
     headers: getAuthHeader() || undefined,
   });
   return data;
@@ -30,24 +32,39 @@ export async function getFunnelData(signal) {
  * Fetch monthly trend for inquiries and enrollments
  * GET /api/dashboard/monthly-trend
  */
-export async function getMonthlyTrend(signal) {
+export async function getMonthlyTrend(signal, period) {
   const { data } = await axios.get('/api/dashboard/monthly-trend', {
     signal,
+    params: period ? { period } : undefined,
     headers: getAuthHeader() || undefined,
   });
   return data;
 }
 
-export async function getGradeDistribution(signal) {
+export async function getGradeDistribution(signal, period) {
   const { data } = await axios.get('/api/dashboard/grade-distribution', {
     signal,
+    params: period ? { period } : undefined,
     headers: getAuthHeader() || undefined,
   });
   return data;
 }
 
-export async function getCounselorPerformance(signal) {
+export async function getCounselorPerformance(signal, period) {
   const { data } = await axios.get('/api/dashboard/counselor-performance', {
+    signal,
+    params: period ? { period } : undefined,
+    headers: getAuthHeader() || undefined,
+  });
+  return data;
+}
+
+/**
+ * Open leads with no contact for 7+ days
+ * GET /api/dashboard/inactivity-alerts
+ */
+export async function getInactivityAlerts(signal) {
+  const { data } = await axios.get('/api/dashboard/inactivity-alerts', {
     signal,
     headers: getAuthHeader() || undefined,
   });

@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import { useApplication } from "../hooks/useApplication";
+import { useSchoolSetup } from "../hooks/useSchoolSetup";
 import "../style.css";
 import ParentForm from "./ParentForm";
 
@@ -42,12 +43,6 @@ const REQUIRED_DOCUMENT_TYPES = [
 
 const REQUIRED_PHOTO_TYPES = ["student_photo"];
 
-const generateAcademicYears = (currentYear) => [
-  `${currentYear}-${(currentYear + 1).toString().slice(-2)}`,
-  `${currentYear - 1}-${currentYear.toString().slice(-2)}`,
-  `${currentYear - 2}-${(currentYear - 1).toString().slice(-2)}`,
-  `${currentYear - 3}-${(currentYear - 2).toString().slice(-2)}`,
-];
 
 const normalizeClassValue = (value) => {
   if (!value) {
@@ -213,9 +208,7 @@ export function MultiStepApplication() {
   const [moveError, setMoveError] = useState("");
   const [invalidFields, setInvalidFields] = useState({});
   const [previewItem, setPreviewItem] = useState(null);
-  const [currentAcademicYear, setCurrentAcademicYear] = useState(
-    new Date().getFullYear(),
-  );
+  const { classNames: setupClassNames, years: setupYears, activeYear } = useSchoolSetup();
 
   // Step 1: Student Information
   const [studentForm, setStudentForm] = useState({
@@ -239,7 +232,7 @@ export function MultiStepApplication() {
     previous_class: "",
     marks_percentage: "",
     board_name: "CBSE",
-    academic_year: generateAcademicYears(new Date().getFullYear())[0],
+    academic_year: "",
     additional_qualifications: "",
     extracurricular_activities: "",
     achievements: "",
@@ -304,9 +297,8 @@ export function MultiStepApplication() {
         // Academic auto-fill
       setAcademicForm((prev) => ({
         ...prev,
-        desired_class: normalizeClassValue(
-          app.lead_desired_class || prev.desired_class
-        ),
+        // Keep the exact class name: it must match School Setup
+        desired_class: app.lead_desired_class || prev.desired_class,
         previous_class: getPreviousClassValue(
           app.lead_desired_class || prev.desired_class
         ),
@@ -318,18 +310,13 @@ export function MultiStepApplication() {
     }
   }, [details]);
 
+  // Default the academic year to the school's active year
   useEffect(() => {
-    const nextYear = new Date().getFullYear() + 1;
-    const timeoutMs = new Date(nextYear, 0, 1, 0, 0, 1).getTime() - Date.now();
-    const timer = window.setTimeout(
-      () => {
-        setCurrentAcademicYear(new Date().getFullYear());
-      },
-      Math.max(timeoutMs, 1000),
+    if (!activeYear) return;
+    setAcademicForm((prev) =>
+      prev.academic_year ? prev : { ...prev, academic_year: activeYear.year_name },
     );
-
-    return () => window.clearTimeout(timer);
-  }, [currentAcademicYear]);
+  }, [activeYear]);
 
     useEffect(() => {
       if (!details) {
@@ -342,12 +329,11 @@ export function MultiStepApplication() {
       setAcademicForm((prev) => ({
         ...prev,
 
-        desired_class: normalizeClassValue(
+        desired_class:
           academicInfo?.desired_class ||
           leadDesiredClass ||
           prev.desired_class ||
-          ""
-        ),
+          "",
 
         previous_school: academicInfo?.previous_school || prev.previous_school || "",
         previous_class: normalizeClassValue(
@@ -724,13 +710,15 @@ export function MultiStepApplication() {
     };
   }, [photos, documents]);
 
+  // Academic years and classes come from School Setup. A value saved earlier
+  // that is no longer in the list stays selectable.
   const academicYearOptions = [
     ...new Set(
-      [
-        ...generateAcademicYears(currentAcademicYear),
-        academicForm.academic_year,
-      ].filter(Boolean),
+      [...setupYears.map((y) => y.year_name), academicForm.academic_year].filter(Boolean),
     ),
+  ];
+  const desiredClassOptions = [
+    ...new Set([...setupClassNames, academicForm.desired_class].filter(Boolean)),
   ];
 
   const progressSteps = [
@@ -1194,15 +1182,16 @@ export function MultiStepApplication() {
                   onChange={(e) =>
                     setAcademicForm((p) => ({
                       ...p,
-                      desired_class: normalizeClassValue(e.target.value),
+                      // Exact School Setup name: admissions match the class by name
+                      desired_class: e.target.value,
                       previous_class: getPreviousClassValue(e.target.value),
                     }))
                   }
                 >
                   <option value="">Select desired class</option>
-                  {CLASS_OPTIONS.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
+                  {desiredClassOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
                     </option>
                   ))}
                 </select>

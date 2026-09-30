@@ -346,9 +346,14 @@ export const getApplications = async (schoolId, options = {}) => {
       ? options.offset
       : 0;
 
+  // Optional status filter, only for statuses the database allows
+  const APPLICATION_STATUSES = ['draft', 'in_progress', 'documents_pending', 'submitted', 'under_review', 'approved', 'rejected', 'admission_started', 'admission_completed'];
+  const statusFilter = APPLICATION_STATUSES.includes(options.status) ? { status: options.status } : {};
+
   const applications = await prisma.application.findMany({
     where: {
       school_id: BigInt(schoolId),
+      ...statusFilter,
     },
     orderBy: {
       updated_at: 'desc',
@@ -1808,6 +1813,8 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
           id: true,
           student_id: true,
           application_id: true,
+          section_id: true,
+          is_completed: true,
         },
       });
 
@@ -1999,6 +2006,36 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
             updated_at: new Date(),
           },
         });
+
+        // Keep the admission itself in step: its class decides the fees it is
+        // billed on completion. Only before completion, and only for a class
+        // that exists in School Setup (matched by exact name).
+        if (!admission.is_completed) {
+          const admissionUpdate = {};
+          if (data.admission_type) {
+            admissionUpdate.admission_type = String(data.admission_type).slice(0, 50);
+          }
+          const schoolClass = data.desired_class
+            ? await tx.school_class.findFirst({
+                where: { school_id: schoolIdBigInt, class_name: String(data.desired_class).trim() },
+                select: { id: true, section: { select: { id: true }, orderBy: { section_name: 'asc' } } },
+              })
+            : null;
+          if (schoolClass) {
+            admissionUpdate.class_id = schoolClass.id;
+            const sectionIds = (schoolClass.section || []).map((sec) => String(sec.id));
+            if (sectionIds.length && !sectionIds.includes(String(admission.section_id))) {
+              // The old section belongs to another class: use this class's first section
+              admissionUpdate.section_id = BigInt(sectionIds[0]);
+            }
+          }
+          if (Object.keys(admissionUpdate).length) {
+            await tx.admission.update({
+              where: { id: admission.id },
+              data: { ...admissionUpdate, updated_at: new Date() },
+            });
+          }
+        }
       }
 
       // STEP 4 — Documents
@@ -2318,6 +2355,29 @@ export const getAdmissionApplicationById = async (schoolId, admissionId) => {
       `Failed to get admission application: ${error.message}`
     );
   }
+};
+
+// Submitted or under-review applications can be rejected, with a reason.
+export const rejectApplication = async (applicationId, schoolId, reason) => {
+  const text = String(reason || '').trim();
+  if (!text) {
+    throw new Error('A reason is required to reject an application');
+  }
+  const application = await prisma.application.findFirst({
+    where: { id: BigInt(applicationId), school_id: BigInt(schoolId) },
+    select: { id: true, status: true },
+  });
+  if (!application) {
+    throw new Error('Application not found');
+  }
+  if (!['submitted', 'under_review', 'documents_pending'].includes(application.status)) {
+    throw new Error(`Application cannot be rejected from status: ${application.status}`);
+  }
+  return prisma.application.update({
+    where: { id: application.id },
+    data: { status: 'rejected', rejection_reason: text.slice(0, 2000), updated_at: new Date() },
+    select: { id: true, application_number: true, status: true, rejection_reason: true, updated_at: true },
+  });
 };
 
 export const approveApplication = async (applicationId, schoolId) => {

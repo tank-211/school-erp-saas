@@ -115,7 +115,14 @@ export const searchLeads = async (req, res) => {
             ? value.toString()
             : value
       )
-    );
+    ).map((lead) => ({
+      ...lead,
+      // Names the visit form uses
+      lead_id: lead.id,
+      student_name: [lead.first_name, lead.last_name].filter(Boolean).join(' '),
+      parent_name: null,
+      grade: lead.desired_class || null,
+    }));
 
     return res.json({
       success: true,
@@ -161,8 +168,9 @@ export const searchLeads = async (req, res) => {
 export const createCampusVisit = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
+    let counselorId = req.user.id;
     let {
+      assigned_to,
       lead_id,
       visitor_name,
       visitor_phone,
@@ -211,14 +219,35 @@ export const createCampusVisit = async (req, res) => {
       });
     }
 
+    const caller = await prisma.app_user.findFirst({
+      where: { id: BigInt(req.user.id), school_id: BigInt(school_id) },
+      select: { id: true, name: true, role: true },
+    });
+    const callerIsAdmin = caller?.role === 'admin';
+
+    // The guide for the visit: another counselor/admin of this school, or the caller
+    if (assigned_to !== undefined && assigned_to !== null && assigned_to !== '' && String(assigned_to) !== String(req.user.id)) {
+      if (!/^\d+$/.test(String(assigned_to))) {
+        return res.status(400).json({ success: false, message: 'Invalid guide' });
+      }
+      const guide = await prisma.app_user.findFirst({
+        where: {
+          id: BigInt(assigned_to),
+          school_id: BigInt(school_id),
+          status: 'active',
+          role: { in: ['counselor', 'admin'] },
+        },
+        select: { id: true },
+      });
+      if (!guide) {
+        return res.status(400).json({ success: false, message: 'The chosen guide is not an active counselor of this school' });
+      }
+      counselorId = guide.id;
+    }
+
     // Auto-fill from lead if lead_id provided
     if (lead_id) {
-      const counselor = await prisma.app_user.findFirst({
-  where: {
-    id: BigInt(counselorId),
-    school_id: BigInt(school_id)
-  }
-});
+      const counselor = caller;
 
         const leadResult = await prisma.lead.findFirst({
           where: {
@@ -227,15 +256,14 @@ export const createCampusVisit = async (req, res) => {
           }
         });
 
-        if (
-          !leadResult ||
-          !counselor ||
-          (
-            leadResult.assigned_to?.toString() !== counselor.id.toString() &&
-            leadResult.assigned_to?.toLowerCase()?.trim() !==
-              counselor.name?.toLowerCase()?.trim()
-          )
-        ) {
+        // Admins may book for any lead of the school; counselors for their own
+        // leads (or unassigned ones)
+        const assignedTo = leadResult?.assigned_to ? String(leadResult.assigned_to).trim() : '';
+        const isCallersLead =
+          !assignedTo ||
+          assignedTo === String(counselor?.id) ||
+          assignedTo.toLowerCase() === String(counselor?.name || '').toLowerCase().trim();
+        if (!leadResult || !counselor || (!callerIsAdmin && !isCallersLead)) {
           return res.status(404).json({
             success: false,
             message: 'Lead not found or not assigned to this counselor'
@@ -423,6 +451,21 @@ export const updateCampusVisit = async (req, res) => {
       });
     }
 
+    // A new guide must be active staff of this school
+    if (updates.assigned_to !== undefined) {
+      const guide = /^\d+$/.test(String(updates.assigned_to))
+        ? await prisma.app_user.findFirst({
+            where: { id: BigInt(updates.assigned_to), school_id: BigInt(school_id), status: 'active', role: { in: ['counselor', 'admin'] } },
+            select: { id: true },
+          })
+        : null;
+      if (!guide) {
+        return res.status(400).json({ success: false, message: 'The chosen guide is not an active counselor of this school' });
+      }
+    }
+    // Status changes go through PATCH /visits/:id/status (valid values only)
+    delete updates.status;
+
     const updatedVisit = await counselingQueries.updateCampusVisit(
       id,
       school_id,
@@ -568,13 +611,30 @@ export const updateVisitStatus = async (req, res) => {
     const { school_id } = req.user;
     const counselorId = req.user.id;
     const { id } = req.params;
-    const { status } = req.body;
-    
-    if (!['visited', 'cancelled'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status. Must be "visited" or "cancelled"' });
+    // "visited" is accepted from older clients; the database value is "completed"
+    const requested = req.body?.status === 'visited' ? 'completed' : req.body?.status;
+
+    if (!['completed', 'cancelled', 'no_show'].includes(requested)) {
+      return res.status(400).json({ success: false, message: 'Status must be completed, cancelled or no_show' });
+    }
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ success: false, message: 'Invalid visit id' });
     }
 
-    const updatedVisit = await counselingQueries.updateVisitStatus(id, school_id, counselorId, status);
+    // Admins may update any visit of the school; counselors only their own
+    const caller = await prisma.app_user.findFirst({
+      where: { id: BigInt(counselorId), school_id: BigInt(school_id) },
+      select: { role: true },
+    });
+    const updatedVisit = await counselingQueries.updateVisitStatus(
+      id,
+      school_id,
+      caller?.role === 'admin' ? null : counselorId,
+      requested
+    );
+    if (!updatedVisit?.count) {
+      return res.status(404).json({ success: false, message: 'Visit not found' });
+    }
     return res.json({ success: true, message: 'Visit status updated successfully', data: updatedVisit });
   } catch (error) {
     console.error('Error in updateVisitStatus:', error);

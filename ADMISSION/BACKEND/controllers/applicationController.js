@@ -2,6 +2,7 @@ import * as applicationService from '../services/applicationService.js';
 import prisma from '../src/lib/prisma.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
 import { describeFeeResult } from '../services/admissionFeeService.js';
+import { recordAudit } from '../utils/audit.js';
 /**
  * Create application from lead
  * POST /api/applications
@@ -168,11 +169,12 @@ export const getApplicationCounts = async (req, res) => {
 export const getApplications = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const { limit, offset } = req.query;
+    const { limit, offset, status } = req.query;
 
     const applications = await applicationService.getApplications(school_id, {
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
+      status,
     });
 
     return res.status(200).json({
@@ -670,6 +672,7 @@ export const moveApplicationToReview = async (req, res) => {
       school_id
     );
 
+    await recordAudit(req, { action: 'application.review', entity: 'application', entityId: id, summary: `Application ${id} moved to review` });
     return res.status(200).json({
       success: true,
       data: serializeBigInt(result),
@@ -689,6 +692,23 @@ export const moveApplicationToReview = async (req, res) => {
  * Approve application
  * PATCH /api/applications/:id/approve
  */
+/**
+ * PATCH /api/applications/:id/reject  { reason }
+ */
+export const rejectApplication = async (req, res) => {
+  try {
+    if (!/^\d+$/.test(String(req.params.id))) {
+      return res.status(400).json({ success: false, message: 'Invalid application id' });
+    }
+    const result = await applicationService.rejectApplication(req.params.id, req.user.school_id, req.body?.reason);
+    await recordAudit(req, { action: 'application.rejected', entity: 'application', entityId: req.params.id, summary: `Application ${result?.application_number || req.params.id} rejected` });
+    return res.status(200).json({ success: true, data: serializeBigInt(result), message: 'Application rejected' });
+  } catch (error) {
+    const status = /not found/i.test(error.message) ? 404 : 400;
+    return res.status(status).json({ success: false, message: error.message || 'Failed to reject application' });
+  }
+};
+
 export const approveApplication = async (req, res) => {
   try {
     const { id } = req.params;
@@ -699,6 +719,7 @@ export const approveApplication = async (req, res) => {
       school_id
     );
 
+    await recordAudit(req, { action: 'application.approved', entity: 'application', entityId: id, summary: `Application ${result?.application_number || id} approved` });
     return res.status(200).json({
       success: true,
       data: serializeBigInt(result),
@@ -939,6 +960,12 @@ export const completeAdmission = async (req, res) => {
       req.user.name || req.user.email || req.user.id
     );
 
+    await recordAudit(req, {
+      action: 'admission.completed',
+      entity: 'admission',
+      entityId: admission_id,
+      summary: `Admission ${admission_id} completed. ${describeFeeResult(result.fees)}`.trim(),
+    });
     return res.status(200).json({
       success: true,
       data: serializeBigInt(result),

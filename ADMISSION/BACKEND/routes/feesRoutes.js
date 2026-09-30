@@ -3,7 +3,8 @@ import {
   getDashboardStats,
   getTransactions,
   getInvoiceById,
-  generateInvoice
+  generateInvoice,
+  getUninvoicedFees
 } from '../controllers/feesController.js';
 import {
   getAdmissionsWithoutFees,
@@ -31,6 +32,8 @@ router.get('/transactions', getTransactions);
 router.get('/invoice/:id', getInvoiceById);
 
 // POST generate new invoice
+// Fees assigned but not invoiced yet (Generate Invoice dialog)
+router.get('/uninvoiced', requireSchool, getUninvoicedFees);
 router.post('/generate-invoice', requireSchool, generateInvoice);
 
 // Completed admissions that have no fees yet, and assigning them (admin only)

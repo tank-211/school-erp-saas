@@ -4,15 +4,14 @@ import { ProtectedRoute } from "./components/ProtectedRoute.jsx";
 import { Dashboard } from "./pages/Dashboard";
 import { Leads } from "./pages/Leads";
 import { AddLead } from "./pages/AddLead";
+import { EditLead } from "./pages/EditLead";
 import { Pipeline } from "./pages/Pipeline";
 import { Communication } from "./pages/Communication";
 import { Counseling } from "./pages/Counseling";
 import { ScheduleVisit } from "./pages/ScheduleVisit";
 import { Applications } from "./pages/Applications";
 import { CreateApplication } from "./pages/CreateApplication";
-import { NewApplication } from "./pages/NewApplication";
 import { MultiStepApplication } from "./pages/MultiStepApplication";
-import { Screening } from "./pages/Screening";
 import { OffersSeats } from "./pages/OffersSeats";
 import { FeesPayments } from "./pages/FeesPayments";
 import { InvoiceDetail } from "./pages/InvoiceDetail";
@@ -53,6 +52,7 @@ export default function App() {
           <Route path="leads" element={<Leads />} />
           <Route path="leads/:id" element={<LeadDetails />} />
           <Route path="leads/add" element={<AddLead />} />
+          <Route path="leads/:id/edit" element={<EditLead />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="communication" element={<Communication />} />
           <Route path="counseling" element={<Counseling />} />
@@ -62,15 +62,22 @@ export default function App() {
           <Route path="applications/create" element={<CreateApplication />} />
           <Route path="applications/form/:id"element={<MultiStepApplication />} />
            
-          <Route path="applications/new" element={<NewApplication />} />
-          <Route path="screening" element={<Screening />} />
+          {/* Old duplicate of Create Application, with a hardcoded year and grades */}
+          <Route path="applications/new" element={<Navigate to="/applications/create" replace />} />
           <Route path="offers-seats" element={<OffersSeats />} />
           <Route path="fees-payments" element={<FeesPayments />} />
           <Route path="fees/invoice/:id" element={<InvoiceDetail />} />
           <Route path="enrollment" element={<Enrollment />} />
           <Route path="admission/resume/:id"element={<AdmissionResume />}/>
           <Route path="reports" element={<Reports />} />
-          <Route path="security" element={<Security />} />
+          <Route
+            path="security"
+            element={
+              <ProtectedRoute role="admin">
+                <Security />
+              </ProtectedRoute>
+            }
+          />
           <Route path="settings" element={<Settings />} />
           <Route path="admin" element={adminRouteElement} />
           <Route path="admin/users" element={adminRouteElement} />

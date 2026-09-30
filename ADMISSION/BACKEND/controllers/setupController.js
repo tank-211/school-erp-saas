@@ -16,6 +16,7 @@
  */
 import prisma from '../src/lib/prisma.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
+import { recordAudit } from '../utils/audit.js';
 
 const isId = (value) => /^\d+$/.test(String(value ?? ''));
 const text = (value) => (value === undefined || value === null ? '' : String(value).trim());
@@ -225,6 +226,7 @@ export const activateAcademicYear = async (req, res) => {
     await prisma.$transaction((tx) => activateYear(tx, req.schoolId, existing.id, String(req.user.id)));
     const year = await prisma.academic_year.findUnique({ where: { id: existing.id } });
 
+    await recordAudit(req, { action: 'academic_year.activated', entity: 'academic_year', entityId: year.id, summary: `${year.year_name} made the active year` });
     res.status(200).json({ success: true, message: `${year.year_name} is now the active year`, data: shapeYear(year) });
   } catch (error) {
     handleError(res, error, 'Academic year');
@@ -257,6 +259,7 @@ export const deleteAcademicYear = async (req, res) => {
     }
 
     await prisma.academic_year.delete({ where: { id: year.id } });
+    await recordAudit(req, { action: 'academic_year.deleted', entity: 'academic_year', entityId: year.id, summary: `Deleted academic year ${year.year_name}` });
     res.status(200).json({ success: true, message: 'Academic year deleted' });
   } catch (error) {
     handleError(res, error, 'Academic year');
@@ -505,5 +508,76 @@ export const deleteSection = async (req, res) => {
     res.status(200).json({ success: true, message: 'Section deleted' });
   } catch (error) {
     handleError(res, error, 'Section');
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* Seat capacity                                                       */
+/* ------------------------------------------------------------------ */
+
+// GET /api/setup/seat-capacity?academic_year_id=  (defaults to the active year)
+// Capacity is the sum of the class's section capacities (School Setup);
+// filled = completed admissions in that year, in_progress = started but not
+// yet completed.
+export const getSeatCapacity = async (req, res) => {
+  try {
+    let year;
+    if (req.query.academic_year_id !== undefined) {
+      if (!isId(req.query.academic_year_id)) return fail(res, 400, 'Invalid academic year id');
+      year = await prisma.academic_year.findFirst({
+        where: { id: BigInt(req.query.academic_year_id), school_id: req.schoolId },
+      });
+      if (!year) return fail(res, 404, 'Academic year not found');
+    } else {
+      year = await prisma.academic_year.findFirst({ where: { school_id: req.schoolId, is_active: true } });
+    }
+
+    const classes = await prisma.school_class.findMany({
+      where: { school_id: req.schoolId },
+      orderBy: { class_numeric_value: 'asc' },
+      include: { section: { orderBy: { section_name: 'asc' } } },
+    });
+    const admissions = year
+      ? await prisma.admission.findMany({
+          where: { school_id: req.schoolId, academic_year_id: year.id, NOT: { status: { in: ['cancelled', 'rejected'] } } },
+          select: { class_id: true, section_id: true, is_completed: true },
+        })
+      : [];
+
+    const tally = (filter) => {
+      const list = admissions.filter(filter);
+      return { filled: list.filter((a) => a.is_completed).length, in_progress: list.filter((a) => !a.is_completed).length };
+    };
+
+    const rows = classes.map((c) => {
+      const sections = (c.section || []).map((s) => ({
+        id: String(s.id),
+        section_name: s.section_name,
+        capacity: s.capacity ?? 0,
+        ...tally((a) => String(a.section_id) === String(s.id)),
+      }));
+      const capacity = sections.reduce((n, s) => n + s.capacity, 0);
+      const counts = tally((a) => String(a.class_id) === String(c.id));
+      return {
+        id: String(c.id),
+        class_name: c.class_name,
+        capacity,
+        ...counts,
+        available: Math.max(capacity - counts.filled, 0),
+        sections,
+      };
+    });
+
+    const sum = (key) => rows.reduce((n, r) => n + r[key], 0);
+    res.json({
+      success: true,
+      data: {
+        academic_year: year ? shapeYear(year) : null,
+        totals: { capacity: sum('capacity'), filled: sum('filled'), in_progress: sum('in_progress'), available: sum('available') },
+        classes: rows,
+      },
+    });
+  } catch (error) {
+    handleError(res, error, 'Seat capacity');
   }
 };

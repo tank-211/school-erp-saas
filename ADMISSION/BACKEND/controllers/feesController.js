@@ -1,7 +1,7 @@
 import prisma from '../src/lib/prisma.js';
 import * as feeQueries from '../db/queries/feeQueries.js';
 import Joi from 'joi';
-import { newInvoiceNumber } from '../services/admissionFeeService.js';
+import { newInvoiceNumber, findUninvoicedAssignments } from '../services/admissionFeeService.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
 
 /**
@@ -86,6 +86,45 @@ export const getInvoiceById = async (req, res, next) => {
 };
 
 /**
+ * GET /api/fees/uninvoiced
+ * Students with fees assigned but not invoiced yet, for the Generate Invoice dialog.
+ */
+export const getUninvoicedFees = async (req, res, next) => {
+  try {
+    const assignments = await findUninvoicedAssignments(prisma, req.schoolId);
+    if (!assignments.length) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+    const students = await prisma.student.findMany({
+      where: { school_id: req.schoolId, id: { in: [...new Set(assignments.map((a) => a.student_id))] } },
+      select: { id: true, first_name: true, last_name: true, admission_number: true },
+    });
+    const byStudent = new Map(students.map((st) => [String(st.id), {
+      student_id: String(st.id),
+      student_name: [st.first_name, st.last_name].filter(Boolean).join(' '),
+      admission_number: st.admission_number || null,
+      fees: [],
+    }]));
+    for (const a of assignments) {
+      const entry = byStudent.get(String(a.student_id));
+      if (!entry) continue;
+      entry.fees.push({
+        fee_structure_id: String(a.fee_structure_id),
+        fee_type: a.fee_structure?.fee_type || 'Fee',
+        amount: String(a.final_amount),
+        due_date: a.due_date,
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: [...byStudent.values()].sort((x, y) => x.student_name.localeCompare(y.student_name)),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
  * POST /api/fees/generate-invoice
  * Generate new invoice for student with fee calculations
  */
@@ -104,16 +143,11 @@ export const generateInvoice = async (req, res, next) => {
     const { school_id, id: user_id } = req.user;
 
     const result = await prisma.$transaction(async (tx) => {
-      const feeAssignments =
-        await tx.student_fee_assignment.findMany({
-          where: {
-            student_id: BigInt(student_id),
-            school_id: BigInt(school_id)
-          },
-          include: {
-            fee_structure: true
-          }
-        });
+      // Only fees of this student that are not on an invoice yet, so the
+      // same fee cannot be billed twice
+      const feeAssignments = await findUninvoicedAssignments(tx, school_id, {
+        studentId: student_id,
+      });
 
       const selectedFees = feeAssignments.filter((fee) =>
         fee_structure_ids.includes(
@@ -123,7 +157,7 @@ export const generateInvoice = async (req, res, next) => {
 
       if (selectedFees.length === 0) {
         const error = new Error(
-          'No valid fee assignments found for the selected fee structures'
+          'These fees are already invoiced, or do not belong to this student'
         );
         error.status = 400;
         throw error;
@@ -158,10 +192,16 @@ export const generateInvoice = async (req, res, next) => {
             paid_amount: 0,
             pending_amount: totalAmount,
             notes:
-              `Generated for fee structures: ${fee_structure_ids.join(', ')}`,
+              `Fees: ${selectedFees.map((fee) => fee.fee_structure?.fee_type || fee.fee_structure_id).join(', ')}`,
             created_by: req.user.name || 'System'
           }
         });
+
+      // Mark the billed fees so they are not offered again
+      await tx.student_fee_assignment.updateMany({
+        where: { id: { in: selectedFees.map((fee) => fee.id) }, school_id: BigInt(school_id) },
+        data: { status: 'invoiced', updated_at: new Date() },
+      });
 
       await tx.audit_log.create({
         data: {

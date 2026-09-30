@@ -37,6 +37,7 @@ import {
   getMonthlyTrend,
   getGradeDistribution,
   getCounselorPerformance,
+  getInactivityAlerts,
   checkBackendHealth,
 } from "../services/dashboardService";
 import UpcomingFollowups from "../components/UpcomingFollowups";
@@ -81,7 +82,7 @@ const statMeta = [
     ic: "var(--red)",
   },
   {
-    label: "Offers Sent",
+    label: "Approved Applications",
     key: "offersSent",
     icon: Award,
     color: "var(--yellow-bg)",
@@ -158,10 +159,9 @@ export function Dashboard() {
       : m.format
         ? m.format(0)
         : "0",
-    change: statsData ? statsData[`${m.key}Change`] || "+0%" : "+0%",
-    pos: statsData
-      ? (statsData[`${m.key}Change`]?.startsWith("+") ?? true)
-      : true,
+    // Month-over-month change from the server; null means no comparison to show
+    change: statsData ? statsData[`${m.key}Change`] ?? null : null,
+    pos: !String(statsData?.[`${m.key}Change`] || "").startsWith("-"),
   }));
 
   // Fetch funnel data from backend (must be inside component)
@@ -206,14 +206,7 @@ export function Dashboard() {
       if (signal?.aborted) return;
       console.error("❌ [Dashboard Frontend] Funnel error:", err);
       setFunnelError(err.message || "Failed to load funnel data");
-      setFunnelData([
-        { stage: "Inquiry", count: 0, pct: "0%" },
-        { stage: "Contacted", count: 0, pct: "0%" },
-        { stage: "Interested", count: 0, pct: "0%" },
-        { stage: "Visit", count: 0, pct: "0%" },
-        { stage: "Applied", count: 0, pct: "0%" },
-        { stage: "Enrolled", count: 0, pct: "0%" },
-      ]);
+      setFunnelData([]);
     }
   };
 
@@ -331,20 +324,31 @@ export function Dashboard() {
     };
   }, []);
 
-  const alerts = [
-    {
-      name: "John Doe",
-      grade: "Grade 5",
-      reason: "Waitlisted - No update since 5 days",
-      days: "5d",
-    },
-    {
-      name: "Sara Khan",
-      grade: "Grade 2",
-      reason: "Payment pending - admission stage",
-      days: "3d",
-    },
-  ];
+  // Open leads with no contact for a week or more
+  const [alerts, setAlerts] = useState([]);
+  const [alertsError, setAlertsError] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    getInactivityAlerts(controller.signal)
+      .then((resp) => {
+        setAlerts(
+          (resp?.data || []).map((a) => ({
+            id: a.lead_id,
+            name: a.name,
+            grade: a.grade || "",
+            reason: a.reason,
+            days: `${a.days_inactive}d`,
+          })),
+        );
+        setAlertsError(null);
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setAlertsError(err.message || "Failed to load inactivity alerts");
+        }
+      });
+    return () => controller.abort();
+  }, []);
 
   return (
     <div className="page">
@@ -585,11 +589,14 @@ export function Dashboard() {
                 <span className="stat-label" style={{ fontSize: 11 }}>
                   {s.label}
                 </span>
-                <span
-                  className={`stat-badge ${s.pos ? "positive" : "negative"}`}
-                >
-                  {s.change}
-                </span>
+                {s.change && (
+                  <span
+                    className={`stat-badge ${s.pos ? "positive" : "negative"}`}
+                    title="Compared with last month"
+                  >
+                    {s.change}
+                  </span>
+                )}
               </div>
               <div
                 style={{
@@ -684,7 +691,7 @@ export function Dashboard() {
         <UpcomingFollowups
           interval={2}
           limit={10}
-          onViewAll={() => navigate("/communication")}
+          onViewAll={() => navigate("/leads")}
         />
       </div>
 
@@ -845,9 +852,15 @@ export function Dashboard() {
             </div>
           </div>
           <div className="card-body">
+            {alerts.length === 0 && (
+              <div style={{ textAlign: "center", padding: "24px 0", color: "var(--gray-500)", fontSize: 13 }}>
+                {alertsError || "No leads have been inactive for a week or more."}
+              </div>
+            )}
             {alerts.map((a, i) => (
               <div
-                key={i}
+                key={a.id || i}
+                onClick={() => a.id && navigate(`/leads/${a.id}`)}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -857,6 +870,7 @@ export function Dashboard() {
                   border: "1px solid #fecaca",
                   borderRadius: "var(--r)",
                   marginBottom: i < alerts.length - 1 ? 10 : 0,
+                  cursor: "pointer",
                 }}
               >
                 <div

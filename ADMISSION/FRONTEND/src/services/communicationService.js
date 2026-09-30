@@ -130,18 +130,13 @@ export const sendComposeEmail = async (formData) => {
     throw new Error('Not authenticated. Please login first.');
   }
 
-  const API_URL = import.meta.env.VITE_API_URL;
-
-  console.log("API_URL =", JSON.stringify(import.meta.env.VITE_API_URL));
-
-  const response = await fetch(`${API_URL}/communication/send`, {
+  const response = await fetch('/api/communication/send', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
     },
     body: formData,
   });
-  console.log(import.meta.env.VITE_API_URL);
   const text = await response.text();
 
   console.log("RAW RESPONSE:", text);

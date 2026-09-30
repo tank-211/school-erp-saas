@@ -32,6 +32,30 @@ export const createLead = async (req, res, next) => {
 
     // Determine academic_year_id: prefer request, otherwise use active academic year for the school
     let academic_year_id = req.body.academic_year_id;
+    if (academic_year_id) {
+      // A year sent by the client must belong to the caller's school
+      const ownYear = /^\d+$/.test(String(academic_year_id))
+        ? await prisma.academic_year.findFirst({
+            where: { id: BigInt(academic_year_id), school_id: BigInt(req.user.school_id) },
+            select: { id: true },
+          })
+        : null;
+      if (!ownYear) {
+        return res.status(400).json({ success: false, message: 'Academic year not found for this school.' });
+      }
+    }
+    if (req.body.assigned_to) {
+      // Leads can only be assigned to an active user of the same school
+      const owner = /^\d+$/.test(String(req.body.assigned_to))
+        ? await prisma.app_user.findFirst({
+            where: { id: BigInt(req.body.assigned_to), school_id: BigInt(req.user.school_id), status: 'active' },
+            select: { id: true },
+          })
+        : null;
+      if (!owner) {
+        return res.status(400).json({ success: false, message: 'Assigned counselor not found in this school.' });
+      }
+    }
     if (!academic_year_id) {
       const yearRes = await prisma.academic_year.findFirst({
         where: {
@@ -154,6 +178,22 @@ export const updateLead = async (req, res, next) => {
     const { id } = req.params;
     const school_id = req.user.school_id;
 
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ success: false, message: 'Invalid lead id.' });
+    }
+    if (req.body.assigned_to) {
+      // Leads can only be assigned to an active user of the same school
+      const owner = /^\d+$/.test(String(req.body.assigned_to))
+        ? await prisma.app_user.findFirst({
+            where: { id: BigInt(req.body.assigned_to), school_id: BigInt(school_id), status: 'active' },
+            select: { id: true },
+          })
+        : null;
+      if (!owner) {
+        return res.status(400).json({ success: false, message: 'Assigned counselor not found in this school.' });
+      }
+    }
+
     const updatedLead = await leadQueries.updateLead(id, school_id, req.body);
 
     if (!updatedLead) {
@@ -165,7 +205,7 @@ export const updateLead = async (req, res, next) => {
 
     res.status(200).json({ 
       success: true, 
-      data: updatedLead,
+      data: serializeBigInt(updatedLead),
       message: "Lead updated successfully."
     });
   } catch (error) {

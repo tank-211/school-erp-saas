@@ -4,6 +4,9 @@ import { ArrowLeft, Save, X, AlertCircle, CheckCircle } from "lucide-react";
 import "../style.css";
 import { createLead } from "../services/leadService.js";
 import { getToken } from "../utils/authToken.js";
+import { useSchoolSetup } from "../hooks/useSchoolSetup";
+import { fetchSchoolCounselors } from "../services/schoolService.js";
+import { useAuth } from "../context/AuthContext.jsx";
 
 export function AddLead() {
   const navigate = useNavigate();
@@ -34,6 +37,15 @@ export function AddLead() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Classes come from School Setup; counselors are the school's active staff
+  const { classNames, loading: classesLoading, error: classesError } = useSchoolSetup();
+  const { user } = useAuth();
+  const [counselors, setCounselors] = useState([]);
+
+  useEffect(() => {
+    if (!user?.school_id) return;
+    fetchSchoolCounselors(user.school_id).then(setCounselors);
+  }, [user?.school_id]);
 
   const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -182,27 +194,18 @@ export function AddLead() {
                   onChange={(e) => set("grade", e.target.value)}
                   required
                 >
-                  <option value="">Select grade</option>
-                  {[
-                    "Nursery",
-                    "LKG",
-                    "UKG",
-                    "Grade 1",
-                    "Grade 2",
-                    "Grade 3",
-                    "Grade 4",
-                    "Grade 5",
-                    "Grade 6",
-                    "Grade 7",
-                    "Grade 8",
-                    "Grade 9",
-                    "Grade 10",
-                    "Grade 11",
-                    "Grade 12",
-                  ].map((g) => (
+                  <option value="">
+                    {classesLoading ? "Loading classes..." : "Select grade"}
+                  </option>
+                  {classNames.map((g) => (
                     <option key={g}>{g}</option>
                   ))}
                 </select>
+                {!classesLoading && !classNames.length && (
+                  <div className="text-muted text-sm" style={{ marginTop: 4 }}>
+                    {classesError || "No classes yet. An admin can add them in School Setup."}
+                  </div>
+                )}
               </div>
             </div>
             <div className="form-group">
@@ -415,7 +418,12 @@ export function AddLead() {
                   onChange={(e) => set("counselor", e.target.value)}
                 >
                 <option value="">Select counselor</option>
-
+                  {counselors.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.role === "admin" ? " (Admin)" : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="form-group">

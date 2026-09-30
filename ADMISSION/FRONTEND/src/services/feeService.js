@@ -73,8 +73,23 @@ export async function generateInvoice(invoiceData) {
     }
     throw new Error(response.data?.message || 'Failed to generate invoice');
   } catch (error) {
-    console.error('Error generating invoice:', error);
-    throw error;
+    throw new Error(error.response?.data?.message || error.message || 'Failed to generate invoice');
+  }
+}
+
+/**
+ * Students with fees assigned but not invoiced yet
+ * GET /api/fees/uninvoiced
+ */
+export async function getUninvoicedFees() {
+  try {
+    const response = await axios.get('/api/fees/uninvoiced', { headers: getAuthHeader() });
+    if (response.data && response.data.success) {
+      return response.data.data;
+    }
+    throw new Error(response.data?.message || 'Failed to load fees');
+  } catch (error) {
+    throw new Error(error.response?.data?.message || error.message || 'Failed to load fees');
   }
 }
 /**

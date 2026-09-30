@@ -213,6 +213,30 @@ const navigate = useNavigate();
   const student = application.student_info || {};
   const parent = application.parent_info || {};
 
+  const handleReject = async () => {
+    const reason = window.prompt("Reason for rejecting this application:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      alert("A reason is required to reject an application.");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/applications/${id}/reject`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${getToken()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Failed to reject application");
+      setApplication((prev) => ({ ...prev, status: "rejected", rejection_reason: reason.trim() }));
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
   const handleApprove = async () => {
     try {
         const token = getToken();
@@ -438,6 +462,13 @@ const navigate = useNavigate();
       </div>
 
 
+      {application.status === "rejected" && application.rejection_reason && (
+        <div className="application-card">
+          <h2>Rejected</h2>
+          <p>{application.rejection_reason}</p>
+        </div>
+      )}
+
       {application.status === "under_review" && (
         <div className="application-card">
             <h2>Review Application</h2>
@@ -446,12 +477,17 @@ const navigate = useNavigate();
             The application has been reviewed and is ready for approval.
             </p>
 
-            <button
-            className="btn-primary"
-            onClick={handleApprove}
-            >
-            Approve Application
-            </button>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+              className="btn-primary"
+              onClick={handleApprove}
+              >
+              Approve Application
+              </button>
+              <button className="btn btn-outline" style={{ color: "#b91c1c", borderColor: "#fca5a5" }} onClick={handleReject}>
+                Reject
+              </button>
+            </div>
         </div>
         )}
 

@@ -13,7 +13,6 @@ import admissionRoutes from './routes/admissionRoutes.js';
 import applicationRoutes from './routes/applicationRoutes.js';
 import parentRoutes from './routes/parentRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
-import funnelRoutes from './src/routes/funnelRoutes.js';
 import communicationRoutes from './routes/communicationRoutes.js';
 import emailRoutes from './routes/email.routes.js';
 import templateRoutes from './routes/templateRoutes.js';
@@ -25,6 +24,8 @@ import userRoutes from './routes/userRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import feesRoutes from './routes/feesRoutes.js';
 import setupRoutes from './routes/setupRoutes.js';
+import pipelineRoutes from './routes/pipelineRoutes.js';
+import securityRoutes from './routes/securityRoutes.js';
 import { signUploadUrlsInResponse, verifySignedUpload } from './utils/signedUploads.js';
 
 dotenv.config();
@@ -160,8 +161,11 @@ app.use('/api/fees', feesRoutes);
 // School setup routes (academic years, classes, sections)
 app.use('/api/setup', setupRoutes);
 
-// Funnel routes
-app.use('/api', funnelRoutes);
+// Admission pipeline (derived from leads, visits, applications, admissions)
+app.use('/api/pipeline', pipelineRoutes);
+
+// Security & Compliance (admins): staff by role, audit log
+app.use('/api/security', securityRoutes);
 
 
 

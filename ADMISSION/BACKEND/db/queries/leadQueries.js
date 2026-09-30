@@ -123,42 +123,53 @@ export const deleteLead = async (id, school_id) => {
   return true;
 };
 
+// Real follow-ups: the next_follow_up_date set on each open lead's most recent
+// activity that scheduled one (a later activity replaces an earlier plan).
+// `followupInterval` is accepted for compatibility and no longer used.
 export const getUpcomingFollowups = async (
   school_id,
   followupInterval = 2,
   limit = 10
 ) => {
-  const leads = await prisma.lead.findMany({
+  void followupInterval;
+  const activities = await prisma.lead_activity.findMany({
     where: {
-      school_id: BigInt(school_id),
-      follow_up_status: {
-        in: ['pending', 'contacted', 'interested']
-      },
-      last_contacted_at: {
-        not: null
+      next_follow_up_date: { not: null },
+      lead: {
+        school_id: BigInt(school_id),
+        NOT: { follow_up_status: { in: ['admitted', 'converted', 'lost', 'inactive', 'not-interested', 'not_interested'] } }
       }
     },
-    take: Number(limit)
-  });
-
-  return leads.map((lead) => {
-    const nextDate = new Date(lead.last_contacted_at);
-    nextDate.setDate(nextDate.getDate() + Number(followupInterval));
-
-    let priority = 'upcoming';
-
-    if (nextDate < new Date()) {
-      priority = 'overdue';
-    } else if (
-      nextDate.toDateString() === new Date().toDateString()
-    ) {
-      priority = 'today';
+    orderBy: { created_at: 'desc' },
+    select: {
+      lead_id: true,
+      activity_type: true,
+      notes: true,
+      next_follow_up_date: true,
+      scheduled_time: true,
+      created_at: true,
+      lead: true
     }
-
-    return {
-      ...lead,
-      next_follow_up_date: nextDate,
-      priority
-    };
   });
+
+  const latest = new Map();
+  for (const activity of activities) {
+    const key = String(activity.lead_id);
+    if (!latest.has(key)) latest.set(key, activity);
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  return [...latest.values()]
+    .sort((x, y) => new Date(x.next_follow_up_date) - new Date(y.next_follow_up_date))
+    .slice(0, Number(limit))
+    .map((activity) => {
+      const dateKey = new Date(activity.next_follow_up_date).toISOString().slice(0, 10);
+      return {
+        ...activity.lead,
+        next_follow_up_date: activity.next_follow_up_date,
+        next_action: activity.activity_type,
+        next_action_notes: activity.notes,
+        priority: dateKey < todayKey ? 'overdue' : dateKey === todayKey ? 'today' : 'upcoming'
+      };
+    });
 };

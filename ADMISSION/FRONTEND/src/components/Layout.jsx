@@ -15,12 +15,11 @@ const navItems = [
   { path: "/communication", label: "Communication",       icon: MessageSquare },
   { path: "/counseling",    label: "Counseling",          icon: UserCheck },
   { path: "/applications",  label: "Applications",        icon: FileText },
-  { path: "/screening",     label: "Screening",           icon: ClipboardCheck },
   { path: "/offers-seats",  label: "Offers & Seats",      icon: Award },
   { path: "/fees-payments", label: "Fees & Payments",     icon: CreditCard },
   { path: "/enrollment",    label: "Enrollment",          icon: GraduationCap },
   { path: "/reports",       label: "Reports",             icon: BarChart3 },
-  { path: "/security",      label: "Security & Compliance", icon: Shield },
+  { path: "/security",      label: "Security & Compliance", icon: Shield, adminOnly: true },
   { path: "/admin",         label: "Admin Dashboard",     icon: Shield },
   { path: "/admin/setup",   label: "School Setup",        icon: Building2 },
   { path: "/settings",      label: "Settings",            icon: SettingsIcon },
@@ -36,7 +35,9 @@ export function Layout() {
   const isActive = (path) =>
     matches(path) && !navItems.some((item) => item.path.startsWith(`${path}/`) && matches(item.path));
   // Admin pages are listed for school admins only
-  const visibleNavItems = navItems.filter((item) => !item.path.startsWith("/admin") || user?.role === "admin");
+  const visibleNavItems = navItems.filter(
+    (item) => !(item.adminOnly || item.path.startsWith("/admin")) || user?.role === "admin"
+  );
 
   const toggleCollapse = () => {
     setCollapsed(!collapsed);
