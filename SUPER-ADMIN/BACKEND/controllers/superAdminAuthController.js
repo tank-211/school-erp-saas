@@ -32,6 +32,15 @@ const login = async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
+    // Deactivated staff cannot sign in (checked after the password)
+    if (!staff.is_active) {
+      return res.status(403).json({ error: "This staff account is deactivated." });
+    }
+
+    await prisma.service_provider_staff
+      .update({ where: { id: staff.id }, data: { last_login: new Date() } })
+      .catch(() => {});
+
     console.log("Generating token...");
     const token = jwt.sign(
       {

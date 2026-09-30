@@ -4,7 +4,9 @@ import { superAdminService } from '../../services/superAdminService'
 function StaffManager() {
   const [staffList, setStaffList] = useState([])
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState(null)
   const [form, setForm] = useState({
     full_name: '',
     email: '',
@@ -35,6 +37,23 @@ function StaffManager() {
     }
   }, [])
 
+  // Role and active state; the server refuses changes that would lock out the
+  // last super admin or your own account, and only super admins may change them
+  const updateStaff = async (staff, changes, label) => {
+    setBusyId(staff.id)
+    setError('')
+    setNotice('')
+    try {
+      const result = await superAdminService.updateStaff(staff.id, changes)
+      setStaffList((prev) => prev.map((s) => (s.id === staff.id ? { ...s, ...result.staff } : s)))
+      setNotice(`${staff.full_name}: ${label}`)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const handleChange = (event) => {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
@@ -47,6 +66,7 @@ function StaffManager() {
 
     try {
       await superAdminService.createStaff(form)
+      setNotice(`${form.full_name} can now sign in with the password you set.`)
       setForm({ full_name: '', email: '', password: '', internal_role: 'support' })
       const data = await superAdminService.getStaff()
       setStaffList(data)
@@ -63,6 +83,7 @@ function StaffManager() {
       <p className="sp-subtitle">Create and monitor service provider staff accounts.</p>
 
       {error && <div className="sp-error" style={{ marginTop: '12px' }}>{error}</div>}
+      {notice && <div className="sp-success" style={{ marginTop: '12px' }}>{notice}</div>}
 
       <div className="sp-grid" style={{ marginTop: '16px' }}>
         <article className="sp-card">
@@ -102,6 +123,7 @@ function StaffManager() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
+                minLength={8}
                 required
               />
             </label>
@@ -135,7 +157,9 @@ function StaffManager() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Role</th>
-                <th>Active</th>
+                <th>Status</th>
+                <th>Last sign-in</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -143,8 +167,32 @@ function StaffManager() {
                 <tr key={staff.id}>
                   <td>{staff.full_name}</td>
                   <td>{staff.email}</td>
-                  <td>{staff.internal_role}</td>
-                  <td>{staff.is_active ? 'Yes' : 'No'}</td>
+                  <td>
+                    <select
+                      className="sp-select"
+                      value={staff.internal_role}
+                      disabled={busyId === staff.id}
+                      onChange={(e) => updateStaff(staff, { internal_role: e.target.value }, `role changed to ${e.target.value.replace('_', ' ')}`)}
+                    >
+                      <option value="super_admin">Super Admin</option>
+                      <option value="support">Support</option>
+                      <option value="billing">Billing</option>
+                    </select>
+                  </td>
+                  <td>{staff.is_active ? 'Active' : 'Deactivated'}</td>
+                  <td>{staff.last_login ? new Date(staff.last_login).toLocaleString() : 'Never'}</td>
+                  <td>
+                    <button
+                      className={`sp-btn ${staff.is_active ? 'sp-btn-ghost' : 'sp-btn-primary'}`}
+                      disabled={busyId === staff.id}
+                      onClick={() => {
+                        if (staff.is_active && !window.confirm(`Deactivate ${staff.full_name}? They will be signed out and cannot sign in.`)) return
+                        updateStaff(staff, { is_active: !staff.is_active }, staff.is_active ? 'deactivated' : 'reactivated')
+                      }}
+                    >
+                      {staff.is_active ? 'Deactivate' : 'Reactivate'}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { superAdminService } from "../../services/superAdminService";
 
+// Today's date in India (YYYY-MM-DD), the calendar the school apps use
+const indiaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+const STATE_LABEL = { active: "Active", expiring_soon: "Expiring soon", expired: "Expired", suspended: "Suspended" };
+
 function RenewalManager() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -9,11 +13,12 @@ function RenewalManager() {
   const [renewals, setRenewals] = useState([]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
   const [form, setForm] = useState({
     amount: "",
     currency: "INR",
     period_months: 3,
-    paid_on: new Date().toISOString().slice(0, 10),
+    paid_on: indiaToday(),
     notes: "",
     reactivate_school: true,
   });
@@ -23,14 +28,12 @@ function RenewalManager() {
 
     const loadData = async () => {
       try {
-        const schools = await superAdminService.getSchools();
+        const found = await superAdminService.getSchool(id);
         if (cancelled) {
           return;
         }
 
-        setSchool(
-          schools.find((item) => String(item.id) === String(id)) || null,
-        );
+        setSchool(found);
         const renewalHistory = await superAdminService.getSchoolRenewals(id);
         if (!cancelled) {
           setRenewals(renewalHistory);
@@ -49,20 +52,14 @@ function RenewalManager() {
     };
   }, [id]);
 
+  // From the server, by the same rule the school apps use to allow sign-in
   const expiryState = useMemo(() => {
-    if (!school?.expiry_date) {
-      return "No expiry date";
-    }
-
-    const expiryDate = new Date(school.expiry_date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    if (expiryDate < today) {
-      return "Expired";
-    }
-
-    return "Active";
+    if (!school) return "";
+    const state = STATE_LABEL[school.access_state] || "Active";
+    const until = school.expiry_date
+      ? `until ${new Date(school.expiry_date).toLocaleDateString("en-IN", { timeZone: "UTC" })}`
+      : "no expiry date";
+    return `${(school.plan_type || "trial").toUpperCase()} plan · ${state} · ${until}`;
   }, [school]);
 
   const handleChange = (event) => {
@@ -77,6 +74,7 @@ function RenewalManager() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setNotice("");
 
     try {
       await superAdminService.renewSchoolSubscription(id, {
@@ -84,10 +82,16 @@ function RenewalManager() {
         period_months: Number(form.period_months),
         amount: form.amount === "" ? null : Number(form.amount),
       });
-      const schools = await superAdminService.getSchools();
-      setSchool(schools.find((item) => String(item.id) === String(id)) || null);
+      const updated = await superAdminService.getSchool(id);
+      setSchool(updated);
       const renewalHistory = await superAdminService.getSchoolRenewals(id);
       setRenewals(renewalHistory);
+      setNotice(
+        updated?.expiry_date
+          ? `Renewed. ${updated.name} now has access until ${new Date(updated.expiry_date).toLocaleDateString("en-IN", { timeZone: "UTC" })}.`
+          : "Renewal recorded.",
+      );
+      setForm((prev) => ({ ...prev, amount: "", notes: "" }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,6 +122,11 @@ function RenewalManager() {
       {error && (
         <div className="sp-error" style={{ marginBottom: "12px" }}>
           {error}
+        </div>
+      )}
+      {notice && (
+        <div className="sp-success" style={{ marginBottom: "12px" }}>
+          {notice}
         </div>
       )}
 

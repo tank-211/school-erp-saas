@@ -40,11 +40,16 @@ const getPaymentGateway = async (req, res) => {
       });
     }
 
+    // Whether a secret is stored, without ever reading it out
+    const withSecret = await prisma.platform_payment_gateway.count({
+      where: { provider: "razorpay", client_secret: { not: "" } },
+    });
+
     return res.json({
       success: true,
       data: {
         ...gateway,
-        has_client_secret: Boolean(gateway.client_id),
+        has_client_secret: withSecret > 0,
       },
     });
   } catch (error) {
@@ -188,7 +193,20 @@ const updatePaymentGateway = async (req, res) => {
       updateData.client_secret = client_secret;
     }
 
+    // New keys or environment are untested until "Test connection" passes
+    if (updateData.environment !== undefined || updateData.client_id !== undefined || updateData.client_secret) {
+      updateData.status = "configured";
+      updateData.connected_at = null;
+    }
+
+    // "connected" is only ever set by a successful test
     if (status !== undefined) {
+      if (!["configured", "disabled"].includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: "Status can only be set to configured or disabled",
+        });
+      }
       updateData.status = status;
     }
 
@@ -238,46 +256,79 @@ const updatePaymentGateway = async (req, res) => {
  * Actual Razorpay platform/OAuth connection testing will be added
  * after the Razorpay Technology Partner credentials/flow are configured.
  */
+// Razorpay key ids start with rzp_test_ or rzp_live_
+const keyEnvironment = (keyId) =>
+  /^rzp_test_/.test(keyId) ? "test" : /^rzp_live_/.test(keyId) ? "live" : null;
+
+/**
+ * POST /api/super-admin/payment-gateway/test
+ * Real check: calls Razorpay with the saved keys. On success the gateway is
+ * marked "connected"; on rejected keys, "invalid_credentials".
+ */
 const testPaymentGateway = async (req, res) => {
   try {
-    const gateway =
-      await prisma.platform_payment_gateway.findUnique({
-        where: {
-          provider: "razorpay",
-        },
-      });
+    const gateway = await prisma.platform_payment_gateway.findUnique({
+      where: { provider: "razorpay" },
+    });
 
     if (!gateway) {
-      return res.status(404).json({
+      return res.status(404).json({ success: false, message: "Payment gateway is not configured" });
+    }
+    if (!gateway.client_id || !gateway.client_secret) {
+      return res.status(400).json({ success: false, message: "Payment gateway credentials are incomplete" });
+    }
+
+    const keyEnv = keyEnvironment(gateway.client_id);
+    if (!keyEnv) {
+      return res.status(400).json({ success: false, message: "The Key ID should start with rzp_test_ or rzp_live_." });
+    }
+    if (keyEnv !== gateway.environment) {
+      return res.status(400).json({
         success: false,
-        message: "Payment gateway is not configured",
+        message: `This is a ${keyEnv} key but the environment is set to ${gateway.environment}.`,
       });
     }
 
-    if (!gateway.client_id || !gateway.client_secret) {
-      return res.status(400).json({
-        success: false,
-        message: "Payment gateway credentials are incomplete",
-      });
+    if (typeof fetch !== "function") {
+      return res.status(500).json({ success: false, message: "This server cannot make outgoing requests (Node 18+ needed)." });
     }
+
+    const auth = Buffer.from(`${gateway.client_id}:${gateway.client_secret}`).toString("base64");
+    let response;
+    try {
+      response = await fetch("https://api.razorpay.com/v1/payments?count=1", {
+        headers: { Authorization: `Basic ${auth}` },
+        signal: AbortSignal.timeout(10000),
+      });
+    } catch (networkError) {
+      return res.status(502).json({ success: false, message: "Could not reach Razorpay. Try again in a minute." });
+    }
+
+    if (response.status === 401) {
+      await prisma.platform_payment_gateway.update({
+        where: { provider: "razorpay" },
+        data: { status: "invalid_credentials" },
+      });
+      return res.status(400).json({ success: false, message: "Razorpay rejected these keys. Check the Key ID and Secret." });
+    }
+    if (!response.ok) {
+      return res.status(502).json({ success: false, message: `Razorpay answered with status ${response.status}. Try again later.` });
+    }
+
+    const updated = await prisma.platform_payment_gateway.update({
+      where: { provider: "razorpay" },
+      data: { status: "connected", connected_at: new Date() },
+      select: { provider: true, environment: true, status: true, connected_at: true },
+    });
 
     return res.json({
       success: true,
-      message:
-        "Payment gateway configuration is present. Razorpay connection test will be enabled after platform credentials are configured.",
-      data: {
-        provider: gateway.provider,
-        environment: gateway.environment,
-        status: gateway.status,
-      },
+      message: `Connected: Razorpay accepted the ${gateway.environment} keys.`,
+      data: updated,
     });
   } catch (error) {
-    console.error("Test payment gateway error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to test payment gateway",
-    });
+    console.error("Test payment gateway error:", error.message);
+    return res.status(500).json({ success: false, message: "Failed to test payment gateway" });
   }
 };
 
