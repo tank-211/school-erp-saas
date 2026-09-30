@@ -18,11 +18,11 @@ COPY prisma ./prisma/
 COPY src ./src/
 COPY tsconfig.json ./
 
+# Generate the Prisma client first: the TypeScript build type-checks against it
+RUN npm run prisma:generate
+
 # Build TypeScript
 RUN npm run build
-
-# Generate Prisma client
-RUN npm run prisma:generate
 
 # Expose port
 EXPOSE 5000
