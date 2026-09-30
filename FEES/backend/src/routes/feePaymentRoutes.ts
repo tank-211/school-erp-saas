@@ -5,14 +5,14 @@ import { validateRequest, paginationValidator } from '../middleware/validation';
 
 const router = Router();
 
-// GET - Dashboard statistics (allow without authentication for now)
+// GET - Dashboard statistics
 router.get(
   '/dashboard/stats',
   authenticate,
   feePaymentController.getDashboardStats
 );
 
-// GET - Monthly collection (allow without authentication for now)
+// GET - Monthly collection
 router.get(
   '/dashboard/monthly',
   authenticate,
@@ -25,14 +25,14 @@ router.get(
   feePaymentController.getPaymentMethodStats
 );
 
-// GET - Recent transactions (allow without authentication for now)
+// GET - Recent transactions
 router.get(
   '/dashboard/recent-transactions',
   authenticate,
   feePaymentController.getRecentTransactions
 );
 
-// GET - Pending payments (allow without authentication for now)
+// GET - Pending payments
 router.get(
   '/pending',
   authenticate,
@@ -40,7 +40,7 @@ router.get(
   feePaymentController.getPendingPayments
 );
 
-// GET - Overdue payments (allow without authentication for now)
+// GET - Overdue payments
 router.get(
   '/overdue',
   authenticate,
@@ -48,7 +48,7 @@ router.get(
   feePaymentController.getOverduePayments
 );
 
-// GET - Payment history for student (allow without authentication for now)
+// GET - Payment history for student
 router.get(
   '/student/:studentId/history',
   authenticate,

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { fetchStudents, recordPayment } from "../services/apiService";
+import { fetchStudents, recordPayment, fetchSchoolLookups, fetchStudentStats, sendSMSMessage, sendWhatsAppMessage, createRefundRequest } from "../services/apiService";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, Download, RefreshCw, Plus, CreditCard, Eye, History as HistoryIcon,
   Printer, Pencil, MoreVertical, X, Wallet, IndianRupee, Clock, AlertCircle,
@@ -8,12 +9,7 @@ import {
   ChevronRight, Landmark
 } from "lucide-react";
 
-/* ------------------------------------------------------------------ */
-/*  MOCK DATA — swap this out for your real API data                  */
-/* ------------------------------------------------------------------ */
-
-const CLASSES = ["Grade 6", "Grade 7", "Grade 8", "Grade 9", "Grade 10", "Grade 11", "Grade 12"];
-const SECTIONS = ["A", "B", "C"];
+// Classes, sections and years come from the school's own setup (/api/school/lookups)
 const STATUSES = ["Paid", "Partial", "Pending", "Not Assigned"];
 
 const AVATAR_COLORS = [
@@ -94,13 +90,15 @@ const mapApiStudentToUiStudent = (student) => {
     latestAdmission?.section?.section_name || "-";
 
   const history = (student.payment || []).map((payment) => ({
+    paymentId: String(payment.id),
     receiptNo: payment.payment_number || `PAY-${payment.id}`,
     date: payment.payment_date
       ? new Date(payment.payment_date).toLocaleDateString("en-IN")
       : "-",
     amount: Number(payment.amount || 0),
     method: payment.payment_method || "-",
-    collectedBy: "Fee Office",
+    collectedBy: payment.received_by_name || "—",
+    invoiceId: payment.invoice_id ? Number(payment.invoice_id) : null,
     status:
       String(payment.status || "").toUpperCase() === "SUCCESS"
         ? "Success"
@@ -128,8 +126,6 @@ const mapApiStudentToUiStudent = (student) => {
     admNo: student.admission_number || "-",
 
     name: name || "Unnamed Student",
-
-    roll: "-",
 
     cls: className,
 
@@ -207,10 +203,6 @@ const mapApiStudentToUiStudent = (student) => {
         sum + Number(assignment.concession_amount || 0),
       0
     ),
-
-    scholarship: 0,
-
-    fine: 0,
 
     feeBreakdown,
 
@@ -304,8 +296,19 @@ export default function StudentFeeManagement() {
   const [students, setStudents] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [drawerTab, setDrawerTab] = useState("overview");
-  const [search, setSearch] = useState("");
-  const [yearFilter, setYearFilter] = useState("2024-25");
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get("search") || "");
+  const navigate = useNavigate();
+  const location = useLocation();
+  // The navbar search opens /students?search=...; follow it even when already here
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get("search");
+    if (q !== null) setSearch(q);
+  }, [location.search]);
+  const [yearFilter, setYearFilter] = useState("All Years");
+  const [lookups, setLookups] = useState({ classes: [], academicYears: [] });
+  const [serverStats, setServerStats] = useState(null);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 25;
   const [classFilter, setClassFilter] = useState("All Classes");
   const [sectionFilter, setSectionFilter] = useState("All Sections");
   const [statusFilter, setStatusFilter] = useState("All Status");
@@ -317,38 +320,35 @@ export default function StudentFeeManagement() {
 
   // payment formQ
   const [payForm, setPayForm] = useState({
-    date: new Date().toISOString().slice(0, 10), amount: "", discount: "", fine: "",
-    mode: "UPI", txnId: "", remarks: "",
+    amount: "", mode: "UPI", txnId: "", remarks: "",
   });
 
+  // Every student of the school (the API returns 100 per page)
+  const loadStudents = async () => {
+    setLoading(true);
+    const all = [];
+    let failed = null;
+    for (let p = 1, pages = 1; p <= pages && p <= 20; p++) {
+      const result = await fetchStudents({ page: p, limit: 100 });
+      if (!result.success) { failed = result.error; break; }
+      const data = result.data || {};
+      all.push(...(data.students || []));
+      pages = Math.ceil((data.total || 0) / 100) || 1;
+    }
+    if (failed) notify(failed || "Failed to load students.", "error");
+    setStudents(all.map(mapApiStudentToUiStudent));
+    setLoading(false);
+  };
+
+  const loadStats = async () => {
+    const result = await fetchStudentStats();
+    if (result.success) setServerStats(result.data);
+  };
+
   useEffect(() => {
-    const loadStudents = async () => {
-      setLoading(true);
-
-      const result = await fetchStudents({
-        page: 1,
-        limit: 100,
-      });
-
-      if (result.success) {
-        console.log("👨‍🎓 Real students loaded:", result.data);
-
-      const studentsData = result.data?.students || [];
-
-      const mappedStudents = studentsData.map(mapApiStudentToUiStudent);
-
-      console.log("👨‍🎓 Mapped students for UI:", mappedStudents);
-
-      setStudents(mappedStudents);
-      } else {
-        console.error("👨‍🎓 Failed to load students:", result.error);
-        notify(result.error || "Failed to load students.", "error");
-      }
-
-      setLoading(false);
-    };
-
     loadStudents();
+    loadStats();
+    fetchSchoolLookups().then((r) => { if (r.success) setLookups(r.data); });
   }, []);
 
   useEffect(() => {
@@ -374,7 +374,8 @@ export default function StudentFeeManagement() {
       const matchesClass = classFilter === "All Classes" || s.cls === classFilter;
       const matchesSection = sectionFilter === "All Sections" || s.section === sectionFilter;
       const matchesStatus = statusFilter === "All Status" || s.status === statusFilter;
-      return matchesSearch && matchesClass && matchesSection && matchesStatus;
+      const matchesYear = yearFilter === "All Years" || s.academicYear === yearFilter;
+      return matchesSearch && matchesClass && matchesSection && matchesStatus && matchesYear;
     });
     if (sortKey) {
       list = [...list].sort((a, b) => {
@@ -386,7 +387,16 @@ export default function StudentFeeManagement() {
       });
     }
     return list;
-  }, [students, search, classFilter, sectionFilter, statusFilter, sortKey, sortDir]);
+  }, [students, search, classFilter, sectionFilter, statusFilter, yearFilter, sortKey, sortDir]);
+
+  useEffect(() => { setPage(1); }, [search, classFilter, sectionFilter, statusFilter, yearFilter]);
+  const pageCount = Math.max(Math.ceil(filtered.length / PAGE_SIZE), 1);
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sectionOptions = useMemo(() => {
+    const cls = lookups.classes.find((c) => c.name === classFilter);
+    const list = cls ? cls.sections : lookups.classes.flatMap((c) => c.sections);
+    return [...new Set(list.map((x) => x.name))];
+  }, [lookups, classFilter]);
 
   const activeChips = [
     classFilter !== "All Classes" && { key: "class", label: classFilter, clear: () => setClassFilter("All Classes") },
@@ -402,13 +412,20 @@ export default function StudentFeeManagement() {
   /* ---------------- stats ---------------- */
 
   const stats = useMemo(() => {
-    const totalStudents = students.length;
-    const collectedToday = 184500;
     const pendingCount = students.filter((s) => s.balance > 0).length;
     const pendingAmount = students.reduce((sum, s) => sum + s.balance, 0);
-    const receiptsGenerated = students.reduce((sum, s) => sum + s.history.length, 0) + 979;
-    return { totalStudents, collectedToday, pendingCount, pendingAmount, receiptsGenerated };
-  }, [students]);
+    return {
+      totalStudents: serverStats?.total ?? students.length,
+      admittedThisYear: serverStats?.admittedThisYear ?? 0,
+      activeYear: serverStats?.activeYear || "",
+      collectedToday: serverStats?.collectedToday ?? 0,
+      paymentsToday: serverStats?.paymentsToday ?? 0,
+      collectedThisMonth: serverStats?.collectedThisMonth ?? 0,
+      paymentsThisMonth: serverStats?.paymentsThisMonth ?? 0,
+      pendingCount,
+      pendingAmount,
+    };
+  }, [students, serverStats]);
 
   /* ---------------- actions ---------------- */
 
@@ -418,7 +435,7 @@ export default function StudentFeeManagement() {
     setPayForm({
       date: new Date().toISOString().slice(0, 10),
       amount: student.balance > 0 ? String(student.balance) : "",
-      discount: "", fine: "", mode: "UPI", txnId: "", remarks: "",
+      mode: "UPI", txnId: "", remarks: "",
     });
   };
 
@@ -481,26 +498,10 @@ export default function StudentFeeManagement() {
         "success"
       );
 
-      const refreshed = await fetchStudents({
-        page: 1,
-        limit: 100,
-      });
-
-      if (refreshed.success) {
-        const studentsData = refreshed.data?.students || [];
-        setStudents(studentsData.map(mapApiStudentToUiStudent));
-      } else {
-        notify(
-          "Payment was recorded, but student data could not be refreshed.",
-          "info"
-        );
-      }
+      await Promise.all([loadStudents(), loadStats()]);
 
       setPayForm({
-        date: new Date().toISOString().slice(0, 10),
         amount: "",
-        discount: "",
-        fine: "",
         mode: "UPI",
         txnId: "",
         remarks: "",
@@ -527,17 +528,57 @@ export default function StudentFeeManagement() {
       message: `Initiate a refund of ${inr(receipt.amount)} for ${selectedStudent?.name}? This will be sent to Refund Management for approval.`,
       confirmLabel: "Send for refund",
       danger: true,
-      onConfirm: () => {
+      onConfirm: async () => {
         setDialog(null);
-        notify(`Refund request for ${inr(receipt.amount)} sent for approval.`, "info");
+        const result = await createRefundRequest({
+          studentId: selectedStudent?.id,
+          feePaymentId: receipt.paymentId,
+          amount: receipt.amount,
+          reason: `Refund of receipt ${receipt.receiptNo}`,
+        });
+        if (result?.success === false || result?.error) {
+          notify(result.error || result.message || "Could not create the refund request.", "error");
+        } else {
+          notify(`Refund request for ${inr(receipt.amount)} sent for approval.`, "info");
+        }
       },
     });
   };
 
-  const quickAction = (label) => notify(`${label} — done.`, "success");
+  // Real actions from the drawer and the table
+  const quickAction = async (action, student = selectedStudent) => {
+    if (!student) return;
+    if (action === "invoice" || action === "receipt") {
+      if (!student.invoiceId) return notify("This student has no invoice yet.", "error");
+      return navigate(action === "invoice" ? `/invoice/${student.invoiceId}` : `/receipt/${student.invoiceId}`);
+    }
+    if (action === "statement") {
+      return downloadCsv(`fee-statement-${student.admNo}.csv`, [
+        ["Receipt", "Date", "Amount", "Method", "Collected by", "Status"],
+        ...student.history.map((h) => [h.receiptNo, h.date, h.amount, h.method, h.collectedBy, h.status]),
+        [],
+        ["Total fee", "", student.total], ["Paid", "", student.paid], ["Balance", "", student.balance],
+      ]);
+    }
+    if (action === "sms" || action === "whatsapp") {
+      if (!student.invoiceId) return notify("This student has no invoice to remind about.", "error");
+      const result = action === "sms" ? await sendSMSMessage(student.invoiceId) : await sendWhatsAppMessage(student.invoiceId);
+      return notify(result.message, result.success ? "success" : "error");
+    }
+  };
 
-  const exportData = () => notify(`Exporting ${filtered.length} student records...`, "info");
-  const refreshData = () => { setLoading(true); setTimeout(() => setLoading(false), 500); notify("Fee data refreshed."); };
+  const downloadCsv = (filename, rows) => {
+    const cell = (v) => { const t = v === null || v === undefined ? "" : String(v); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+    const url = URL.createObjectURL(new Blob(["\ufeff" + rows.map((r) => r.map(cell).join(",")).join("\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const exportData = () => downloadCsv(`students-fees-${new Date().toISOString().slice(0, 10)}.csv`, [
+    ["Adm. No.", "Student", "Class", "Section", "Parent", "Mobile", "Total fee", "Paid", "Balance", "Status", "Last payment"],
+    ...filtered.map((s) => [s.admNo, s.name, s.cls, s.section, s.parent, s.mobile, s.total, s.paid, s.balance, s.status, s.lastPayment]),
+  ]);
+  const refreshData = async () => { await Promise.all([loadStudents(), loadStats()]); notify("Fee data refreshed."); };
 
   const allSelected = filtered.length > 0 && selectedRows.length === filtered.length;
   const toggleSelectAll = () => setSelectedRows(allSelected ? [] : filtered.map((s) => s.id));
@@ -566,7 +607,7 @@ export default function StudentFeeManagement() {
             <div className="stat-content">
               <div className="stat-label">Total Students</div>
               <div className="stat-value">{stats.totalStudents.toLocaleString("en-IN")}</div>
-              <div className="stat-trend trend-up"><TrendingUp size={12} /> +12 <span className="trend-desc">enrolled this year</span></div>
+              <div className="stat-trend trend-up"><TrendingUp size={12} /> {stats.admittedThisYear} <span className="trend-desc">admitted{stats.activeYear ? ` in ${stats.activeYear}` : " this year"}</span></div>
             </div>
           </div>
         </div>
@@ -576,7 +617,7 @@ export default function StudentFeeManagement() {
             <div className="stat-content">
               <div className="stat-label">Fees Collected Today</div>
               <div className="stat-value">{inr(stats.collectedToday)}</div>
-              <div className="stat-trend trend-up"><TrendingUp size={12} /> +8.2% <span className="trend-desc">23 transactions today</span></div>
+              <div className="stat-trend trend-up"><TrendingUp size={12} /> {stats.paymentsToday} <span className="trend-desc">payment{stats.paymentsToday === 1 ? "" : "s"} today</span></div>
             </div>
           </div>
         </div>
@@ -594,9 +635,9 @@ export default function StudentFeeManagement() {
           <div className="stat-row">
             <div className="stat-icon"><Receipt size={18} /></div>
             <div className="stat-content">
-              <div className="stat-label">Receipts Generated</div>
-              <div className="stat-value">{stats.receiptsGenerated.toLocaleString("en-IN")}</div>
-              <div className="stat-trend trend-up"><TrendingUp size={12} /> +43 <span className="trend-desc">this month</span></div>
+              <div className="stat-label">Payments This Month</div>
+              <div className="stat-value">{stats.paymentsThisMonth.toLocaleString("en-IN")}</div>
+              <div className="stat-trend trend-up"><TrendingUp size={12} /> {inr(stats.collectedThisMonth)} <span className="trend-desc">collected</span></div>
             </div>
           </div>
         </div>
@@ -614,19 +655,20 @@ export default function StudentFeeManagement() {
           </div>
           <div className="filter-group">
             <select className="filter-select" value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
-              <option>2024-25</option><option>2023-24</option><option>2022-23</option>
+              <option>All Years</option>
+              {lookups.academicYears.map((y) => <option key={y.id}>{y.name}</option>)}
             </select>
           </div>
           <div className="filter-group">
             <select className="filter-select" value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
               <option>All Classes</option>
-              {CLASSES.map((c) => <option key={c}>{c}</option>)}
+              {lookups.classes.map((c) => <option key={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="filter-group">
             <select className="filter-select" value={sectionFilter} onChange={(e) => setSectionFilter(e.target.value)}>
               <option>All Sections</option>
-              {SECTIONS.map((s) => <option key={s}>{s}</option>)}
+              {sectionOptions.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
           <div className="filter-group">
@@ -657,9 +699,9 @@ export default function StudentFeeManagement() {
 
       {/* Action bar */}
       <div className="action-bar">
-        <button className="btn btn-success" onClick={() => notify("Add Student form would open here.", "info")}>
-          <Plus size={14} /> Add Student
-        </button>
+        <span className="text-sm text-muted" title="A student is created when their admission is completed in the Admission app">
+          Students are added when an admission is completed
+        </span>
         <button
           className="btn btn-primary"
           onClick={() => {
@@ -690,7 +732,6 @@ export default function StudentFeeManagement() {
                   <th>Photo</th>
                   <th>Adm. No.</th>
                   <th className="sortable-th" onClick={() => toggleSort("name")}>Student Name</th>
-                  <th>Roll No.</th>
                   <th>Class</th>
                   <th>Sec.</th>
                   <th>Parent</th>
@@ -706,16 +747,15 @@ export default function StudentFeeManagement() {
               </thead>
               <tbody>
                 {loading ? (
-                  <SkeletonRows cols={16} rows={6} />
+                  <SkeletonRows cols={15} rows={6} />
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={16}><div className="no-data">No students match your filters.</div></td></tr>
-                ) : filtered.map((s) => (
+                  <tr><td colSpan={15}><div className="no-data">No students match your filters.</div></td></tr>
+                ) : pageRows.map((s) => (
                   <tr key={s.id} className={selectedId === s.id ? "row-active" : ""}>
                     <td><input type="checkbox" checked={selectedRows.includes(s.id)} onChange={() => toggleRow(s.id)} /></td>
                     <td><Avatar name={s.name} color={s.avatarColor} /></td>
                     <td className="adm-no">{s.admNo}</td>
                     <td className="student-name">{s.name}</td>
-                    <td className="roll-no">{s.roll}</td>
                     <td className="class">{s.cls}</td>
                     <td className="section">{s.section}</td>
                     <td className="parent-name">{s.parent}</td>
@@ -731,9 +771,7 @@ export default function StudentFeeManagement() {
                         <button className="action-btn view-btn" title="View Details" onClick={() => openDrawer(s, "overview")}><Eye size={14} /></button>
                         <button className="action-btn collect-btn" title="Collect Fee" onClick={() => openDrawer(s, "collect")}><CreditCard size={14} /></button>
                         <button className="action-btn" title="Payment History" onClick={() => openDrawer(s, "history")}><HistoryIcon size={14} /></button>
-                        <button className="action-btn" title="Print Receipt" onClick={() => quickAction("Receipt sent to printer")}><Printer size={14} /></button>
-                        <button className="action-btn edit-btn" title="Update Fee" onClick={() => notify("Update Fee Structure form would open here.", "info")}><Pencil size={14} /></button>
-                        <button className="action-btn" title="More Options" onClick={() => notify("More options menu", "info")}><MoreVertical size={14} /></button>
+                        <button className="action-btn" title="Print Receipt" onClick={() => quickAction("receipt", s)}><Printer size={14} /></button>
                       </div>
                     </td>
                   </tr>
@@ -742,11 +780,13 @@ export default function StudentFeeManagement() {
             </table>
           </div>
           <div className="table-footer">
-            <span className="table-info">Showing 1–{filtered.length} of {filtered.length} students</span>
+            <span className="table-info">
+              {filtered.length ? `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)} of ${filtered.length} students` : "No students"}
+            </span>
             <div className="flex items-center gap-2">
-              <button className="btn btn-outline btn-sm btn-icon" disabled><ChevronLeft size={14} /></button>
-              <span className="badge badge-teal">1</span>
-              <button className="btn btn-outline btn-sm btn-icon" disabled><ChevronRight size={14} /></button>
+              <button className="btn btn-outline btn-sm btn-icon" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></button>
+              <span className="badge badge-teal">{page} / {pageCount}</span>
+              <button className="btn btn-outline btn-sm btn-icon" disabled={page >= pageCount} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></button>
             </div>
           </div>
         </div>
@@ -815,7 +855,6 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
             <div className="drawer-block">
               <h4 className="drawer-block-title">Student Information</h4>
               <div className="drawer-info-grid">
-                <div><label>Roll No.</label><span>{student.roll}</span></div>
                 <div><label>Class</label><span>{student.cls} - {student.section}</span></div>
                 <div><label>Date of Birth</label><span>{student.dob}</span></div>
                 <div><label>Academic Year</label><span>{student.academicYear}</span></div>
@@ -840,8 +879,6 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
                   <div key={k}><label>{k}</label><span>{inr(v)}</span></div>
                 ))}
                 <div><label>Discount</label><span>{inr(student.discount)}</span></div>
-                <div><label>Scholarship</label><span>{inr(student.scholarship)}</span></div>
-                <div><label>Fine</label><span>{inr(student.fine)}</span></div>
               </div>
               <div className="divider" />
               <div className="bank-grid">
@@ -854,16 +891,11 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
             <div className="drawer-block">
               <h4 className="drawer-block-title">Quick Actions</h4>
               <div className="quick-actions-grid">
-                <button className="quick-action-btn" onClick={() => onQuickAction("Receipt generated")}><FileText size={15} /> Generate Receipt</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Receipt sent to printer")}><Printer size={15} /> Print Receipt</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Statement downloaded")}><Download size={15} /> Download Statement</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("SMS reminder sent")}><MessageSquare size={15} /> Send SMS Reminder</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("WhatsApp reminder sent")}><Send size={15} /> Send WhatsApp Reminder</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Email reminder sent")}><MailIcon size={15} /> Send Email Reminder</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Opening ledger")}><Landmark size={15} /> View Ledger</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Discount applied")}><Percent size={15} /> Apply Discount</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Fine added")}><AlertTriangle size={15} /> Add Fine</button>
-                <button className="quick-action-btn" onClick={() => onQuickAction("Transfer request started")}><ArrowRightLeft size={15} /> Transfer Student</button>
+                <button className="quick-action-btn" onClick={() => onQuickAction("invoice")}><FileText size={15} /> Open Invoice</button>
+                <button className="quick-action-btn" onClick={() => onQuickAction("receipt")}><Printer size={15} /> Print Receipt</button>
+                <button className="quick-action-btn" onClick={() => onQuickAction("statement")}><Download size={15} /> Download Statement</button>
+                <button className="quick-action-btn" onClick={() => onQuickAction("sms")}><MessageSquare size={15} /> Send SMS Reminder</button>
+                <button className="quick-action-btn" onClick={() => onQuickAction("whatsapp")}><Send size={15} /> Send WhatsApp Reminder</button>
               </div>
             </div>
           </>
@@ -879,11 +911,7 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Payment Date</label>
-              <input type="date" className="form-input" value={payForm.date} onChange={(e) => setPayForm({ ...payForm, date: e.target.value })} />
-            </div>
-            <div className="grid-2" style={{ marginBottom: 0 }}>
+            <div className="grid-2" style={{ marginBottom: 16 }}>
               <div className="form-group">
                 <label className="form-label">Amount to Collect<span className="req">*</span></label>
                 <div className="amount-input-wrapper">
@@ -891,24 +919,7 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
                   <input className="form-input amount-input" type="number" value={payForm.amount}
                     onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder="0" />
                 </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Discount</label>
-                <div className="amount-input-wrapper">
-                  <span className="currency-prefix">₹</span>
-                  <input className="form-input amount-input" type="number" value={payForm.discount}
-                    onChange={(e) => setPayForm({ ...payForm, discount: e.target.value })} placeholder="0" />
-                </div>
-              </div>
-            </div>
-            <div className="grid-2" style={{ marginBottom: 16 }}>
-              <div className="form-group">
-                <label className="form-label">Fine</label>
-                <div className="amount-input-wrapper">
-                  <span className="currency-prefix">₹</span>
-                  <input className="form-input amount-input" type="number" value={payForm.fine}
-                    onChange={(e) => setPayForm({ ...payForm, fine: e.target.value })} placeholder="0" />
-                </div>
+                <div className="text-sm text-muted" style={{ marginTop: 4 }}>Recorded with today's date.</div>
               </div>
               <div className="form-group">
                 <label className="form-label">Balance After Payment</label>
@@ -944,7 +955,6 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
             </div>
 
             <div className="modal-actions" style={{ borderTop: "none", paddingTop: 0 }}>
-              <button className="btn btn-outline w-full" onClick={() => onQuickAction("Payment updated")}>Update Payment</button>
               <button className="btn btn-primary w-full" onClick={onSubmitPayment}><Wallet size={14} /> Collect Payment</button>
             </div>
           </div>
@@ -971,8 +981,7 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
                       <div className="timeline-amount">{inr(h.amount)}</div>
                       <div className="timeline-meta">{h.date} · {h.method} · Collected by {h.collectedBy}</div>
                       <div className="timeline-actions">
-                        <button className="btn btn-ghost btn-sm" onClick={() => onQuickAction("Receipt downloaded")}><Download size={12} /> Download</button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => onQuickAction("Receipt sent to printer")}><Printer size={12} /> Reprint</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => onQuickAction("receipt")}><Printer size={12} /> Receipt</button>
                         <button className="btn btn-ghost btn-sm" style={{ color: "var(--red-dark)" }} onClick={() => onRefund(h)}><ArrowRightLeft size={12} /> Refund</button>
                       </div>
                     </div>

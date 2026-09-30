@@ -79,8 +79,44 @@ export class InvoiceService {
     const pendingAmount =
       Number(invoice.pending_amount);
 
+    // School letterhead, the student's class/year, and what the invoice covers
+    const [school, admission, assignments] = await Promise.all([
+      prisma.school.findUnique({
+        where: { id: invoice.school_id },
+        select: { name: true, address: true, city: true, state: true, postal_code: true, phone: true, email: true },
+      }),
+      prisma.admission.findFirst({
+        where: { student_id: student.id, school_id: invoice.school_id },
+        orderBy: { id: 'desc' },
+        select: {
+          school_class: { select: { class_name: true } },
+          section: { select: { section_name: true } },
+          academic_year: { select: { year_name: true } },
+        },
+      }),
+      prisma.student_fee_assignment.findMany({
+        where: { student_id: student.id, school_id: invoice.school_id },
+        select: { final_amount: true, fee_structure: { select: { fee_type: true } } },
+      }),
+    ]);
+    const feeBreakdown = this.breakdownFromNotes(invoice.notes, assignments, totalAmount);
+
     return {
       invoiceId: invoice.id.toString(),
+
+      school: school
+        ? {
+            name: school.name,
+            address: [school.address, school.city, school.state, school.postal_code].filter(Boolean).join(', '),
+            phone: school.phone || null,
+            email: school.email || null,
+          }
+        : null,
+
+      className: admission?.school_class?.class_name || null,
+      section: admission?.section?.section_name || null,
+      academicYear: admission?.academic_year?.year_name || null,
+      feeBreakdown,
       invoiceNumber:
         invoice.invoice_number,
 
@@ -235,13 +271,6 @@ export class InvoiceService {
       };
     }
 
-    if (filters.schoolId) {
-      where.school_id =
-        BigInt(
-          filters.schoolId
-        );
-    }
-
     if (filters.invoiceNumber) {
       where.invoice_number =
         filters.invoiceNumber;
@@ -261,6 +290,13 @@ export class InvoiceService {
               first_name: true,
               middle_name: true,
               last_name: true,
+              phone: true,
+              // Current class, for the list
+              admission: {
+                select: { school_class: { select: { class_name: true } } },
+                orderBy: { id: 'desc' },
+                take: 1,
+              },
             },
           },
 
@@ -323,6 +359,12 @@ export class InvoiceService {
             rollNumber:
               invoice.student
                 .admission_number,
+
+            className:
+              invoice.student.admission?.[0]?.school_class?.class_name || null,
+
+            phone:
+              invoice.student.phone || null,
 
             totalAmount:
               Number(
@@ -559,6 +601,32 @@ export class InvoiceService {
         .padStart(3, '0');
 
     return `INV-${timestamp}-${random}`;
+  }
+
+  /**
+   * Fee lines of an invoice. Invoices raised by the admission link and the
+   * Generate Invoice dialog list their fee types in the notes
+   * ("Admission fees: Tuition, Lab" / "Fees: Tuition"); each is matched to the
+   * student's fee assignment. When nothing matches, or the lines do not add up
+   * to the invoice total, no breakdown is shown rather than a guessed one.
+   */
+  private breakdownFromNotes(
+    notes: string | null,
+    assignments: Array<{ final_amount: any; fee_structure: { fee_type: string } | null }>,
+    total: number
+  ) {
+    const listed = String(notes || '')
+      .replace(/^[^:]*fees:\s*/i, '')
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (!listed.length) return [];
+    const lines = listed
+      .map((type) => assignments.find((a) => a.fee_structure?.fee_type?.toLowerCase() === type))
+      .filter((a): a is NonNullable<typeof a> => Boolean(a))
+      .map((a) => ({ feeType: a.fee_structure!.fee_type, amount: Number(a.final_amount) }));
+    const sum = lines.reduce((t, l) => t + Math.round(l.amount * 100), 0);
+    return lines.length === listed.length && sum === Math.round(total * 100) ? lines : [];
   }
 
   /**

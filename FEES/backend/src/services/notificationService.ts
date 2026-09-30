@@ -2,6 +2,24 @@ import prisma from '../config/database';
 import { NotFoundError } from '../middleware/errorHandler';
 import logger from '../config/logger';
 
+/**
+ * No SMS or WhatsApp provider is connected yet. Instead of logging a message
+ * and reporting it as sent, the request fails with 503 and says so.
+ * Connect a provider (e.g. MSG91, Twilio, WhatsApp Business API) in send().
+ */
+class ProviderNotConfiguredError extends Error {
+  status = 503;
+  code = 'PROVIDER_NOT_CONFIGURED';
+  constructor(channel: 'sms' | 'whatsapp') {
+    super(`${channel === 'sms' ? 'SMS' : 'WhatsApp'} is not set up yet: no provider is connected, so nothing was sent.`);
+    this.name = 'ProviderNotConfiguredError';
+  }
+}
+
+const send = async (channel: 'sms' | 'whatsapp', _phone: string, _message: string): Promise<never> => {
+  throw new ProviderNotConfiguredError(channel);
+};
+
 export class NotificationService {
   async sendWhatsAppNotification(invoiceId: string, schoolId: string) {
     const invoice = await prisma.invoice.findFirst({
@@ -68,24 +86,7 @@ export class NotificationService {
     const message =
       `Hello ${studentName}, your pending fee is ₹${pending.toLocaleString('en-IN')}. Please pay soon.`;
 
-    logger.info(
-      'WhatsApp notification sent',
-      {
-        invoiceId,
-        phone,
-        message,
-      }
-    );
-
-    return {
-      success: true,
-      channel: 'whatsapp',
-      phone,
-      message,
-      invoiceId,
-      sentAt:
-        new Date().toISOString(),
-    };
+    return send('whatsapp', phone, message);
   }
 
   async sendSMSNotification(invoiceId: string, schoolId: string) {
@@ -153,24 +154,7 @@ export class NotificationService {
     const message =
       `Hello ${studentName}, your pending fee is Rs.${pending.toLocaleString('en-IN')}. Please pay soon.`;
 
-    logger.info(
-      'SMS notification sent',
-      {
-        invoiceId,
-        phone,
-        message,
-      }
-    );
-
-    return {
-      success: true,
-      channel: 'sms',
-      phone,
-      message,
-      invoiceId,
-      sentAt:
-        new Date().toISOString(),
-    };
+    return send('sms', phone, message);
   }
 
   async sendBulkNotification(data: {
@@ -252,7 +236,7 @@ export class NotificationService {
     );
 
     return {
-      success: true,
+      success: successCount > 0,
       channel:
         data.channel,
       total:

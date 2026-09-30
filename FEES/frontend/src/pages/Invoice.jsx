@@ -95,13 +95,23 @@ const Invoice = () => {
 
   const amountPaid = invoice.paidAmount || invoice.amountPaid || 0
   const isFullyPaid = remainingBalance <= 0
+  const school = invoice.school || {}
+  const initials = (school.name || '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')
+  const classLabel = [invoice.className, invoice.section].filter(Boolean).join(' / ')
+  const breakdown = Array.isArray(invoice.feeBreakdown) ? invoice.feeBreakdown : []
+  const contact = [school.phone, school.email].filter(Boolean).join(' | ')
 
   return (
     <div className="page">
       {/* Back Button */}
       <button className="back-btn" onClick={() => navigate('/fees')}>
         <ArrowLeft size={20} />
-        <span>Back to Dashboard</span>
+        <span>Back to Payments</span>
       </button>
 
       {/* Invoice Container - Clean White Design */}
@@ -110,19 +120,21 @@ const Invoice = () => {
         {/* School Header - Clean White */}
         <div className="invoice-school-header">
           <div className="school-logo-section">
-            <div className="school-initial">ST</div>
+            {initials && <div className="school-initial">{initials}</div>}
             <div>
-              <h2 className="school-name">Sacred Tree</h2>
-              <p className="school-subtitle">International School</p>
+              <h2 className="school-name">{school.name || 'School'}</h2>
+              {school.address && <p className="school-subtitle">{school.address}</p>}
             </div>
           </div>
           <div className="invoice-title-section">
-            <h1 className="invoice-main-title">Admission Fee Invoice</h1>
-            <p className="invoice-id-text">Invoice ID: {invoice.invoiceId}</p>
+            <h1 className="invoice-main-title">Fee Invoice</h1>
+            <p className="invoice-id-text">Invoice No: {invoice.invoiceNumber || invoice.invoiceId}</p>
+            {invoice.invoiceDate && <p className="invoice-id-text">Date: {invoice.invoiceDate}</p>}
           </div>
-          <button className="btn btn-outline btn-sm">
+          {/* The browser's print dialog can save the invoice as a PDF */}
+          <button className="btn btn-outline btn-sm" onClick={() => window.print()}>
             <Download size={14} />
-            Download PDF
+            Print / Save as PDF
           </button>
         </div>
 
@@ -134,15 +146,19 @@ const Invoice = () => {
           </div>
           <div className="info-row">
             <span className="info-label">Class / Section</span>
-            <span className="info-value">{invoice.class}</span>
+            <span className="info-value">{classLabel || '—'}</span>
           </div>
           <div className="info-row">
-            <span className="info-label">Admission ID</span>
-            <span className="info-value">ADM-2024-1234</span>
+            <span className="info-label">Admission No.</span>
+            <span className="info-value">{invoice.rollNumber || '—'}</span>
           </div>
           <div className="info-row">
             <span className="info-label">Academic Year</span>
-            <span className="info-value">2024-2025</span>
+            <span className="info-value">{invoice.academicYear || '—'}</span>
+          </div>
+          <div className="info-row">
+            <span className="info-label">Due Date</span>
+            <span className="info-value">{invoice.dueDate || '—'}</span>
           </div>
         </div>
 
@@ -157,17 +173,25 @@ const Invoice = () => {
               </tr>
             </thead>
             <tbody>
-              {invoice.feeBreakdown && invoice.feeBreakdown.map((fee, idx) => (
-                <tr key={idx}>
-                  <td>{fee.description}</td>
-                  <td className="text-right">₹{fee.amount.toLocaleString()}</td>
+              {breakdown.length > 0 ? (
+                breakdown.map((fee, idx) => (
+                  <tr key={idx}>
+                    <td>{fee.feeType || fee.description}</td>
+                    <td className="text-right">₹{Number(fee.amount || 0).toLocaleString()}</td>
+                  </tr>
+                ))
+              ) : (
+                // No itemised lines on record: show what the invoice says it covers
+                <tr>
+                  <td>{invoice.notes || 'School fees'}</td>
+                  <td className="text-right">₹{Number(invoice.totalAmount || 0).toLocaleString()}</td>
                 </tr>
-              ))}
+              )}
             </tbody>
             <tfoot>
               <tr className="total-row">
                 <td className="total-label">Total Amount</td>
-                <td className="text-right total-amount">₹{invoice.totalAmount.toLocaleString()}</td>
+                <td className="text-right total-amount">₹{Number(invoice.totalAmount || 0).toLocaleString()}</td>
               </tr>
             </tfoot>
            </table>
@@ -175,12 +199,11 @@ const Invoice = () => {
 
         {/* Payment Terms */}
         <div className="terms-section">
-          <h3 className="section-title">Payment Terms</h3>
+          <h3 className="section-title">Payment Details</h3>
           <ul className="terms-list">
-            <li>• Payment must be made by the due date to avoid late fees</li>
-            <li>• Late payment will incur a 5% penalty per week</li>
-            <li>• All fees are non-refundable unless stated otherwise</li>
-            <li>• For any queries, contact the accounts department</li>
+            {invoice.dueDate && <li>• Please pay by {invoice.dueDate}</li>}
+            <li>• Paid so far: ₹{Number(amountPaid).toLocaleString()} · Balance: ₹{Number(Math.max(remainingBalance, 0)).toLocaleString()}</li>
+            {contact && <li>• For queries, contact the school: {contact}</li>}
           </ul>
         </div>
 

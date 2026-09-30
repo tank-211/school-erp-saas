@@ -1,7 +1,14 @@
+import prisma from '../config/database';
 import { Request, Response } from 'express';
 import reportService from '../services/reportService';
 import pdfGenerator from '../utils/pdfGenerator';
 import logger from '../config/logger';
+
+// Rows per export: default when not given, never more than 10,000
+const exportLimit = (value: unknown, fallback: number) => {
+  const n = parseInt(String(value ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 10000) : fallback;
+};
 
 /**
  * Export comprehensive report as PDF
@@ -12,7 +19,12 @@ export const exportReport = async (req: Request, res: Response) => {
     logger.info('Starting report export...');
 
     // Fetch comprehensive report data
-    const reportData = await reportService.getComprehensiveReportData(req.user!.schoolId);
+    const reportData: any = await reportService.getComprehensiveReportData(req.user!.schoolId);
+    const school = await prisma.school.findUnique({
+      where: { id: BigInt(req.user!.schoolId) },
+      select: { name: true },
+    });
+    reportData.schoolName = school?.name;
 
     // Generate PDF
     const pdfBuffer: any = await pdfGenerator.generateReport(reportData);
@@ -65,7 +77,7 @@ export const exportDashboardStats = async (req: Request, res: Response) => {
  */
 export const exportTransactionsCSV = async (req: Request, res: Response) => {
   try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const limit = exportLimit(req.query.limit, 50);
     const transactions = await reportService.getRecentTransactions(req.user!.schoolId, limit);
 
     // Create CSV content
@@ -121,7 +133,7 @@ export const exportTransactionsCSV = async (req: Request, res: Response) => {
  */
 export const exportPendingPaymentsCSV = async (req: Request, res: Response) => {
   try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+    const limit = exportLimit(req.query.limit, 100);
     const pendingPayments = await reportService.getPendingPaymentsReport(req.user!.schoolId, limit);
 
     // Create CSV content
@@ -177,7 +189,7 @@ export const exportPendingPaymentsCSV = async (req: Request, res: Response) => {
  */
 export const exportRefundsCSV = async (req: Request, res: Response) => {
   try {
-    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    const limit = exportLimit(req.query.limit, 50);
     const refunds = await reportService.getRefundRequestsReport(req.user!.schoolId, limit);
 
     // Create CSV content

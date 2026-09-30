@@ -18,7 +18,7 @@ export const uploadFeeStructures = asyncHandler(async (req: Request, res: Respon
     return sendError(res, 'CSV file is empty', [], 400);
   }
 
-  const result = await bulkUploadService.uploadFeeStructures(csvData, uploadedBy || '', req.user!.schoolId);
+  const result = await bulkUploadService.uploadFeeStructures(csvData, uploadedBy || '', req.user!.schoolId, req.file?.originalname || '');
 
   sendSuccess(res, 'Fee structures uploaded successfully', result, 201);
 });
@@ -37,7 +37,7 @@ export const uploadInvoices = asyncHandler(async (req: Request, res: Response) =
     return sendError(res, 'CSV file is empty', [], 400);
   }
 
-  const result = await bulkUploadService.uploadInvoices(csvData, uploadedBy || '', req.user!.schoolId);
+  const result = await bulkUploadService.uploadInvoices(csvData, uploadedBy || '', req.user!.schoolId, req.file?.originalname || '');
 
   sendSuccess(res, 'Invoices uploaded successfully', result, 201);
 });
@@ -56,7 +56,7 @@ export const uploadPayments = asyncHandler(async (req: Request, res: Response) =
     return sendError(res, 'CSV file is empty', [], 400);
   }
 
-  const result = await bulkUploadService.uploadPayments(csvData, uploadedBy || '', req.user!.schoolId);
+  const result = await bulkUploadService.uploadPayments(csvData, uploadedBy || '', req.user!.schoolId, req.file?.originalname || '');
 
   sendSuccess(res, 'Payments uploaded successfully', result, 201);
 });
@@ -75,7 +75,7 @@ export const uploadStudents = asyncHandler(async (req: Request, res: Response) =
     return sendError(res, 'CSV file is empty', [], 400);
   }
 
-  const result = await bulkUploadService.uploadStudents(csvData, uploadedBy || '', req.user!.schoolId);
+  const result = await bulkUploadService.uploadStudents(csvData, uploadedBy || '', req.user!.schoolId, req.file?.originalname || '');
 
   sendSuccess(res, 'Students uploaded successfully', result, 201);
 });
@@ -85,7 +85,7 @@ export const getUploadLogs = asyncHandler(async (req: Request, res: Response) =>
 
   const { page: p, limit: l } = getPaginationParams({ page, limit });
 
-  const result = await bulkUploadService.getUploadLogs(p, l);
+  const result = await bulkUploadService.getUploadLogs(p, l, req.user!.schoolId);
 
   sendSuccess(res, 'Upload logs retrieved successfully', result.logs, 200, {
     ...getPaginationMeta(p, l, result.total),

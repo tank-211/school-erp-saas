@@ -31,12 +31,6 @@ const CustomTooltip = ({ active, payload }) => {
 }
 
 const PaymentMethodChart = ({ data = [] }) => {
-  const defaultData = [
-    { name: 'Online', value: 7200 },
-    { name: 'Cheque', value: 2800 },
-    { name: 'Cash', value: 1950 },
-  ]
-
   const colors = ['#22c55e', '#108fb9', '#0ea5e9', '#f59e0b', '#f97316']
 
   // Transform backend data to chart format
@@ -48,7 +42,7 @@ const PaymentMethodChart = ({ data = [] }) => {
         value: item.totalAmount || item.value || 0,
         count: item.count || 0
       }))
-    : defaultData
+    : []
 
   return (
     <div className="card">
@@ -56,6 +50,11 @@ const PaymentMethodChart = ({ data = [] }) => {
         <h3 className="card-title">Payment Method Distribution</h3>
       </div>
       <div className="card-body">
+        {chartData.length === 0 ? (
+          <div style={{ height: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+            No payments recorded yet.
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Pie
@@ -76,6 +75,7 @@ const PaymentMethodChart = ({ data = [] }) => {
             <Legend verticalAlign="bottom" height={36} />
           </PieChart>
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   )

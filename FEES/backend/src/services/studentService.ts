@@ -312,19 +312,22 @@ export class StudentService {
             },
           },
 
+          // Payment history shown in the student drawer
           payment: {
             orderBy: {
               payment_date: 'desc',
             },
-            take: 1,
+            take: 50,
             select: {
               id: true,
+              invoice_id: true,
               payment_number: true,
               amount: true,
               payment_date: true,
               payment_method: true,
               transaction_id: true,
               status: true,
+              received_by: true,
             },
           },
 
@@ -348,8 +351,30 @@ export class StudentService {
       }),
     ]);
 
+    // received_by holds a user id: show the staff member's name
+    const receiverIds = [
+      ...new Set(
+        students.flatMap((st: any) => (st.payment || []).map((p: any) => String(p.received_by || '')))
+          .filter((v: string) => /^\d+$/.test(v))
+      ),
+    ];
+    const receivers = receiverIds.length
+      ? await prisma.app_user.findMany({
+          where: { id: { in: receiverIds.map((v) => BigInt(v)) }, school_id: BigInt(schoolId) },
+          select: { id: true, name: true },
+        })
+      : [];
+    const receiverName = new Map(receivers.map((u) => [u.id.toString(), u.name]));
+    const withNames = students.map((st: any) => ({
+      ...st,
+      payment: (st.payment || []).map((p: any) => ({
+        ...p,
+        received_by_name: receiverName.get(String(p.received_by)) || null,
+      })),
+    }));
+
     return {
-      students,
+      students: withNames,
       total,
       page,
       limit,
@@ -458,6 +483,31 @@ export class StudentService {
       },
     });
 
+    // Collections today and this month (India dates), same rule as the
+    // dashboard: every payment that is not cancelled counts
+    const IST = 5.5 * 60 * 60 * 1000;
+    const ist = new Date(Date.now() + IST);
+    const todayStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()));
+    const monthStart = new Date(Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), 1));
+    const paid = (from: Date) =>
+      prisma.payment.aggregate({
+        where: { school_id: schoolIdBigInt, payment_date: { gte: from }, status: { not: 'cancelled' } },
+        _sum: { amount: true },
+        _count: { _all: true },
+      });
+
+    const activeYear = await prisma.academic_year.findFirst({
+      where: { school_id: schoolIdBigInt, OR: [{ is_active: true }, { status: 'active' }] },
+      select: { id: true, year_name: true },
+    });
+    const [today, month, admittedThisYear] = await Promise.all([
+      paid(todayStart),
+      paid(monthStart),
+      activeYear
+        ? prisma.admission.count({ where: { school_id: schoolIdBigInt, academic_year_id: activeYear.id } })
+        : Promise.resolve(0),
+    ]);
+
     return {
       total: totalStudents,
       active: activeStudents,
@@ -465,6 +515,12 @@ export class StudentService {
         status: item.status,
         count: item._count._all,
       })),
+      activeYear: activeYear?.year_name || null,
+      admittedThisYear,
+      collectedToday: Number(today._sum.amount ?? 0),
+      paymentsToday: today._count._all,
+      collectedThisMonth: Number(month._sum.amount ?? 0),
+      paymentsThisMonth: month._count._all,
     };
   }
 }

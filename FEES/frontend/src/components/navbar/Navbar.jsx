@@ -1,17 +1,23 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Bell, User, LogOut, Settings, ChevronDown } from "lucide-react";
-import { logoutUser } from "../../services/apiService";
+import { logoutUser, fetchSchoolProfile } from "../../services/apiService";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [schoolName, setSchoolName] = useState("");
 
+  useEffect(() => {
+    fetchSchoolProfile().then((r) => { if (r.success) setSchoolName(r.data?.name || ""); });
+  }, []);
+
+  // Searches students on the Students page
   const handleSearch = (e) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      console.log("Searching for:", searchTerm);
+      navigate(`/students?search=${encodeURIComponent(searchTerm.trim())}`);
     }
   };
 
@@ -48,7 +54,7 @@ const Navbar = () => {
             <Search size={16} className="input-icon" />
             <input
               type="text"
-              placeholder="Search students, parents, staff..."
+              placeholder="Search students by name or admission no."
               className="form-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -56,11 +62,7 @@ const Navbar = () => {
           </div>
         </form>
 
-        <select className="form-select campus-select">
-          <option value="bangalore">Bangalore Campus</option>
-          <option value="pune">Pune Campus</option>
-          <option value="mumbai">Mumbai Campus</option>
-        </select>
+        {schoolName && <span className="campus-select" style={{ fontWeight: 600 }}>{schoolName}</span>}
       </div>
 
       {/* RIGHT SIDE - Actions & Profile */}
@@ -82,11 +84,6 @@ const Navbar = () => {
             Export Report
           </button>
         </Link>
-
-        {/* Notifications */}
-        <div className="notification-icon">
-          <Bell size={18} />
-        </div>
 
         {/* User Profile Dropdown */}
         <div className="profile-dropdown">
@@ -111,15 +108,6 @@ const Navbar = () => {
                   <div className="dropdown-user-role">{userRole}</div>
                 </div>
               </div>
-              <div className="dropdown-divider"></div>
-              <Link to="/profile" className="dropdown-item" onClick={() => setShowProfileMenu(false)}>
-                <User size={14} />
-                My Profile
-              </Link>
-              <Link to="/settings" className="dropdown-item" onClick={() => setShowProfileMenu(false)}>
-                <Settings size={14} />
-                Settings
-              </Link>
               <div className="dropdown-divider"></div>
               <button className="dropdown-item logout" onClick={handleLogout}>
                 <LogOut size={14} />

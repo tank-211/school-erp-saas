@@ -1,38 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CheckCircle, ArrowLeft, Home } from 'lucide-react';
 
 const RefundRequestSuccess = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [successData, setSuccessData] = useState({
-    requestId: 'RFD-2024-001234',
-    invoiceId: 'INV-2024-005678',
-    amount: '₹5,000.00',
-    status: 'Pending Review',
-  });
-
-  useEffect(() => {
-    // Check for state from navigation first
-    if (location.state?.successData) {
-      setSuccessData(location.state.successData);
-    } else {
-      // Fallback to sessionStorage
-      const storedData = sessionStorage.getItem('newRefundData');
-      if (storedData) {
-        const parsedData = JSON.parse(storedData);
-        setSuccessData({
-          requestId: parsedData.requestId || ('RFD-' + Date.now()),
-          invoiceId: parsedData.invoiceId,
-          amount: parsedData.formattedAmount || `₹${parseInt(parsedData.amount).toLocaleString()}`,
-          status: 'Pending Review',
-        });
-      }
-    }
-  }, [location.state]);
+  // Only what the server returned for the request just made; nothing made up
+  const successData = location.state?.successData || null;
+  const statusLabel = { PENDING: 'Pending review', APPROVED: 'Approved', REJECTED: 'Rejected', PROCESSED: 'Refunded' };
 
   const handleBackToDashboard = () => {
-    navigate('/');
+    navigate('/dashboard');
   };
 
   const handleBackToRefunds = () => {
@@ -40,7 +18,7 @@ const RefundRequestSuccess = () => {
   };
 
   const handleNewRequest = () => {
-    navigate('/refund/request');
+    navigate('/refund-request');
   };
 
   return (
@@ -95,7 +73,7 @@ const RefundRequestSuccess = () => {
                   Request ID
                 </span>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--gray-800)', fontFamily: 'monospace' }}>
-                  {successData.requestId}
+                  {successData?.requestId ? `#${successData.requestId}` : '—'}
                 </span>
               </div>
 
@@ -110,7 +88,7 @@ const RefundRequestSuccess = () => {
                   Invoice ID
                 </span>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--gray-800)', fontFamily: 'monospace' }}>
-                  {successData.invoiceId}
+                  {successData?.invoiceId || '—'}
                 </span>
               </div>
 
@@ -125,7 +103,7 @@ const RefundRequestSuccess = () => {
                   Refund Amount
                 </span>
                 <span style={{ fontSize: '16px', fontWeight: '700', color: 'var(--primary)' }}>
-                  {successData.amount}
+                  {successData?.amount || '—'}
                 </span>
               </div>
 
@@ -139,7 +117,7 @@ const RefundRequestSuccess = () => {
                   Status
                 </span>
                 <span className="badge badge-status-pending" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                  {successData.status}
+                  {statusLabel[successData?.status] || successData?.status || '—'}
                 </span>
               </div>
             </div>

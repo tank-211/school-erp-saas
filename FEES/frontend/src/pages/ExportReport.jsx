@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { reportService } from '../services/reportService'
 
+// Export every record (the server caps this); the page used to stop at 50/100 rows
+const EXPORT_LIMIT = 10000
+
 const ExportReport = () => {
   const [selectedReport, setSelectedReport] = useState('pdf')
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState('')
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [debugInfo, setDebugInfo] = useState('')
 
   // Check authentication status on component mount
   useEffect(() => {
@@ -14,11 +16,6 @@ const ExportReport = () => {
     const isAuth = !!token
     setIsAuthenticated(isAuth)
     
-    if (!isAuth) {
-      setDebugInfo('⚠️ Not authenticated. No accessToken or authToken found in localStorage.')
-    } else {
-      setDebugInfo('✅ Signed in')
-    }
   }, [])
 
   // Handle export function - calls backend API
@@ -43,13 +40,13 @@ const ExportReport = () => {
           result = await reportService.exportPDF()
           break
         case 'transactions-csv':
-          result = await reportService.exportTransactionsCSV(50)
+          result = await reportService.exportTransactionsCSV(EXPORT_LIMIT)
           break
         case 'pending-csv':
-          result = await reportService.exportPendingPaymentsCSV(100)
+          result = await reportService.exportPendingPaymentsCSV(EXPORT_LIMIT)
           break
         case 'refunds-csv':
-          result = await reportService.exportRefundsCSV(50)
+          result = await reportService.exportRefundsCSV(EXPORT_LIMIT)
           break
         default:
           result = { success: false, message: 'Invalid report type' }
@@ -83,18 +80,6 @@ const ExportReport = () => {
             <h2 className="card-title">Export Options</h2>
           </div>
           <div className="card-body">
-            {/* Authentication Status */}
-            <div style={{ 
-              marginBottom: '15px', 
-              padding: '10px', 
-              backgroundColor: isAuthenticated ? '#d4edda' : '#f8d7da',
-              color: isAuthenticated ? '#155724' : '#721c24',
-              borderRadius: '4px',
-              border: isAuthenticated ? '1px solid #c3e6cb' : '1px solid #f5c6cb',
-              fontSize: '0.9em'
-            }}>
-              {isAuthenticated ? '✅ Authenticated' : '⚠️ Not authenticated'}
-            </div>
 
             <div className="form-group">
               <label>Select Report Format</label>
@@ -188,9 +173,7 @@ const ExportReport = () => {
               {loading ? '⏳ Exporting...' : '⬇️ Download Report'}
             </button>
 
-            {debugInfo && (
-              <div style={{ marginTop: '15px', fontSize: '0.85em', color: '#555' }}>{debugInfo}</div>
-            )}
+
           </div>
         </div>
 

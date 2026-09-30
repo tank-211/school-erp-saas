@@ -2634,3 +2634,16 @@ ul, ol { list-style: none; }
   .fee-mgmt-layout { flex-direction: column; }
   .student-drawer, .fee-mgmt-empty-col { flex: 1 1 auto; width: 100%; position: static; max-height: none; }
 }
+
+/* Message banners (used by forms and list pages for server results) */
+.alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: var(--r-md, 8px);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.alert-error   { background: var(--red-bg, #fee2e2);   border: 1px solid #fca5a5; color: var(--red-dark, #991b1b); }
+.alert-success { background: var(--green-bg, #dcfce7); border: 1px solid #86efac; color: #166534; }

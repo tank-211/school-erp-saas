@@ -15,6 +15,8 @@ const BulkUpload = () => {
   const [previewData, setPreviewData] = useState(null)
   const [uploads, setUploads] = useState([])
   const [loading, setLoading] = useState(true)
+  const [logError, setLogError] = useState('')
+  const [uploadResult, setUploadResult] = useState(null)
 
   const uploadCards = [
     {
@@ -24,8 +26,9 @@ const BulkUpload = () => {
       icon: DollarSign,
       iconBg: '#e6f8ed',
       iconColor: '#22c55e',
-      features: ['Define fee categories', 'Set class-wise fees', 'Academic year mapping'],
-      templateColumns: ['Class', 'Category', 'Amount', 'Due Date']
+      features: ['Fee type and amount per class', 'Class and year by name (as in School Setup)', 'Active year used when none is given'],
+      // Columns the server reads (FEES bulkUploadService.uploadFeeStructures)
+      templateColumns: ['className', 'academicYear', 'feeType', 'amount', 'dueDate', 'description']
     },
     {
       id: 2,
@@ -34,8 +37,8 @@ const BulkUpload = () => {
       icon: FileText,
       iconBg: '#dbf4ff',
       iconColor: '#0ea5e9',
-      features: ['Auto-generate invoices', 'Custom due dates', 'Batch processing'],
-      templateColumns: ['Student ID', 'Student Name', 'Class', 'Amount', 'Due Date']
+      features: ['One invoice per row', 'Student by admission number', 'Custom due dates'],
+      templateColumns: ['admissionNumber', 'amount', 'dueDate', 'notes']
     },
     {
       id: 3,
@@ -44,8 +47,8 @@ const BulkUpload = () => {
       icon: CreditCard,
       iconBg: '#f3e8ff',
       iconColor: '#8b5cf6',
-      features: ['Import payment history', 'Reconciliation support', 'Multi-method support'],
-      templateColumns: ['Invoice ID', 'Student Name', 'Amount', 'Payment Date', 'Payment Method']
+      features: ['Matched by invoice number', 'Updates paid and pending amounts', 'Cash, cheque, bank transfer, UPI'],
+      templateColumns: ['invoiceNumber', 'amount', 'paymentDate', 'paymentMethod', 'transactionId', 'bankName', 'chequeNumber', 'remarks']
     },
     {
       id: 4,
@@ -54,8 +57,8 @@ const BulkUpload = () => {
       icon: Users,
       iconBg: '#fef3c7',
       iconColor: '#f59e0b',
-      features: ['Student profiles', 'Parent information', 'Class assignments'],
-      templateColumns: ['Student Name', 'Class', 'Roll Number', 'Parent Name', 'Phone', 'Email']
+      features: ['Student profiles', 'Contact details', 'Matched by admission number'],
+      templateColumns: ['admissionNumber', 'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender', 'address', 'city', 'state', 'postalCode']
     },
   ]
 
@@ -64,16 +67,19 @@ const BulkUpload = () => {
     try {
       const result = await getBulkUploadLogs(1, 20)
       if (result.success && Array.isArray(result.data)) {
+        const statusLabel = { success: 'Success', partial: 'Partly imported', failed: 'Failed' }
         const transformed = result.data.map((log) => ({
           id: log.id,
-          type: log.fileName?.replace(/_/g, ' ').replace('.csv', '').replace(/\b\w/g, l => l.toUpperCase()) || 'Unknown',
-          fileName: log.fileName,
-          records: log.totalRecords || 0,
-          status: log.status === 'COMPLETED' ? 'Success' : 'Processing',
-          uploadedBy: log.uploadedBy || 'Admin User',
-          time: log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A',
+          type: log.type || '—',
+          fileName: log.fileName || '—',
+          records: `${log.succeeded ?? 0} of ${log.records ?? 0}`,
+          status: statusLabel[log.status] || log.status || '—',
+          uploadedBy: log.uploadedBy || '—',
+          time: log.createdAt ? new Date(log.createdAt).toLocaleString() : '—',
         }))
         setUploads(transformed)
+      } else if (!result.success) {
+        setLogError(result.error || 'Could not load upload history')
       }
     } catch (error) {
       console.error('Error loading upload logs:', error)
@@ -87,7 +93,7 @@ const BulkUpload = () => {
   }, [loadUploadLogs])
 
   const handleBackToDashboard = () => {
-    navigate('/')
+    navigate('/dashboard')
   }
 
   const getCardTypeKey = (cardTitle) => {
@@ -110,6 +116,7 @@ const BulkUpload = () => {
   }
 
   const closeModal = () => {
+    setUploadResult(null)
     setIsModalOpen(false)
     setSelectedCard(null)
     setSelectedFile(null)
@@ -179,9 +186,8 @@ const BulkUpload = () => {
     const selectedCardData = uploadCards.find(card => getCardTypeKey(card.title) === selectedCard)
     if (!selectedCardData) return
     
-    const headers = selectedCardData.templateColumns.join(',')
-    const sampleRow = selectedCardData.templateColumns.map(() => 'Sample Data').join(',')
-    const csvContent = `${headers}\n${sampleRow}`
+    // Header row only: every row in the file is imported, so no sample data
+    const csvContent = `${selectedCardData.templateColumns.join(',')}\n`
     
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -202,17 +208,19 @@ const BulkUpload = () => {
 
     try {
       const result = await uploadBulkFile(selectedCard, selectedFile)
-      
+      setIsUploading(false)
+
       if (result.success) {
         setUploadProgress(100)
-        setTimeout(() => {
-          setIsUploading(false)
-          alert("File uploaded successfully!")
-          closeModal()
-          loadUploadLogs()
-        }, 500)
+        // What the server actually imported, row by row
+        const data = result.data || {}
+        setUploadResult({
+          imported: Number(data.success || 0),
+          failed: Number(data.failed || 0),
+          errors: Array.isArray(data.errors) ? data.errors.slice(0, 10) : [],
+        })
+        loadUploadLogs()
       } else {
-        setIsUploading(false)
         alert(result.error || 'Upload failed')
       }
     } catch (error) {
@@ -311,6 +319,14 @@ const BulkUpload = () => {
                         <div className="spinner"></div>
                       </td>
                     </tr>
+                  ) : logError ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '24px', color: 'var(--red, #dc2626)' }}>{logError}</td>
+                    </tr>
+                  ) : uploads.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '24px' }} className="text-muted">No uploads yet</td>
+                    </tr>
                   ) : uploads.map((upload) => (
                     <tr key={upload.id}>
                       <td className="td-bold">{upload.type}</td>
@@ -322,7 +338,7 @@ const BulkUpload = () => {
                       </td>
                       <td className="td-mono">{upload.records}</td>
                       <td>
-                        <span className={`badge ${upload.status === 'Success' ? 'badge-green' : 'badge-yellow'}`}>
+                        <span className={`badge ${upload.status === 'Success' ? 'badge-green' : upload.status === 'Failed' ? 'badge-red' : 'badge-yellow'}`}>
                           {upload.status === 'Success' ? (
                             <>
                               <CheckCircle size={12} />
@@ -369,13 +385,36 @@ const BulkUpload = () => {
                 <div className="instructions-content">
                   <h4>Instructions:</h4>
                   <ul>
-                    <li>Download the CSV template to see the required format</li>
-                    <li>Fill in your data following the template structure</li>
-                    <li>Upload the completed CSV file</li>
-                    <li>Review the preview and confirm the upload</li>
+                    <li>Download the CSV template: it has the exact column names the importer reads</li>
+                    <li>Add one row per record; dates as YYYY-MM-DD</li>
+                    <li>Upload the file and check the preview</li>
+                    <li>After uploading, you will see how many rows were imported and why any failed</li>
                   </ul>
                 </div>
               </div>
+
+              {/* Result of the last upload, as reported by the server */}
+              {uploadResult && (
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: '8px',
+                    marginBottom: '16px',
+                    background: uploadResult.failed === 0 ? '#dcfce7' : uploadResult.imported === 0 ? '#fee2e2' : '#fef3c7',
+                    color: uploadResult.failed === 0 ? '#166534' : uploadResult.imported === 0 ? '#991b1b' : '#92400e',
+                    fontSize: '14px',
+                  }}
+                >
+                  <strong>{uploadResult.imported} row(s) imported, {uploadResult.failed} failed.</strong>
+                  {uploadResult.errors.length > 0 && (
+                    <ul style={{ margin: '8px 0 0', paddingLeft: '18px' }}>
+                      {uploadResult.errors.map((e, i) => (
+                        <li key={i}>{e.error || 'Row could not be imported'}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {/* Template Download */}
               <div className="template-download">

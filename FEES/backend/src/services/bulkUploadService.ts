@@ -30,7 +30,8 @@ export class BulkUploadService {
   async uploadFeeStructures(
     csvData: any[],
     uploadedBy: string,
-    schoolId: string
+    schoolId: string,
+    fileName: string = ''
   ) {
     const results: any[] = [];
     const errors: any[] = [];
@@ -38,21 +39,10 @@ export class BulkUploadService {
     for (const row of csvData) {
       try {
         const scopedSchoolId = schoolId;
-        const academicYearId =
-          row.academicYearId || row.academic_year_id;
-        const classId = row.classId || row.class_id;
-
-        if (!academicYearId) {
-          throw new ValidationError(
-            'academicYearId is required'
-          );
-        }
-
-        if (!classId) {
-          throw new ValidationError(
-            'classId is required'
-          );
-        }
+        // Class and year may be given by name (as on School Setup) or by id.
+        // With no year given, the school's active year is used.
+        const academicYearId = await this.resolveAcademicYearId(row, scopedSchoolId);
+        const classId = await this.resolveClassId(row, scopedSchoolId);
 
         const [academicYear, schoolClass] = await Promise.all([
           prisma.academic_year.findFirst({ where: { id: BigInt(academicYearId), school_id: BigInt(scopedSchoolId) } }),
@@ -119,7 +109,9 @@ export class BulkUploadService {
       csvData.length,
       results.length,
       errors.length,
-      uploadedBy
+      uploadedBy,
+      schoolId,
+      fileName
     );
 
     return {
@@ -138,7 +130,8 @@ export class BulkUploadService {
   async uploadInvoices(
     csvData: any[],
     uploadedBy: string,
-    schoolId: string
+    schoolId: string,
+    fileName: string = ''
   ) {
     const results: any[] = [];
     const errors: any[] = [];
@@ -240,7 +233,9 @@ export class BulkUploadService {
       csvData.length,
       results.length,
       errors.length,
-      uploadedBy
+      uploadedBy,
+      schoolId,
+      fileName
     );
 
     return {
@@ -260,20 +255,26 @@ export class BulkUploadService {
   async uploadPayments(
     csvData: any[],
     uploadedBy: string,
-    schoolId: string
+    schoolId: string,
+    fileName: string = ''
   ) {
     const results: any[] = [];
     const errors: any[] = [];
 
     for (const row of csvData) {
       try {
-        const invoiceId =
+        // Invoice by its number (INV-...) as printed, or by internal id
+        const invoiceRef = String(
+          row.invoiceNumber ||
+          row.invoice_number ||
           row.invoiceId ||
-          row.invoice_id;
+          row.invoice_id ||
+          ''
+        ).trim();
 
-        if (!invoiceId) {
+        if (!invoiceRef) {
           throw new ValidationError(
-            'Invoice ID is required'
+            'Invoice number is required'
           );
         }
 
@@ -289,7 +290,9 @@ export class BulkUploadService {
 
         const invoice =
           await prisma.invoice.findFirst({
-            where: { id: BigInt(invoiceId), school_id: BigInt(schoolId) },
+            where: /^\d+$/.test(invoiceRef)
+              ? { id: BigInt(invoiceRef), school_id: BigInt(schoolId) }
+              : { invoice_number: invoiceRef, school_id: BigInt(schoolId) },
           });
 
         if (!invoice) {
@@ -438,7 +441,9 @@ export class BulkUploadService {
       csvData.length,
       results.length,
       errors.length,
-      uploadedBy
+      uploadedBy,
+      schoolId,
+      fileName
     );
 
     return {
@@ -461,7 +466,8 @@ export class BulkUploadService {
   async uploadStudents(
     csvData: any[],
     uploadedBy: string,
-    schoolId: string
+    schoolId: string,
+    fileName: string = ''
   ) {
     const results: any[] = [];
     const errors: any[] = [];
@@ -619,7 +625,9 @@ export class BulkUploadService {
       csvData.length,
       results.length,
       errors.length,
-      uploadedBy
+      uploadedBy,
+      schoolId,
+      fileName
     );
 
     return {
@@ -638,30 +646,106 @@ export class BulkUploadService {
    * upload flows continue to work without
    * referencing a non-existent Prisma model.
    */
+  /**
+   * Upload history of one school. There is no bulk_upload_log table, so each
+   * upload is recorded in audit_log (action 'bulk_upload').
+   */
   async getUploadLogs(
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    schoolId: string
   ) {
-    return {
-      logs: [],
-      total: 0,
-      page,
-      limit,
-    };
+    const where = { school_id: BigInt(schoolId), action: 'bulk_upload' };
+    const [rows, total] = await Promise.all([
+      prisma.audit_log.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: { app_user: { select: { name: true } } },
+      }),
+      prisma.audit_log.count({ where }),
+    ]);
+
+    const logs = rows.map((row: any) => {
+      const data = (row.new_data || {}) as any;
+      return {
+        id: row.id.toString(),
+        type: row.entity,
+        fileName: data.fileName || null,
+        records: Number(data.total || 0),
+        succeeded: Number(data.success || 0),
+        failed: Number(data.failed || 0),
+        status: row.status,
+        uploadedBy: row.app_user?.name || null,
+        createdAt: row.created_at,
+      };
+    });
+
+    return { logs, total, page, limit };
   }
 
-  /**
-   * Current schema has no bulk_upload_log table.
-   * Therefore logging is intentionally disabled.
-   */
   private async logUpload(
-    _type: string,
-    _total: number,
-    _success: number,
-    _failed: number,
-    _uploadedBy: string
+    type: string,
+    total: number,
+    success: number,
+    failed: number,
+    uploadedBy: string,
+    schoolId: string,
+    fileName: string
   ) {
-    return;
+    // History must never break the upload itself
+    try {
+      await prisma.audit_log.create({
+        data: {
+          school_id: BigInt(schoolId),
+          user_id: /^\d+$/.test(String(uploadedBy || '')) ? BigInt(uploadedBy) : null,
+          action: 'bulk_upload',
+          entity: type,
+          entity_id: BigInt(0),
+          status: failed === 0 ? 'success' : success === 0 ? 'failed' : 'partial',
+          new_data: { fileName: fileName || null, total, success, failed },
+          change_summary: `${type} upload: ${success} of ${total} rows imported`,
+        },
+      });
+    } catch (error: any) {
+      console.error('Could not record upload history:', error?.message);
+    }
+  }
+
+  private async resolveAcademicYearId(row: any, schoolId: string): Promise<bigint> {
+    const sid = BigInt(schoolId);
+    const byId = row.academicYearId || row.academic_year_id;
+    const byName = String(row.academicYear || row.academic_year || row.yearName || '').trim();
+    const year = byId && /^\d+$/.test(String(byId))
+      ? await prisma.academic_year.findFirst({ where: { id: BigInt(byId), school_id: sid }, select: { id: true } })
+      : byName
+        ? await prisma.academic_year.findFirst({ where: { school_id: sid, year_name: { equals: byName, mode: 'insensitive' } }, select: { id: true } })
+        : await prisma.academic_year.findFirst({ where: { school_id: sid, is_active: true }, select: { id: true } });
+    if (!year) {
+      throw new ValidationError(
+        byId || byName
+          ? `Academic year "${byName || byId}" was not found in your school`
+          : 'No academic year given and the school has no active year'
+      );
+    }
+    return year.id;
+  }
+
+  private async resolveClassId(row: any, schoolId: string): Promise<bigint> {
+    const sid = BigInt(schoolId);
+    const byId = row.classId || row.class_id;
+    const byName = String(row.className || row.class_name || row.class || '').trim();
+    if (!byId && !byName) {
+      throw new ValidationError('className is required');
+    }
+    const found = byId && /^\d+$/.test(String(byId))
+      ? await prisma.school_class.findFirst({ where: { id: BigInt(byId), school_id: sid }, select: { id: true } })
+      : await prisma.school_class.findFirst({ where: { school_id: sid, class_name: { equals: byName, mode: 'insensitive' } }, select: { id: true } });
+    if (!found) {
+      throw new ValidationError(`Class "${byName || byId}" was not found in your school`);
+    }
+    return found.id;
   }
 
   /**

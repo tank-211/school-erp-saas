@@ -1,7 +1,6 @@
 const bcrypt = require('bcryptjs');
 
 import prisma from '../config/database';
-import { getDBStatus } from '../config/database';
 import { generateTokenPair, verifyRefreshToken, } from '../config/jwt';
 import {
   ConflictError,
@@ -9,7 +8,6 @@ import {
   AuthenticationError,
   AuthorizationError,
 } from '../middleware/errorHandler';
-import { mockUsers } from './mockDataService';
 import logger from '../config/logger';
 import { getSchoolAccess, SchoolAccessError } from '../utils/schoolAccess';
 
@@ -87,48 +85,6 @@ export class AuthService {
         ...tokens,
       };
     } catch (error: any) {
-      // Development fallback when database is unavailable
-      if (
-        !getDBStatus() &&
-        process.env.NODE_ENV === 'development'
-      ) {
-        logger.warn(
-          '📦 Using mock data for user registration (database unavailable)'
-        );
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const mockUser = {
-          id: Date.now().toString(),
-          name: `${firstName || ''} ${lastName || ''}`.trim(),
-          email,
-          password: hashedPassword,
-          role,
-          schoolId: schoolId || '1',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        const tokens = generateTokenPair({
-          id: mockUser.id,
-          email: mockUser.email,
-          role: mockUser.role,
-          schoolId: mockUser.schoolId,
-        });
-
-        return {
-          user: {
-            id: mockUser.id,
-            firstName: firstName || '',
-            lastName: lastName || '',
-            email: mockUser.email,
-            role: mockUser.role,
-            schoolId: mockUser.schoolId,
-          },
-          ...tokens,
-        };
-      }
-
       throw error;
     }
   }
@@ -200,64 +156,6 @@ export class AuthService {
         ...tokens,
       };
     } catch (error: any) {
-      // Development fallback when database is unavailable
-      if (
-        !getDBStatus() &&
-        process.env.NODE_ENV === 'development'
-      ) {
-        logger.warn(
-          '📦 Using mock data for login (database unavailable)'
-        );
-
-        const mockUser = mockUsers.find(
-          (u) => u.email === email
-        );
-
-        if (!mockUser) {
-          throw new AuthenticationError(
-            'Invalid email or password'
-          );
-        }
-
-        const passwordMatch = await bcrypt.compare(
-          password,
-          mockUser.password
-        );
-
-        if (!passwordMatch) {
-          throw new AuthenticationError(
-            'Invalid email or password'
-          );
-        }
-
-        const tokens = generateTokenPair({
-          id: mockUser.id.toString(),
-          email: mockUser.email,
-          role: String(mockUser.role),
-          schoolId: String(
-            (mockUser as any).schoolId ??
-              (mockUser as any).school_id ??
-              '1'
-          ),
-        });
-
-        const nameParts = mockUser.name
-          .trim()
-          .split(/\s+/);
-
-        return {
-          user: {
-            id: mockUser.id.toString(),
-            firstName: nameParts[0] || '',
-            lastName:
-              nameParts.slice(1).join(' ') || '',
-            email: mockUser.email,
-            role: mockUser.role,
-          },
-          ...tokens,
-        };
-      }
-
       throw error;
     }
   }

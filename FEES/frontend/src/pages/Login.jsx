@@ -92,13 +92,6 @@ export function Login() {
           </button>
         </form>
 
-        <div className="login-footer">
-          <p className="demo-credentials">
-            <strong>Demo Credentials:</strong><br />
-            Email: admin@feesystem.com<br />
-            Password: Admin@2024
-          </p>
-        </div>
       </div>
     </div>
   );
