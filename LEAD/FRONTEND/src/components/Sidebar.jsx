@@ -3,8 +3,13 @@ import { NavLink, useLocation } from 'react-router-dom'
 import './Sidebar.css'
 import { useSettings } from "../context/SettingsContext";
 
+const initialsOf = (name = '') =>
+  name.split(/\s+/).filter((w) => /^[A-Za-z0-9]/.test(w)).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'S';
+
 export default function Sidebar({ collapsed, onToggle }) {
-  const { settings } = useSettings();
+  const { settings, refresh } = useSettings();
+  // Reload for whoever is signed in now (the app may have started on the login page)
+  React.useEffect(() => { refresh?.() }, [refresh]);
   const location = useLocation()
   const reportsActive = location.pathname.startsWith('/reports')
   const [reportsExpanded, setReportsExpanded] = useState(reportsActive)
@@ -13,17 +18,14 @@ export default function Sidebar({ collapsed, onToggle }) {
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
       {/* Brand */}
       <div className="sidebar-brand">
-        <div className="brand-logo">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <circle cx="14" cy="14" r="14" fill="#10b981" />
-            <path d="M14 6L14 22 M8 11C8 11 11 8 14 10C17 8 20 11 20 11"
-              stroke="white" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
+        {/* The signed-in user's own school (name and city from the school record) */}
+        <div className="school-badge" title={settings?.schoolName || 'School'}>
+          {initialsOf(settings?.schoolName)}
         </div>
         {!collapsed && (
           <div className="brand-text">
-            <span className="brand-name">{settings?.schoolName||"School Name"}</span>
-            <span className="brand-sub">CRM SYSTEM</span>
+            <span className="brand-name">{settings?.schoolName || 'Loading...'}</span>
+            <span className="brand-sub">{[settings?.city, 'Leads'].filter(Boolean).join(' · ')}</span>
           </div>
         )}
         <button className="toggle-btn" onClick={onToggle} title="Toggle Sidebar">
@@ -39,7 +41,7 @@ export default function Sidebar({ collapsed, onToggle }) {
       {/* Campus Selector */}
       {!collapsed && (
         <div className="campus-selector">
-          <div style={{ fontWeight: 600 }}>{settings?.campus || settings?.schoolName || 'Your school'}</div>
+          <div style={{ fontWeight: 600 }}>{settings?.city || 'City not set'}</div>
           <span className="campus-location">{settings?.timezone || 'Asia/Kolkata'}</span>
         </div>
       )}

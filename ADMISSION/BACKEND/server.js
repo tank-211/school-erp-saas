@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import app from './app.js';
+import { startScheduledEmailJob } from './jobs/scheduledEmailJob.js';
 
 dotenv.config();
 
@@ -11,6 +12,14 @@ dotenv.config();
 const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
+  // Sends emails scheduled from Communication once they are due (checked every
+  // minute). It was never started before, so scheduled emails stayed pending.
+  // Set DISABLE_EMAIL_SCHEDULER=true on extra instances so only one sends.
+  if (process.env.DISABLE_EMAIL_SCHEDULER !== 'true') {
+    startScheduledEmailJob();
+    console.log('Scheduled email job started');
+  }
+
   console.log('\n┌─────────────────────────────────────────────────┐');
   console.log('│  School ERP Backend Server Started Successfully │');
   console.log('├─────────────────────────────────────────────────┤');

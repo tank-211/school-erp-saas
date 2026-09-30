@@ -31,6 +31,7 @@ router.get('/profile', asyncHandler(async (req: Request, res: Response) => {
     success: true,
     data: {
       name: school.name,
+      city: school.city || null,
       address: [school.address, school.city, school.state, school.postal_code].filter(Boolean).join(', '),
       phone: school.phone,
       email: school.email,

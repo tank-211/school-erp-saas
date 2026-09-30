@@ -8,7 +8,6 @@ const getRequiredEmailConfig = () => {
   const user = process.env.EMAIL_USER;
   const pass = process.env.EMAIL_PASS;
 
-  console.log("Attempting login with:", process.env.EMAIL_USER); // Add this
   
 
   if (!user || !pass) {

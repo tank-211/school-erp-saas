@@ -47,6 +47,7 @@ function Toggle({ enabled, onToggle }) {
 }
 
 function ProfileTab() {
+  const { refresh: refreshSettings } = useSettings()
   const [form, setForm] = useState({
     schoolName: '',
     email: '',
@@ -87,22 +88,24 @@ function ProfileTab() {
   }
 
   const handleSave = async () => {
-  await authFetch('/api/settings/profile', {
-    method: 'PUT',
-    body: JSON.stringify({
-      schoolName: form.schoolName,
-      email: form.email,
-      phone: form.phone
+    // The school name is not sent: Super Admin sets it
+    const res = await authFetch('/api/settings/profile', {
+      method: 'PUT',
+      body: JSON.stringify({
+        email: form.email,
+        phone: form.phone
+      })
     })
-  })
+    const body = await res.json().catch(() => ({}))
+    if (!res.ok || body.success === false) {
+      alert(body.message || 'Could not save the school contact details')
+      return
+    }
 
-    // 🔥 refresh settings
-    const res = await authFetch('/api/settings')
-    const data = await res.json()
+    // Header and sidebar pick up the saved details
+    await refreshSettings?.()
 
-    console.log("Updated settings:", data.data)
-
-    alert('System settings saved')
+    alert('School contact details saved')
   }
   
   return(
@@ -114,7 +117,8 @@ function ProfileTab() {
       <div className="form-row-2">
         <div className="form-group">
           <label className="form-label">School Name</label>
-          <input className="form-input" value={form.schoolName} onChange={(e) => handleChange('schoolName', e.target.value)} />
+          <input className="form-input" value={form.schoolName} readOnly disabled />
+          <small style={{ color: '#6b7280' }}>Set by the platform administrator; the same name shows in Admission and Fees.</small>
         </div>
       </div>
       <div className="form-group">
