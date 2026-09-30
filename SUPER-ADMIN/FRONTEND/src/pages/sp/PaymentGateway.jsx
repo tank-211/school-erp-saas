@@ -193,7 +193,7 @@ function PaymentGateway() {
           </span>
         </div>
 
-        <form onSubmit={handleSave}>
+        <form onSubmit={handleSave} autoComplete="off">
           <div className="sp-form-grid">
             <div className="sp-form-group">
               <label htmlFor="environment">
@@ -220,6 +220,8 @@ function PaymentGateway() {
                 id="client_id"
                 name="client_id"
                 type="text"
+                autoComplete="off"
+                spellCheck={false}
                 value={form.client_id}
                 onChange={handleChange}
                 placeholder="rzp_test_... or rzp_live_..."
@@ -235,6 +237,8 @@ function PaymentGateway() {
                 id="client_secret"
                 name="client_secret"
                 type="password"
+                // Not a login: stop the browser filling in the saved Super Admin password
+                autoComplete="new-password"
                 value={form.client_secret}
                 onChange={handleChange}
                 placeholder={
