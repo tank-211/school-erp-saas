@@ -54,12 +54,17 @@ const Sidebar = () => {
   const { logout, user } = useAuth()
   const [schoolName, setSchoolName] = useState('')
   const [schoolCity, setSchoolCity] = useState('')
-  // The signed-in user's own school, not a fixed name
+  const [schoolError, setSchoolError] = useState('')
+  // The signed-in user's own school, not a fixed name. A failed request is
+  // shown as such (with the reason on hover) instead of an endless "Loading...".
   useEffect(() => {
     fetchSchoolProfile().then((r) => {
       if (r.success) {
         setSchoolName(r.data?.name || '')
         setSchoolCity(r.data?.city || '')
+      } else {
+        setSchoolError(r.error || 'Could not load the school')
+        console.error('School profile error:', r.error)
       }
     })
   }, [])
@@ -126,8 +131,12 @@ const Sidebar = () => {
         {/* The signed-in user's own school (name and city from the school record) */}
         <div className="school-badge" title={schoolName || 'School'}>{initialsOf(schoolName)}</div>
         <div className="logo-text-wrap">
-          <div className="school-name">{schoolName || 'Loading...'}</div>
-          <div className="school-sub">{[schoolCity, 'Fees'].filter(Boolean).join(' · ')}</div>
+          <div className="school-name" title={schoolError || undefined}>
+            {schoolName || (schoolError ? 'School not loaded' : 'Loading...')}
+          </div>
+          <div className="school-sub" title={schoolError || undefined}>
+            {schoolError && !schoolName ? 'Server not reachable · Fees' : [schoolCity, 'Fees'].filter(Boolean).join(' · ')}
+          </div>
         </div>
       </div>
 
