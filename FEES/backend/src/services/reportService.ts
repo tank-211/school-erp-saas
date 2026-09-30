@@ -7,6 +7,23 @@ import logger from '../config/logger';
  * Handles fetching and preparing data for various reports
  */
 
+type RefundReportRow = {
+  id: bigint;
+  student_id: bigint;
+  amount: unknown;
+  reason: string | null;
+  status: string;
+  created_at: Date;
+  processed_date: Date | null;
+  student: {
+    first_name: string;
+    last_name: string | null;
+  };
+};
+
+ 
+
+
 export const getDashboardStats = async (schoolId: string) => {
   try {
     // Total fees collected from all payments in the last year
@@ -284,7 +301,7 @@ export const getRefundRequestsReport = async (schoolId: string, limit: number = 
       },
     });
 
-    return refunds.map((r) => ({
+    return refunds.map((r: RefundReportRow) => ({
       id: r.id.toString(),
       studentId: r.student_id.toString(),
       studentName: `${r.student.first_name} ${
