@@ -552,6 +552,10 @@ export default function StudentFeeManagement() {
       if (!student.invoiceId) return notify("This student has no invoice yet.", "error");
       return navigate(action === "invoice" ? `/invoice/${student.invoiceId}` : `/receipt/${student.invoiceId}`);
     }
+    if (action === "payonline") {
+      if (!student.invoiceId) return notify("This student has no invoice yet.", "error");
+      return navigate(`/payment/${student.invoiceId}`);
+    }
     if (action === "statement") {
       return downloadCsv(`fee-statement-${student.admNo}.csv`, [
         ["Receipt", "Date", "Amount", "Method", "Collected by", "Status"],
@@ -956,6 +960,9 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
 
             <div className="modal-actions" style={{ borderTop: "none", paddingTop: 0 }}>
               <button className="btn btn-primary w-full" onClick={onSubmitPayment}><Wallet size={14} /> Collect Payment</button>
+              {balance > 0 && student.invoiceId && (
+                <button className="btn btn-outline w-full" type="button" onClick={() => onQuickAction("payonline")}><CreditCard size={14} /> Pay online</button>
+              )}
             </div>
           </div>
         )}

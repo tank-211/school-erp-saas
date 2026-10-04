@@ -14,7 +14,15 @@ export interface ApiResponse<T = any> {
   timestamp: string;
 }
 
-const serializeBigInt = (value: any): any => {
+// Prisma Decimal (decimal.js), recognised by shape so Prisma is not needed here
+const isDecimalLike = (value: any): boolean =>
+  typeof value.toFixed === 'function' &&
+  typeof value.toNumber === 'function' &&
+  's' in value &&
+  'e' in value &&
+  'd' in value;
+
+export const serializeBigInt = (value: any): any => {
   if (typeof value === 'bigint') {
     return value.toString();
   }
@@ -23,7 +31,17 @@ const serializeBigInt = (value: any): any => {
     return value.map(serializeBigInt);
   }
 
+  // Date and Decimal do not keep their value in plain enumerable fields:
+  // walking them with Object.entries would turn them into {} / {s,e,d}
+  if (value instanceof Date) {
+    return value;
+  }
+
   if (value !== null && typeof value === 'object') {
+    if (isDecimalLike(value)) {
+      return Number(value.toString());
+    }
+
     const result: Record<string, any> = {};
 
     for (const [key, val] of Object.entries(value)) {

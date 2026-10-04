@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import {
   ArrowLeft,
   Lock,
@@ -15,6 +15,7 @@ import RazorpayPaymentModal from '../components/RazorpayPaymentModal'
 const Payment = () => {
   const { invoiceId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Online payment needs the school's own Razorpay account to be connected
 
@@ -116,6 +117,15 @@ const Payment = () => {
     totalAmount - paidAmount
   )
 
+  // "Pay Partial Amount" on the invoice page sends the chosen amount here;
+  // without one the full pending amount is paid. Never more than is pending.
+  const requestedAmount = Number(location.state?.partialAmount)
+  const payAmount =
+    Number.isFinite(requestedAmount) && requestedAmount > 0
+      ? Math.min(Math.round(requestedAmount * 100) / 100, pendingAmount)
+      : pendingAmount
+  const isPartial = payAmount < pendingAmount
+
   const handlePaymentSuccess = (paymentData) => {
     console.log(
       '✅ Razorpay payment successful:',
@@ -202,7 +212,7 @@ const Payment = () => {
               </span>
 
               <span className="font-semibold">
-                {invoice.class || 'N/A'}
+                {invoice.className || invoice.class || 'N/A'}
               </span>
             </div>
 
@@ -242,6 +252,30 @@ const Payment = () => {
                 ₹{pendingAmount.toLocaleString('en-IN')}
               </span>
             </div>
+
+            {isPartial && (
+              <>
+                <div className="summary-row">
+                  <span className="text-muted">
+                    Paying Now (partial)
+                  </span>
+
+                  <span className="font-semibold">
+                    ₹{payAmount.toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <div className="summary-row">
+                  <span className="text-muted">
+                    Balance After Payment
+                  </span>
+
+                  <span className="font-semibold">
+                    ₹{(Math.round((pendingAmount - payAmount) * 100) / 100).toLocaleString('en-IN')}
+                  </span>
+                </div>
+              </>
+            )}
 
           </div>
 
@@ -307,7 +341,7 @@ const Payment = () => {
                     invoice.studentId ||
                     invoice.rollNumber
                   }
-                  amount={pendingAmount}
+                  amount={payAmount}
                   invoiceId={invoice.invoiceId}
                   onSuccess={
                     handlePaymentSuccess

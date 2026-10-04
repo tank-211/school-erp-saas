@@ -2,6 +2,7 @@ import prisma from '../config/database';
 import { NotFoundError, ValidationError } from '../middleware/errorHandler';
 import csv from 'csv-parser';
 import { Readable } from 'stream';
+import { serializeBigInt } from '../utils/responseHelper';
 
 export class BulkUploadService {
   async parseCSV(fileBuffer: Buffer): Promise<any[]> {
@@ -756,34 +757,7 @@ export class BulkUploadService {
    * Convert BigInt values into JSON-safe values.
    */
   private serializeBigInt(value: any): any {
-    if (value === null || value === undefined) {
-      return value;
-    }
-
-    if (typeof value === 'bigint') {
-      return value.toString();
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) =>
-        this.serializeBigInt(item)
-      );
-    }
-
-    if (typeof value === 'object') {
-      const result: any = {};
-
-      for (const [key, item] of Object.entries(
-        value
-      )) {
-        result[key] =
-          this.serializeBigInt(item);
-      }
-
-      return result;
-    }
-
-    return value;
+    return serializeBigInt(value);
   }
 }
 

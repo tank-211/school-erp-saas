@@ -1,4 +1,5 @@
 import prisma from '../config/database';
+import { serializeBigInt } from '../utils/responseHelper';
 import {
   NotFoundError,
   ValidationError,
@@ -680,50 +681,7 @@ export class InvoiceService {
   private serializeBigInt(
     value: any
   ): any {
-    if (
-      value === null ||
-      value === undefined
-    ) {
-      return value;
-    }
-
-    if (
-      typeof value === 'bigint'
-    ) {
-      return value.toString();
-    }
-
-    if (
-      Array.isArray(value)
-    ) {
-      return value.map(
-        (item) =>
-          this.serializeBigInt(
-            item
-          )
-      );
-    }
-
-    if (
-      typeof value === 'object'
-    ) {
-      const result: any = {};
-
-      for (
-        const [key, item] of Object.entries(
-          value
-        )
-      ) {
-        result[key] =
-          this.serializeBigInt(
-            item
-          );
-      }
-
-      return result;
-    }
-
-    return value;
+    return serializeBigInt(value);
   }
 }
 

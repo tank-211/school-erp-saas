@@ -1,54 +1,8 @@
-import axios from 'axios';
+// Shared client: sends the token and refreshes it on 401, like every other call
+import apiClient from './apiService';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-// Get authorization token from localStorage
-const getToken = () => {
-  // Try multiple storage keys for compatibility
-  const token = localStorage.getItem('accessToken') || localStorage.getItem('authToken');
-  return token;
-};
-
-// Create axios instance with default headers
-const apiClient = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add token to requests
-apiClient.interceptors.request.use((config) => {
-  const token = getToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-    console.log('✅ Authorization header set with Bearer token');
-  } else {
-    console.warn('⚠️ No auth token found in localStorage');
-  }
-  console.log(`📤 ${config.method.toUpperCase()} ${config.baseURL}${config.url}`);
-  return config;
-}, (error) => {
-  console.error('❌ Request error:', error);
-  return Promise.reject(error);
-});
-
-// Add response error handling
-apiClient.interceptors.response.use(
-  (response) => {
-    console.log('✅ Response received:', response.status, response.statusText);
-    return response;
-  },
-  (error) => {
-    console.error('❌ Response error:', {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      message: error.response?.data?.message,
-      url: error.config?.url,
-    });
-    return Promise.reject(error);
-  }
-);
+// Reports can take longer to build than the default API timeout
+const DOWNLOAD_TIMEOUT = 60000;
 
 // Export Report Service
 export const reportService = {
@@ -60,6 +14,7 @@ export const reportService = {
       console.log('📄 Starting PDF export...');
       const response = await apiClient.get('/reports/export', {
         responseType: 'blob',
+        timeout: DOWNLOAD_TIMEOUT,
       });
       
       // Create blob link and trigger download
@@ -109,6 +64,7 @@ export const reportService = {
       const response = await apiClient.get('/reports/transactions/csv', {
         params: { limit },
         responseType: 'blob',
+        timeout: DOWNLOAD_TIMEOUT,
       });
       
       // Create blob link and trigger download
@@ -143,6 +99,7 @@ export const reportService = {
       const response = await apiClient.get('/reports/pending-payments/csv', {
         params: { limit },
         responseType: 'blob',
+        timeout: DOWNLOAD_TIMEOUT,
       });
       
       // Create blob link and trigger download
@@ -177,6 +134,7 @@ export const reportService = {
       const response = await apiClient.get('/reports/refunds/csv', {
         params: { limit },
         responseType: 'blob',
+        timeout: DOWNLOAD_TIMEOUT,
       });
       
       // Create blob link and trigger download

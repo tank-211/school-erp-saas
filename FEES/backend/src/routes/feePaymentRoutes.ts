@@ -80,10 +80,11 @@ router.post(
  * Saves to database using Prisma
  * Returns 201 Created with the created record
  * Authentication: Required (JWT token)
- * Authorization: All authenticated users can submit
+ * Authorization: ADMIN/ACCOUNTANT only
  */
 router.post(
   '/submit',
+  authorize('ADMIN', 'ACCOUNTANT'),
   feePaymentController.submitFeePayment
 );
 

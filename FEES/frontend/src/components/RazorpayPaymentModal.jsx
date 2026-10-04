@@ -249,10 +249,8 @@ const RazorpayPaymentModal = ({
 
       <div className="payment-info">
         <p>
-          <strong>Payment Method:</strong> UPI (Google Pay, PhonePe, PayTM, etc.)
-        </p>
-        <p>
-          <strong>Amount will be:</strong> Deducted from your UPI-linked bank account
+          <strong>Payment Method:</strong> Choose any method offered at checkout
+          (the options depend on the school's Razorpay account).
         </p>
         <p>
           <strong>Security:</strong> Your payment is secured by Razorpay. Your bank details
