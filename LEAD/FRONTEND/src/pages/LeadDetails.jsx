@@ -2,6 +2,24 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./LeadDetails.css";
 const API_URL = import.meta.env.VITE_API_URL;
+
+// Stages a lead can be moved to; the values are statuses PUT /leads/:id accepts
+const STATUS_OPTIONS = [
+  { value: "new", label: "New" },
+  { value: "contacted", label: "Contacted" },
+  { value: "qualified", label: "Qualified" },
+  { value: "converted", label: "Admitted" },
+  { value: "lost", label: "Lost" },
+];
+// Older status words for the same stage (STATUS_GROUPS in the backend leadService)
+const STATUS_ALIAS = { pending: "new", interested: "qualified", admitted: "converted", inactive: "lost", "not-interested": "lost" };
+
+// Backend message plus any field errors from its validator
+const describeError = (data, fallback) => {
+  const fields = Object.values(data?.errors || {});
+  if (fields.length) return `${data.message || fallback}: ${fields.join("; ")}`;
+  return data?.message || fallback;
+};
 export default function LeadDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -10,8 +28,16 @@ export default function LeadDetails() {
   const [tasks, setTasks] = useState([]);
   const [application, setApplication] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [loadError, setLoadError] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
+  const [statusError, setStatusError] = useState("");
+  const [note, setNote] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState("");
 
   useEffect(() => {
+    setLead(null);
+    setLoadError("");
     fetchLead();
     // Emails, SMS, WhatsApp and calls with this lead
     fetch(`${API_URL}/communications/history/${id}?limit=100`, {
@@ -35,13 +61,75 @@ export default function LeadDetails() {
         }
       );
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
+      if (!res.ok || !data.data) {
+        setLead(null);
+        setLoadError(res.ok || res.status === 404 ? "Lead not found" : data.message || "Could not load the lead");
+        return;
+      }
+
+      setLoadError("");
       setLead(data.data);
       setTasks(data.data.tasks || []);
       setApplication(data.data.application || []);
     } catch (err) {
       console.error(err);
+      setLoadError(err.message || "Could not load the lead");
+    }
+  };
+
+  const authHeaders = () => ({
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+  });
+
+  const changeStatus = async (status) => {
+    setStatusError("");
+    setStatusSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/leads/${id}`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(describeError(data, "Could not update the status"));
+      }
+      // Reload so the status and the timeline show what was saved
+      await fetchLead();
+    } catch (err) {
+      setStatusError(err.message || "Could not update the status");
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  const addNote = async () => {
+    const text = note.trim();
+    if (!text) {
+      setNoteError("Please type a note first");
+      return;
+    }
+    setNoteError("");
+    setNoteSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/activities`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ leadId: id, type: "note", note: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) {
+        throw new Error(describeError(data, "Could not save the note"));
+      }
+      setNote("");
+      await fetchLead();
+    } catch (err) {
+      setNoteError(err.message || "Could not save the note");
+    } finally {
+      setNoteSaving(false);
     }
   };
 
@@ -50,6 +138,7 @@ export default function LeadDetails() {
     LEAD_UPDATED: "Lead updated",
     LEAD_ASSIGNED: "Lead assigned",
     STAGE_CHANGED: "Stage changed",
+    note: "Note",
   };
   // Messages already appear from the communication log; skip their duplicate activity rows
   const MESSAGE_TYPES = new Set(["email", "sms", "whatsapp", "call"]);
@@ -79,8 +168,15 @@ export default function LeadDetails() {
 
 
 if (!lead) {
-  return <div className="lead-details-container">Loading...</div>;
+  return <div className="lead-details-container">{loadError || "Loading..."}</div>;
 }
+
+    const currentStatus = String(lead.follow_up_status || "").toLowerCase();
+    const statusValue = STATUS_ALIAS[currentStatus] || currentStatus;
+    // "5" -> "Grade 5"; "Grade 5" and "LKG" are shown as they are
+    const gradeLabel = /^\d+$/.test(String(lead.desired_class || "").trim())
+      ? `Grade ${lead.desired_class}`
+      : lead.desired_class || "";
 
     const createApplication = async () => {
       try {
@@ -125,12 +221,28 @@ if (!lead) {
       </div>
 
       <div className="lead-details-grade">
-        Grade {lead.desired_class}
+        {gradeLabel}
       </div>
     </div>
 
-    <div className="lead-status">
-      {lead.follow_up_status}
+    <div style={{ textAlign: "right" }}>
+      <select
+        className="lead-status"
+        aria-label="Lead status"
+        style={{ border: "none", cursor: "pointer" }}
+        value={statusValue}
+        disabled={statusSaving}
+        onChange={(e) => changeStatus(e.target.value)}
+      >
+        {!STATUS_OPTIONS.some((o) => o.value === statusValue) && (
+          <option value={statusValue}>{lead.follow_up_status || "No status"}</option>
+        )}
+        {STATUS_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+      {statusSaving && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Saving...</div>}
+      {statusError && <div role="alert" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{statusError}</div>}
     </div>
   </div>
 
@@ -238,14 +350,34 @@ if (!lead) {
           </span>
 
           <span className="detail-value">
-            {task.dueDate
-              ? new Date(task.dueDate).toLocaleDateString()
+            {task.due_date
+              ? new Date(task.due_date).toLocaleDateString()
               : "-"}
           </span>
         </div>
       ))
     )}
   </div>
+<div className="lead-details-card">
+  <h3>Add Note</h3>
+
+  <textarea
+    rows={3}
+    placeholder="What happened with this lead?"
+    value={note}
+    onChange={(e) => setNote(e.target.value)}
+    style={{ width: "100%", padding: 10, border: "1px solid #e2e8f0", borderRadius: 8, fontFamily: "inherit", fontSize: 14 }}
+  />
+  {noteError && <div role="alert" style={{ fontSize: 13, color: "#b91c1c", marginTop: 6 }}>{noteError}</div>}
+  <button
+    className="btn-primary"
+    style={{ marginTop: 10 }}
+    disabled={noteSaving}
+    onClick={addNote}
+  >
+    {noteSaving ? "Saving..." : "Add note"}
+  </button>
+</div>
 <div className="lead-details-card">
   <h3>Timeline</h3>
 

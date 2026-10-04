@@ -11,7 +11,7 @@ const prisma = new PrismaClient();
         },
         include: {
         lead: true,
-        app_user: true,
+        app_user: { select: { id: true, name: true, email: true } },
         application_documents: true,
         application_student_info: true,
         application_parent_info: true,
@@ -219,14 +219,15 @@ export const getApplicationByIdService = async (
     },
     include: {
       lead: true,
-      app_user: true,
+      app_user: { select: { id: true, name: true, email: true } },
       application_documents: {
         orderBy: {
           uploaded_at: "desc"
         }
       },
       application_student_info: true,
-      application_parent_info: true
+      application_parent_info: true,
+      application_academic_info: true
     }
   });
 

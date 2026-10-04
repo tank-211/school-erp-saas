@@ -66,7 +66,7 @@ export const updateUserRole = async (req, res) => {
 
     const { role } = req.body
 
-    await updateUserRoleService(
+    const user = await updateUserRoleService(
       req.params.id,
       role,
       req.user.schoolId
@@ -74,11 +74,12 @@ export const updateUserRole = async (req, res) => {
 
     res.json({
       success: true,
+      data: serializeBigInt(user),
       message: "Role updated"
     })
 
   } catch (error) {
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message
     })
@@ -96,17 +97,18 @@ export const toggleUserStatus = async (req, res) => {
 
     const user = await toggleUserStatusService(
       req.params.id,
-      req.user.schoolId
+      req.user.schoolId,
+      req.user.id
     )
 
     res.json({
       success: true,
-      data: user,
+      data: serializeBigInt(user),
       message: "User status updated"
     })
 
   } catch (error) {
-    res.status(400).json({
+    res.status(error.statusCode || 400).json({
       success: false,
       message: error.message
     })

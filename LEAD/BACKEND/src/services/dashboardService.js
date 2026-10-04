@@ -64,6 +64,7 @@ export const getStatsService = async (schoolId) => {
   const [
     totalLeads,
     newLeads,
+    contactedLeads,
     qualifiedLeads,
     lostLeads,
     convertedLeads
@@ -89,6 +90,13 @@ export const getStatsService = async (schoolId) => {
       prisma.lead.count({
         where: {
           school_id: schoolId,
+          follow_up_status: { in: STATUS_GROUPS.qualified }
+        }
+      }),
+
+      prisma.lead.count({
+        where: {
+          school_id: schoolId,
           follow_up_status: { in: STATUS_GROUPS.lost }
         }
       }),
@@ -101,14 +109,15 @@ export const getStatsService = async (schoolId) => {
       })
   ]);
 
-  const activeLeads = newLeads + qualifiedLeads;
+  // Still being worked on: every lead that is neither admitted nor lost
+  const activeLeads = newLeads + contactedLeads + qualifiedLeads;
 
   // Real "last 30 days" figures for the cards' second line
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   const [recentLeads, recentActive, recentConverted, recentAdmissions] = await Promise.all([
     prisma.lead.count({ where: { school_id: schoolId, created_at: { gte: since } } }),
     prisma.lead.count({
-      where: { school_id: schoolId, created_at: { gte: since }, follow_up_status: { in: [...STATUS_GROUPS.new, ...STATUS_GROUPS.contacted] } },
+      where: { school_id: schoolId, created_at: { gte: since }, follow_up_status: { in: [...STATUS_GROUPS.new, ...STATUS_GROUPS.contacted, ...STATUS_GROUPS.qualified] } },
     }),
     prisma.lead.count({
       where: { school_id: schoolId, created_at: { gte: since }, follow_up_status: { in: STATUS_GROUPS.admitted } },
@@ -182,18 +191,6 @@ export const getEnrollmentTrendService = async (schoolId) => {
 };
 
 export const getStatusDistributionService = async (schoolId) => {
-  const leads = await prisma.lead.findMany({
-    where: {
-      school_id: schoolId
-    },
-    select: {
-      id: true,
-      follow_up_status: true
-    }
-  });
-
-  console.log("LEADS:", leads);
-
   const statuses = await prisma.lead.groupBy({
     by: ["follow_up_status"],
 
@@ -202,24 +199,28 @@ export const getStatusDistributionService = async (schoolId) => {
     },
 
     _count: {
-      follow_up_status: true
+      _all: true
     },
   });
 
-  const allStatuses = ["new", "contacted", "inactive", "admitted"];
-
-  const map = {};
+  // One slice per stage (STATUS_GROUPS), so the slices add up to the lead total.
+  // A status outside every stage is counted under "other" rather than dropped.
+  const stages = Object.keys(STATUS_GROUPS);
+  const totals = Object.fromEntries(stages.map((stage) => [stage, 0]));
+  let other = 0;
   statuses.forEach((s) => {
-    map[s.follow_up_status] =
-      s._count.follow_up_status;
+    const count = s._count?._all || 0;
+    const status = String(s.follow_up_status ?? "").toLowerCase();
+    const stage = stages.find((key) => STATUS_GROUPS[key].includes(status));
+    if (stage) totals[stage] += count;
+    else other += count;
   });
 
-  return allStatuses.map((status) => ({
-    name: status,
-    value: map[status] || 0,
-  }));
+  const distribution = stages.map((name) => ({ name, value: totals[name] }));
+  if (other > 0) distribution.push({ name: "other", value: other });
+  return distribution;
 };
-  
+
 
 export const getTodayOverviewService = async (schoolId) => {
   // "Today" and "this week" in India time

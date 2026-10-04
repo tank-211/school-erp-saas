@@ -55,6 +55,13 @@ export const createLeadSchema = z.object({
   status: z.enum(["new", "qualified", "lost", "converted"]).optional(),
 });
 
+// Every status the lead service stores (LEAD_STATUSES in services/leadService.js),
+// so Lead Details can move a lead to any stage, e.g. "contacted".
+const LEAD_STATUS_VALUES = [
+  "new", "pending", "contacted", "interested", "qualified",
+  "converted", "admitted", "inactive", "lost",
+];
+
 export const updateLeadSchema = z.object({
   studentFirstName: z.string().optional(),
   studentLastName: z.string().optional(),
@@ -74,7 +81,7 @@ export const updateLeadSchema = z.object({
   source: z.string().optional(),
   notes: z.string().optional(),
 
-  status: z.enum(["new", "qualified", "lost", "converted"]).optional(),
+  status: z.enum(LEAD_STATUS_VALUES).optional(),
 });
 
 export const bulkCreateLeadsSchema = z.object({
@@ -95,7 +102,9 @@ export const updateActivitySchema = z.object({
 
 // Communication Validators
 export const emailSchema = z.object({
-  to: z.string().email("Invalid email"),
+  // The recipient is always the lead's own address (resolved in the service,
+  // within the caller's school); a "to" sent by a client is not used.
+  to: z.string().optional(),
   subject: z.string().min(1, "Subject is required"),
   content: z.string().min(1, "Content is required"),
   leadId: z.coerce.number(),
