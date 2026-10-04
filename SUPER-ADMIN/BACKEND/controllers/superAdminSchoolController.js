@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
 const { serializeBigInt } = require("../utils/bigintSerializer");
+const { indiaToday, addMonthsClamped } = require("../utils/indiaDate");
 
 const allowedPlanTypes = new Set(['trial', 'basic', 'pro', 'ultimate']);
 
@@ -30,14 +31,34 @@ const defaultAcademicYear = (today = new Date()) => {
 // that day and is blocked from the next day (see utils/schoolAccess in the
 // school apps).
 const TRIAL_MONTHS = 1;
-const trialEndDate = (now = new Date()) => {
-  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })
-    .format(now)
-    .split("-")
-    .map(Number);
-  const targetMonth = m - 1 + TRIAL_MONTHS;
-  const lastDay = new Date(Date.UTC(y, targetMonth + 1, 0)).getUTCDate();
-  return new Date(Date.UTC(y, targetMonth, Math.min(d, lastDay)));
+const trialEndDate = (now = new Date()) => addMonthsClamped(indiaToday(now), TRIAL_MONTHS);
+
+// Optional text fields: a blank input is stored as NULL, not "". school.email
+// is unique, so a second school saved with "" would collide with the first.
+const blankToNull = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text === "" ? null : text;
+};
+
+// Which unique value a Prisma P2002 is about (meta.target is a list of columns
+// or the constraint name, depending on the driver)
+const duplicateMessage = (err) => {
+  const target = [].concat(err?.meta?.target || []).join(",").toLowerCase();
+  const model = String(err?.meta?.modelName || "").toLowerCase();
+  if (model === "app_user" || target.includes("app_user")) {
+    return "This admin email is already used by another account.";
+  }
+  if (model === "academic_year" || target.includes("academic_year")) {
+    return "The school's first academic year already exists.";
+  }
+  if (target.includes("email")) {
+    return "Another school already uses this school email.";
+  }
+  if (target.includes("name")) {
+    return "A school with this name already exists.";
+  }
+  return "A school with these details already exists.";
 };
 
 const isValidDateString = (value) =>
@@ -111,12 +132,6 @@ const getSchoolById = async (req, res) => {
 };
 
 // GET /api/super-admin/stats — Dashboard summary metrics
-// India calendar date as midnight UTC, matching how DATE columns come back and
-// the rule the school apps use to block expired schools (utils/schoolAccess).
-const indiaToday = () => {
-  const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-  return new Date(`${ymd}T00:00:00.000Z`);
-};
 
 const getStats = async (req, res) => {
   try {
@@ -220,7 +235,10 @@ const createSchool = async (req, res) => {
       });
     }
 
-    if (!name || !admin_name || !admin_email || !admin_password) {
+    const schoolName = String(name || "").trim();
+    const schoolEmail = blankToNull(email);
+
+    if (!schoolName || !admin_name || !admin_email || !admin_password) {
       return res.status(400).json({
         error:
           "School name, admin name, admin email, and admin password are required.",
@@ -259,20 +277,38 @@ const createSchool = async (req, res) => {
       return res.status(409).json({ error: "This admin email is already used by another account." });
     }
 
+    const nameTaken = await prisma.school.findFirst({
+      where: { name: { equals: schoolName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (nameTaken) {
+      return res.status(409).json({ error: `A school named "${schoolName}" already exists.` });
+    }
+
+    if (schoolEmail) {
+      const schoolEmailTaken = await prisma.school.findFirst({
+        where: { email: { equals: schoolEmail, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (schoolEmailTaken) {
+        return res.status(409).json({ error: `Another school already uses the school email ${schoolEmail}.` });
+      }
+    }
+
     const hashedPassword = await bcrypt.hash(admin_password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
       const school = await tx.school.create({
         data: {
-          name,
-          email,
-          phone,
-          address,
-          city,
-          state,
-          postal_code,
-          country,
-          principal_name,
+          name: schoolName,
+          email: schoolEmail,
+          phone: blankToNull(phone),
+          address: blankToNull(address),
+          city: blankToNull(city),
+          state: blankToNull(state),
+          postal_code: blankToNull(postal_code),
+          country: blankToNull(country),
+          principal_name: blankToNull(principal_name),
           plan_type: normalizedPlanType,
           is_active: true,
           expiry_date: schoolExpiry,
@@ -339,7 +375,7 @@ const createSchool = async (req, res) => {
 
     if (err.code === "P2002") {
       return res.status(409).json({
-        error: "School name or admin email already exists.",
+        error: duplicateMessage(err),
       });
     }
 
