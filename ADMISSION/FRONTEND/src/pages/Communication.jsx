@@ -354,6 +354,17 @@ export function Communication() {
       return;
     }
 
+    const scheduledAt =
+      composeForm.scheduleType === "later" ? new Date(composeForm.scheduledDate) : null;
+    if (scheduledAt && Number.isNaN(scheduledAt.getTime())) {
+      setComposeError("Please select a valid date and time for scheduled email.");
+      return;
+    }
+    if (scheduledAt && scheduledAt.getTime() <= Date.now()) {
+      setComposeError("The scheduled time must be in the future.");
+      return;
+    }
+
     setSendInProgress(true);
 
     try {
@@ -362,22 +373,40 @@ export function Communication() {
       formData.append("subject", composeForm.subject.trim());
       formData.append("message", composeForm.message.trim());
 
-      // Pass recipient_id and recipient_type from the first selected recipient
-      // so the backend can store a proper reference in scheduled_emails / communication_logs
-      if (selectedRecipients.length > 0) {
-        formData.append("recipient_id", selectedRecipients[0].id);
-        formData.append("recipient_type", selectedRecipients[0].recipient_type);
-      }
+      // Every selected recipient, so the backend sends and logs one email each
+      const withEmail = selectedRecipients.filter((recipient) =>
+        Boolean(recipient.email && String(recipient.email).trim()),
+      );
+      formData.append(
+        "recipient_refs",
+        withEmail.map((recipient) => `${recipient.recipient_type}:${recipient.id}`).join(","),
+      );
+      formData.append("recipient_id", withEmail[0].id);
+      formData.append("recipient_type", withEmail[0].recipient_type);
 
+      formData.append("scheduleType", composeForm.scheduleType);
       if (composeForm.scheduleType === "later") {
-        formData.append("scheduledDate", composeForm.scheduledDate);
+        // datetime-local is the browser's local time with no offset; the server may
+        // run in UTC, so send the exact instant.
+        formData.append("scheduledDate", scheduledAt.toISOString());
       }
 
       Array.from(composeForm.attachments || []).forEach((file) => {
         formData.append("attachments", file);
       });
 
-      await sendComposeEmail(formData);
+      const result = await sendComposeEmail(formData);
+
+      if (result?.failed?.length) {
+        // Partly sent: keep the form open and say who did not get it
+        setComposeError(
+          `Sent to ${result.sent_count} recipient(s). Not sent to: ${result.failed
+            .map((f) => `${f.email} (${f.error})`)
+            .join("; ")}`,
+        );
+        await loadEmailData();
+        return;
+      }
 
       closeComposeModal();
       await loadEmailData();

@@ -1,4 +1,5 @@
 import prisma from '../src/lib/prisma.js';
+import { toBigIntOrNull } from '../utils/bigintSerializer.js';
 import AppError from '../utils/appError.js';
 import { sendSMS } from '../utils/smsSender.js';
 
@@ -119,7 +120,7 @@ export const sendSms = async (schoolId, userId, payload) => {
         message,
         status: dispatchResult.status || 'failed',
         sent_at: dispatchResult.sent_at || null,
-        created_by: String(userId),
+        created_by: toBigIntOrNull(userId),
       },
 
       select: {

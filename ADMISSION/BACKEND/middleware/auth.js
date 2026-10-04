@@ -9,6 +9,29 @@ import { getJwtSecret } from '../utils/jwtSecret.js';
 import * as authQueries from '../db/queries/authQueries.js';
 import { getSchoolAccess, denySchoolAccess } from '../utils/schoolAccess.js';
 
+// A token outlives the account it was issued for (up to 24h), so the account is
+// re-checked on each request; the short cache keeps that from being a query per request.
+const USER_CACHE_MS = 60 * 1000;
+const userCache = new Map(); // userId -> { active, schoolId, at }
+
+const getUserState = async (userId) => {
+  const key = String(userId);
+  const hit = userCache.get(key);
+  if (hit && Date.now() - hit.at < USER_CACHE_MS) return hit;
+
+  const user = await authQueries.getUserById(key);
+  const state = {
+    active: Boolean(user) && user.status === 'active',
+    schoolId: user ? String(user.school_id) : null,
+    at: Date.now(),
+  };
+  userCache.set(key, state);
+  return state;
+};
+
+export const forgetUserState = (userId) => userCache.delete(String(userId));
+export const clearUserStateCache = () => userCache.clear(); // for tests
+
 /**
  * authMiddleware
  * Verifies JWT token from request headers and sets req.user
@@ -53,6 +76,21 @@ export const authMiddleware = async (req, res, next) => {
       const access = await getSchoolAccess(tokenSchoolId);
       if (!access.allowed) {
         return denySchoolAccess(res, access);
+      }
+
+      // School users only: a token without a school (super admin) has no app_user row.
+      const state = isPositiveIntegerId(req.user.id) ? await getUserState(req.user.id) : null;
+      if (!state || !state.active) {
+        return res.status(401).json({
+          success: false,
+          message: 'Your account is no longer active.',
+        });
+      }
+      if (state.schoolId !== String(tokenSchoolId)) {
+        return res.status(403).json({
+          success: false,
+          message: 'This account does not belong to the school named in the token.',
+        });
       }
     }
 

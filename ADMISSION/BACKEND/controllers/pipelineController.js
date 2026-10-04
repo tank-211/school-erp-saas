@@ -26,8 +26,9 @@ export const PIPELINE_STAGES = [
   { id: 'rejected', title: 'Rejected / Lost', color: '#fff1f2', movable: true },
 ];
 
-// Status written when a lead is dropped on a status-only stage
-const STAGE_TO_STATUS = { new: 'new', contacted: 'contacted', interested: 'interested', rejected: 'lost' };
+// Status written when a lead is dropped on a status-only stage.
+// "New Inquiry" is 'pending' everywhere else (Leads list, Edit Lead).
+const STAGE_TO_STATUS = { new: 'pending', contacted: 'contacted', interested: 'interested', rejected: 'lost' };
 const LOST = new Set(['lost', 'not-interested', 'not_interested', 'inactive']);
 // Order of progress, for "reached this stage or later"
 const PROGRESS = ['new', 'contacted', 'interested', 'campus_visit', 'application_started', 'submitted', 'approved', 'enrolled'];

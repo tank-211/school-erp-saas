@@ -1,6 +1,6 @@
 import prisma from '../../src/lib/prisma.js';
 
-import { serializeBigInt } from "../../utils/bigintSerializer.js";
+import { serializeBigInt, toBigIntOrNull } from "../../utils/bigintSerializer.js";
 
 const recipientQueryMap = {
   lead: `
@@ -198,9 +198,7 @@ export const createCommunicationLog = async (client, payload) => {
       delivered_at: payload.delivered_at || null,
       opened_at: payload.opened_at || null,
       clicked_at: payload.clicked_at || null,
-      created_by: payload.created_by
-        ? String(payload.created_by)
-        : null,
+      created_by: toBigIntOrNull(payload.created_by),
     },
   });
 };
@@ -441,10 +439,7 @@ export const createSimpleCommunicationLog = async (payload) => {
       subject: payload.subject || null,
       message: payload.message || null,
       status: payload.status || 'sent',
-      created_by: (
-        payload.created_by ||
-        payload.sender_id
-      ).toString()
+      created_by: toBigIntOrNull(payload.created_by || payload.sender_id)
     }
   });
 };

@@ -3,6 +3,13 @@ import { getAuthHeader } from '../utils/authToken.js';
 
 const API_BASE_URL = '/api/admin';
 
+// axios puts "Request failed with status code 409" in error.message; the reason
+// the server gave ("Email already registered") is in the response body.
+const withServerMessage = (error) => {
+  const message = error?.response?.data?.message;
+  return message ? new Error(message) : error;
+};
+
 export const fetchAdminUsers = async () => {
   try {
     const response = await axios.get(`${API_BASE_URL}/users`, {
@@ -14,7 +21,7 @@ export const fetchAdminUsers = async () => {
     throw new Error(response.data?.message || 'Failed to fetch users');
   } catch (error) {
     console.error('Error fetching admin users:', error);
-    throw error;
+    throw withServerMessage(error);
   }
 };
 
@@ -29,7 +36,7 @@ export const createAdminUser = async (userData) => {
     throw new Error(response.data?.message || 'Failed to create user');
   } catch (error) {
     console.error('Error creating admin user:', error);
-    throw error;
+    throw withServerMessage(error);
   }
 };
 
@@ -44,7 +51,7 @@ export const updateAdminUserPassword = async (userId, newPassword) => {
     throw new Error(response.data?.message || 'Failed to update password');
   } catch (error) {
     console.error('Error updating password:', error);
-    throw error;
+    throw withServerMessage(error);
   }
 };
 
@@ -59,6 +66,6 @@ export const deleteAdminUser = async (userId) => {
     throw new Error(response.data?.message || 'Failed to delete user');
   } catch (error) {
     console.error('Error deleting user:', error);
-    throw error;
+    throw withServerMessage(error);
   }
 };

@@ -82,7 +82,7 @@ export function Enrollment() {
           admission.section || "N/A",
 
         studentId:
-          admission.student_id || "Pending",
+          admission.admission_number || "Pending",
 
         status:
           admission.status === "active"
