@@ -56,8 +56,11 @@ export const getMonthlyData = async () => {
   }
 
   return result.data.map((item) => {
-    const [year, month] = String(item.month).split('-');
-    const monthNumber = Number(month);
+    // API sends collection_month (YYYY-MM-DD), month_number, collected_amount
+    const [year, month] = String(item.collection_month ?? item.month ?? '').split('-');
+    const monthNumber = Number(item.month_number ?? month);
+    const collected = Number(item.collected_amount ?? item.totalCollected ?? 0);
+    const count = Number(item.transaction_count ?? item.transactionCount ?? 0);
 
     const monthNames = [
       'Jan',
@@ -75,11 +78,11 @@ export const getMonthlyData = async () => {
     ];
 
     return {
-      month: monthNames[monthNumber - 1],
-      collected: Number(item.totalCollected),
-      count: Number(item.transactionCount),
-      totalCollected: Number(item.totalCollected),
-      transactionCount: Number(item.transactionCount),
+      month: monthNames[monthNumber - 1] || item.month_name,
+      collected,
+      count,
+      totalCollected: collected,
+      transactionCount: count,
       year: Number(year)
     };
   });
@@ -196,6 +199,8 @@ export const getRecentTransactionsData = async (limit = 5) => {
       studentId: transaction.studentId,
 
       studentName: transaction.studentName,
+
+      className: transaction.className ?? transaction.class ?? null,
 
       amount: Number(
         transaction.amount ??

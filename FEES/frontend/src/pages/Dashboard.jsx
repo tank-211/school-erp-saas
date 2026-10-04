@@ -7,6 +7,14 @@ import MonthlyFeeChart from "../components/charts/MonthlyFeeChart";
 import PaymentMethodChart from "../components/charts/PaymentMethodChart";
 import { getDashboardMetrics, getMonthlyData, getPaymentMethodData, getRecentTransactionsData } from "../data/dashboardData";
 
+// Lakhs from ₹1,00,000 up; smaller amounts in full so they do not read as ₹0.01L
+const formatAmount = (value) => {
+  const amount = Number(value) || 0;
+  return Math.abs(amount) >= 100000
+    ? `₹${(amount / 100000).toFixed(2)}L`
+    : `₹${amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+};
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -105,7 +113,7 @@ const Dashboard = () => {
               </div>
 
               <div className="stat-value">
-                ₹{(Number(metrics.totalCollected) / 100000).toFixed(2)}L
+                {formatAmount(metrics.totalCollected)}
               </div>
             </div>
           </div>
@@ -129,7 +137,7 @@ const Dashboard = () => {
               </div>
 
               <div className="stat-value">
-                ₹{(Number(metrics.totalPending) / 100000).toFixed(2)}L
+                {formatAmount(metrics.totalPending)}
               </div>
             </div>
           </div>
@@ -153,7 +161,7 @@ const Dashboard = () => {
               </div>
 
               <div className="stat-value">
-                ₹{(Number(metrics.totalOverdue) / 100000).toFixed(2)}L
+                {formatAmount(metrics.totalOverdue)}
               </div>
             </div>
           </div>
@@ -177,7 +185,7 @@ const Dashboard = () => {
               </div>
 
               <div className="stat-value">
-                {metrics.totalRefund === null ? 'Not set up' : `₹${(Number(metrics.totalRefund) / 100000).toFixed(2)}L`}
+                {metrics.totalRefund === null ? 'Not set up' : formatAmount(metrics.totalRefund)}
               </div>
             </div>
           </div>

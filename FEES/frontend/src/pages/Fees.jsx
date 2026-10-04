@@ -34,6 +34,7 @@ const Fees = () => {
           paymentMethod: tx.lastPaymentMethod || '—',
           phone: tx.phone || '',
           date: tx.invoiceDate,
+          dueDate: tx.dueDate || null,
         }))
         setAllTransactions(transformed)
         setFilteredTransactions(transformed)
@@ -52,11 +53,14 @@ const Fees = () => {
     if (filterStatus !== 'All') {
       // Decided from the amounts, whatever the stored status word is
       const due = (tx) => tx.amount - tx.amountPaid
+      // The DB stores unpaid/partial/paid only: overdue = money due and the
+      // due date (YYYY-MM-DD) is before today's date in India
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
       const test = {
         'Paid': (tx) => due(tx) <= 0,
         'Partly Paid': (tx) => tx.amountPaid > 0 && due(tx) > 0,
         'Not Paid': (tx) => tx.amountPaid <= 0 && due(tx) > 0,
-        'Overdue': (tx) => tx.status === 'OVERDUE',
+        'Overdue': (tx) => due(tx) > 0 && !!tx.dueDate && String(tx.dueDate).slice(0, 10) < today,
       }[filterStatus]
       filtered = filtered.filter(test)
     }
@@ -220,7 +224,7 @@ const Fees = () => {
 
                   return (
                     <tr key={tx.id}>
-                      <td>{tx.invoiceId}</td>
+                      <td>{tx.invoiceNumber || tx.invoiceId}</td>
                       <td>{tx.studentName}</td>
                       <td>{tx.class}</td>
                       <td>₹{tx.amount.toLocaleString()}</td>

@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Search, Bell, User, LogOut, Settings, ChevronDown } from "lucide-react";
 import { logoutUser, fetchSchoolProfile } from "../../services/apiService";
+import { useAuth } from "../../context/AuthContext";
 
 const Navbar = () => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [schoolName, setSchoolName] = useState("");
@@ -24,6 +26,7 @@ const Navbar = () => {
   // Clears the stored tokens and user, then returns to the login page
   const handleLogout = async () => {
     await logoutUser();
+    logout();
     navigate("/", { replace: true });
   };
 
