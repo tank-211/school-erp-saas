@@ -99,8 +99,14 @@ export function FeesPayments() {
     }
   };
 
+  // Amounts arrive as decimal strings ("4000.00")
+  const formatRupees = (amount) =>
+    `₹${Number(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+  // Stat cards: full rupees below one lakh, lakhs above
   const formatCurrency = (amount) => {
-    return `₹${(amount / 100000).toFixed(1)}L`; // Convert to lakhs
+    const value = Number(amount || 0);
+    return Math.abs(value) < 100000 ? formatRupees(value) : `₹${(value / 100000).toFixed(1)}L`;
   };
 
   const getStatusBadge = (status) => {
@@ -320,10 +326,10 @@ export function FeesPayments() {
                       <td>{studentName}</td>
                       <td>{invoice.class_name || "—"}</td>
                       <td style={{ fontWeight: 700 }}>
-                        ₹{invoice.total_amount.toLocaleString()}
+                        {formatRupees(invoice.total_amount)}
                       </td>
                       <td style={{ color: "var(--green)" }}>
-                        ₹{invoice.paid_amount.toLocaleString()}
+                        {formatRupees(invoice.paid_amount)}
                       </td>
                       <td
                         style={{
@@ -333,7 +339,7 @@ export function FeesPayments() {
                               : "var(--green)",
                         }}
                       >
-                        ₹{invoice.pending_amount.toLocaleString()}
+                        {formatRupees(invoice.pending_amount)}
                       </td>
                       <td>
                         <span
@@ -343,7 +349,7 @@ export function FeesPayments() {
                         </span>
                       </td>
                       <td style={{ fontSize: 13 }}>
-                        {new Date(invoice.invoice_date).toLocaleDateString()}
+                        {new Date(invoice.invoice_date).toLocaleDateString("en-IN")}
                       </td>
                       <td>
                         <button

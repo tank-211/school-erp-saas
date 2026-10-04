@@ -16,6 +16,8 @@ import { useSchoolSetup } from "../hooks/useSchoolSetup";
 
 const statusConfig = {
   pending: { label: "Pending", cls: "badge-gray" },
+  // Written by older Pipeline moves to "New Inquiry"; same meaning as pending
+  new: { label: "Pending", cls: "badge-gray" },
   contacted: { label: "Contacted", cls: "badge-purple" },
   interested: { label: "Interested", cls: "badge-blue" },
   not_interested: { label: "Not Interested", cls: "badge-red" },
@@ -86,7 +88,7 @@ export function Leads() {
 
   const stats = {
     total: leads.length,
-    newLeads: leads.filter((l) => l.follow_up_status === "pending").length,
+    newLeads: leads.filter((l) => ["pending", "new"].includes(l.follow_up_status)).length,
     contacted: leads.filter((l) => l.follow_up_status === "contacted").length,
     interested: leads.filter((l) => l.follow_up_status === "interested").length,
   };

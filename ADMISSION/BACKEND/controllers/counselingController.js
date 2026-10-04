@@ -8,6 +8,25 @@
 import * as counselingQueries from '../db/queries/counselingQueries.js';
 import prisma from '../src/lib/prisma.js';
 
+// Whose visits the caller may see and manage: null (every visit of the school)
+// for an admin, the caller's own id for a counselor. The role is read from the
+// database, not from the token.
+const visitOwnerFor = async (req) => {
+  const caller = await prisma.app_user.findFirst({
+    where: { id: BigInt(req.user.id), school_id: BigInt(req.user.school_id) },
+    select: { role: true },
+  });
+  return caller?.role === 'admin' ? null : req.user.id;
+};
+
+// "+91 98765 43210", "098765-43210", "9876543210" -> "9876543210"; anything else -> null
+export const normalizePhone = (value) => {
+  const match = String(value ?? '').trim().replace(/[\s-]/g, '').match(/^(?:\+91|91|0)?(\d{10})$/);
+  return match ? match[1] : null;
+};
+
+const PHONE_MESSAGE = 'Enter a 10-digit mobile number (an optional +91 or 0 prefix, spaces and dashes are fine)';
+
 /**
  * GET /api/counseling/stats
  * Get dashboard statistics for authenticated counselor
@@ -18,7 +37,7 @@ export const getDashboardStats = async (req, res) => {
     const { school_id } = req.user;
     const counselorId = req.user.id;
 
-    const stats = await counselingQueries.getDashboardStats(school_id, counselorId);
+    const stats = await counselingQueries.getDashboardStats(school_id, counselorId, await visitOwnerFor(req));
 
     return res.json({
       success: true,
@@ -47,7 +66,7 @@ export const getDashboardStats = async (req, res) => {
 export const getVisits = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
+    const counselorId = await visitOwnerFor(req);
     const filterToday = req.query.filterToday === 'true';
 
     const visits = await counselingQueries.getVisitsForCounselor(
@@ -307,12 +326,15 @@ export const createCampusVisit = async (req, res) => {
       });
     }
 
-    // Validate phone format if provided
-    if (visitor_phone && !/^\d{10}$/.test(visitor_phone.replace(/\D/g, ''))) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid phone format',
-      });
+    if (!visitor_name || !String(visitor_name).trim()) {
+      return res.status(400).json({ success: false, message: 'Visitor name is required' });
+    }
+    if (!visitor_phone) {
+      return res.status(400).json({ success: false, message: 'Visitor phone is required' });
+    }
+    visitor_phone = normalizePhone(visitor_phone);
+    if (!visitor_phone) {
+      return res.status(400).json({ success: false, message: PHONE_MESSAGE });
     }
 
     // Parse tour preferences
@@ -326,6 +348,7 @@ export const createCampusVisit = async (req, res) => {
       school_id,
       lead_id: lead_id || null,
       assigned_to: counselorId,
+      created_by: req.user.id,
       visitor_name,
       visitor_phone,
       student_name,
@@ -371,8 +394,12 @@ export const createCampusVisit = async (req, res) => {
 export const getCampusVisit = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
     const { id } = req.params;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ success: false, message: 'Invalid visit id' });
+    }
+    const counselorId = await visitOwnerFor(req);
 
     const visit = await counselingQueries.getCampusVisitById(id, school_id, counselorId);
 
@@ -408,9 +435,14 @@ export const getCampusVisit = async (req, res) => {
 export const updateCampusVisit = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
     const { id } = req.params;
     const updates = req.body;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ success: false, message: 'Invalid visit id' });
+    }
+    // Admins manage every visit of the school; counselors their own
+    const counselorId = await visitOwnerFor(req);
 
     // Verify visit exists and belongs to this counselor
     const visit = await counselingQueries.getCampusVisitById(id, school_id, counselorId);
@@ -451,6 +483,13 @@ export const updateCampusVisit = async (req, res) => {
       });
     }
 
+    if (updates.visitor_phone !== undefined) {
+      updates.visitor_phone = normalizePhone(updates.visitor_phone);
+      if (!updates.visitor_phone) {
+        return res.status(400).json({ success: false, message: PHONE_MESSAGE });
+      }
+    }
+
     // A new guide must be active staff of this school
     if (updates.assigned_to !== undefined) {
       const guide = /^\d+$/.test(String(updates.assigned_to))
@@ -480,6 +519,14 @@ export const updateCampusVisit = async (req, res) => {
     });
   } catch (error) {
     console.error('Error in updateCampusVisit:', error);
+
+    if (error.code === 'DOUBLE_BOOKING') {
+      return res.status(409).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: 'Failed to update campus visit',
@@ -496,8 +543,12 @@ export const updateCampusVisit = async (req, res) => {
 export const deleteCampusVisit = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
     const { id } = req.params;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ success: false, message: 'Invalid visit id' });
+    }
+    const counselorId = await visitOwnerFor(req);
 
     // Verify visit exists and belongs to this counselor
     const visit = await counselingQueries.getCampusVisitById(id, school_id, counselorId);
@@ -576,7 +627,7 @@ export const getTimeSlotAvailability = async (req, res) => {
 export const getFutureVisits = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
+    const counselorId = await visitOwnerFor(req);
     const visits = await counselingQueries.getFutureVisits(school_id, counselorId);
     return res.json({ success: true, data: visits });
   } catch (error) {
@@ -592,7 +643,7 @@ export const getFutureVisits = async (req, res) => {
 export const getMissedVisits = async (req, res) => {
   try {
     const { school_id } = req.user;
-    const counselorId = req.user.id;
+    const counselorId = await visitOwnerFor(req);
     const visits = await counselingQueries.getMissedVisits(school_id, counselorId);
     return res.json({ success: true, data: visits });
   } catch (error) {
@@ -622,14 +673,10 @@ export const updateVisitStatus = async (req, res) => {
     }
 
     // Admins may update any visit of the school; counselors only their own
-    const caller = await prisma.app_user.findFirst({
-      where: { id: BigInt(counselorId), school_id: BigInt(school_id) },
-      select: { role: true },
-    });
     const updatedVisit = await counselingQueries.updateVisitStatus(
       id,
       school_id,
-      caller?.role === 'admin' ? null : counselorId,
+      await visitOwnerFor(req),
       requested
     );
     if (!updatedVisit?.count) {

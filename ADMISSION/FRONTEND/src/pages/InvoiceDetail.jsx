@@ -71,8 +71,31 @@ export function InvoiceDetail() {
     );
   }
 
+  // The API returns the invoice with nested school, student (with parent_detail
+  // and latest admission) and payment rows; amounts are decimal strings.
+  const school = invoice.school || {};
+  const student = invoice.student || {};
+  const parent = student.parent_detail?.[0] || null;
+  const admission = student.admission?.[0] || null;
+  const payments = invoice.payment || [];
+
   const studentName =
-    `${invoice.first_name} ${invoice.middle_name || ""} ${invoice.last_name}`.trim();
+    [student.first_name, student.middle_name, student.last_name].filter(Boolean).join(" ") || "—";
+  const className = admission?.school_class?.class_name || "";
+  const sectionName = admission?.section?.section_name || "";
+  const schoolAddress = [school.address, school.city, school.state, school.postal_code]
+    .filter(Boolean)
+    .join(", ");
+  const billingAddress = [student.address || parent?.address, student.city || parent?.city]
+    .filter(Boolean)
+    .join(", ");
+  const studentEmail = student.email || parent?.email || "";
+  const studentPhone = student.phone || parent?.phone || "";
+
+  const formatAmount = (value) =>
+    `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+  const formatDate = (value) =>
+    value ? new Date(value).toLocaleDateString("en-IN") : "—";
 
   return (
     <div className="page">
@@ -80,11 +103,13 @@ export function InvoiceDetail() {
       <div className="print-header" style={{ display: "none" }}>
         <div style={{ textAlign: "center", marginBottom: "20px" }}>
           <h1 style={{ margin: "0", fontSize: "24px" }}>
-            {invoice.school_name}
+            {school.name}
           </h1>
-          <p style={{ margin: "5px 0" }}>{invoice.school_address}</p>
+          {schoolAddress && <p style={{ margin: "5px 0" }}>{schoolAddress}</p>}
           <p style={{ margin: "5px 0" }}>
-            Phone: {invoice.school_phone} | Email: {invoice.school_email}
+            {[school.phone && `Phone: ${school.phone}`, school.email && `Email: ${school.email}`]
+              .filter(Boolean)
+              .join(" | ")}
           </p>
         </div>
       </div>
@@ -146,19 +171,25 @@ export function InvoiceDetail() {
           </div>
           <div style={{ textAlign: "right" }}>
             <h3 style={{ margin: "0 0 10px 0", fontSize: "20px" }}>
-              {invoice.school_name}
+              {school.name}
             </h3>
-            <p style={{ margin: "2px 0", fontSize: "14px" }}>
-              {invoice.school_address}
-            </p>
-            <p style={{ margin: "2px 0", fontSize: "14px" }}>
-              <Phone size={12} style={{ marginRight: "5px" }} />
-              {invoice.school_phone}
-            </p>
-            <p style={{ margin: "2px 0", fontSize: "14px" }}>
-              <Mail size={12} style={{ marginRight: "5px" }} />
-              {invoice.school_email}
-            </p>
+            {schoolAddress && (
+              <p style={{ margin: "2px 0", fontSize: "14px" }}>
+                {schoolAddress}
+              </p>
+            )}
+            {school.phone && (
+              <p style={{ margin: "2px 0", fontSize: "14px" }}>
+                <Phone size={12} style={{ marginRight: "5px" }} />
+                {school.phone}
+              </p>
+            )}
+            {school.email && (
+              <p style={{ margin: "2px 0", fontSize: "14px" }}>
+                <Mail size={12} style={{ marginRight: "5px" }} />
+                {school.email}
+              </p>
+            )}
           </div>
         </div>
 
@@ -188,22 +219,35 @@ export function InvoiceDetail() {
                 <User size={14} style={{ marginRight: "5px" }} />
                 {studentName}
               </p>
-              <p style={{ margin: "0 0 5px 0" }}>
-                <FileText size={14} style={{ marginRight: "5px" }} />
-                Class: {invoice.class_name} (Grade {invoice.grade})
-              </p>
-              <p style={{ margin: "0 0 5px 0" }}>
-                <Mail size={14} style={{ marginRight: "5px" }} />
-                {invoice.student_email}
-              </p>
-              <p style={{ margin: "0 0 5px 0" }}>
-                <Phone size={14} style={{ marginRight: "5px" }} />
-                {invoice.student_phone}
-              </p>
-              {invoice.parent_address && (
+              {student.admission_number && (
+                <p style={{ margin: "0 0 5px 0" }}>
+                  <FileText size={14} style={{ marginRight: "5px" }} />
+                  Admission No: {student.admission_number}
+                </p>
+              )}
+              {className && (
+                <p style={{ margin: "0 0 5px 0" }}>
+                  <FileText size={14} style={{ marginRight: "5px" }} />
+                  Class: {className}
+                  {sectionName ? ` - ${sectionName}` : ""}
+                </p>
+              )}
+              {studentEmail && (
+                <p style={{ margin: "0 0 5px 0" }}>
+                  <Mail size={14} style={{ marginRight: "5px" }} />
+                  {studentEmail}
+                </p>
+              )}
+              {studentPhone && (
+                <p style={{ margin: "0 0 5px 0" }}>
+                  <Phone size={14} style={{ marginRight: "5px" }} />
+                  {studentPhone}
+                </p>
+              )}
+              {billingAddress && (
                 <p style={{ margin: "0" }}>
                   <MapPin size={14} style={{ marginRight: "5px" }} />
-                  {invoice.parent_address}
+                  {billingAddress}
                 </p>
               )}
             </div>
@@ -224,11 +268,11 @@ export function InvoiceDetail() {
               <p style={{ margin: "0 0 5px 0" }}>
                 <Calendar size={14} style={{ marginRight: "5px" }} />
                 Invoice Date:{" "}
-                {new Date(invoice.invoice_date).toLocaleDateString()}
+                {formatDate(invoice.invoice_date)}
               </p>
               <p style={{ margin: "0 0 5px 0" }}>
                 <Calendar size={14} style={{ marginRight: "5px" }} />
-                Due Date: {new Date(invoice.due_date).toLocaleDateString()}
+                Due Date: {formatDate(invoice.due_date)}
               </p>
               <p style={{ margin: "0 0 5px 0" }}>
                 Status:{" "}
@@ -252,14 +296,14 @@ export function InvoiceDetail() {
                           : "#721c24",
                   }}
                 >
-                  {invoice.status.toUpperCase()}
+                  {String(invoice.status || "unpaid").toUpperCase()}
                 </span>
               </p>
             </div>
           </div>
         </div>
 
-        {/* Fee Breakdown - Placeholder for now */}
+        {/* Fee Breakdown: the API has no per-fee lines for an invoice, only its total */}
         <div className="fee-breakdown" style={{ marginBottom: "30px" }}>
           <h4
             style={{
@@ -301,10 +345,9 @@ export function InvoiceDetail() {
               </tr>
             </thead>
             <tbody>
-              {/* Placeholder - in real implementation, this would come from the API */}
               <tr>
                 <td style={{ padding: "10px", border: "1px solid #dee2e6" }}>
-                  Tuition Fee
+                  {`Fees as per invoice ${invoice.invoice_number}`}
                 </td>
                 <td
                   style={{
@@ -313,7 +356,7 @@ export function InvoiceDetail() {
                     border: "1px solid #dee2e6",
                   }}
                 >
-                  ₹{invoice.total_amount.toLocaleString()}
+                  {formatAmount(invoice.total_amount)}
                 </td>
               </tr>
             </tbody>
@@ -321,7 +364,7 @@ export function InvoiceDetail() {
         </div>
 
         {/* Payment History */}
-        {invoice.payments && invoice.payments.length > 0 && (
+        {payments.length > 0 && (
           <div className="payment-history" style={{ marginBottom: "30px" }}>
             <h4
               style={{
@@ -390,12 +433,12 @@ export function InvoiceDetail() {
                 </tr>
               </thead>
               <tbody>
-                {invoice.payments.map((payment, index) => (
+                {payments.map((payment, index) => (
                   <tr key={index}>
                     <td
                       style={{ padding: "10px", border: "1px solid #dee2e6" }}
                     >
-                      {new Date(payment.payment_date).toLocaleDateString()}
+                      {formatDate(payment.payment_date)}
                     </td>
                     <td
                       style={{ padding: "10px", border: "1px solid #dee2e6" }}
@@ -414,7 +457,7 @@ export function InvoiceDetail() {
                         border: "1px solid #dee2e6",
                       }}
                     >
-                      ₹{payment.amount.toLocaleString()}
+                      {formatAmount(payment.amount)}
                     </td>
                     <td
                       style={{ padding: "10px", border: "1px solid #dee2e6" }}
@@ -426,11 +469,11 @@ export function InvoiceDetail() {
                           fontSize: "11px",
                           fontWeight: "bold",
                           backgroundColor:
-                            payment.status === "successful"
+                            ["success", "successful"].includes(payment.status)
                               ? "#d4edda"
                               : "#f8d7da",
                           color:
-                            payment.status === "successful"
+                            ["success", "successful"].includes(payment.status)
                               ? "#155724"
                               : "#721c24",
                         }}
@@ -455,7 +498,7 @@ export function InvoiceDetail() {
             justifyContent: "flex-end",
           }}
         >
-          <div style={{ width: "200px" }}>
+          <div style={{ width: "260px" }}>
             <div
               style={{
                 display: "flex",
@@ -466,7 +509,7 @@ export function InvoiceDetail() {
             >
               <span>Total Amount:</span>
               <span style={{ fontWeight: "bold" }}>
-                ₹{invoice.total_amount.toLocaleString()}
+                {formatAmount(invoice.total_amount)}
               </span>
             </div>
             <div
@@ -479,7 +522,7 @@ export function InvoiceDetail() {
             >
               <span>Paid Amount:</span>
               <span style={{ fontWeight: "bold", color: "#28a745" }}>
-                ₹{invoice.paid_amount.toLocaleString()}
+                {formatAmount(invoice.paid_amount)}
               </span>
             </div>
             <div
@@ -495,10 +538,10 @@ export function InvoiceDetail() {
               <span>Balance Due:</span>
               <span
                 style={{
-                  color: invoice.pending_amount > 0 ? "#dc3545" : "#28a745",
+                  color: Number(invoice.pending_amount) > 0 ? "#dc3545" : "#28a745",
                 }}
               >
-                ₹{invoice.pending_amount.toLocaleString()}
+                {formatAmount(invoice.pending_amount)}
               </span>
             </div>
           </div>

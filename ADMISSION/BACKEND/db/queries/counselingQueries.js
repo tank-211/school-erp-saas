@@ -12,6 +12,22 @@ import prisma from '../../src/lib/prisma.js';
 export const toTimeValue = (hhmm) =>
   hhmm instanceof Date ? hhmm : new Date(`1970-01-01T${String(hhmm).slice(0, 5)}:00.000Z`);
 
+// counselorId null = every visit of the school (admins); otherwise the counselor's own
+const ownedBy = (counselorId) =>
+  counselorId === null ? {} : { assigned_to: BigInt(counselorId) };
+
+// Cancelled and no-show rows still occupy unique_counselor_slot in the database
+const FREED = ['cancelled', 'no_show'];
+
+const doubleBooking = () => {
+  const error = new Error('That counselor already has a visit at this time');
+  error.code = 'DOUBLE_BOOKING';
+  return error;
+};
+
+// Two requests for the same slot at once: the database constraint decides
+const asDoubleBooking = (error) => (error?.code === 'P2002' ? doubleBooking() : error);
+
 /**
  * getDashboardStats(schoolId, counselorId)
  * Get dashboard statistics: assigned leads count, upcoming visits, pending tasks
@@ -20,7 +36,7 @@ export const toTimeValue = (hhmm) =>
  * @param {Number} counselorId - Counselor user ID
  * @returns {Promise<Object>} { assignedLeads: 0, upcomingVisits: 0, pendingTasks: 0 }
  */
-export const getDashboardStats = async (schoolId, counselorId) => {
+export const getDashboardStats = async (schoolId, counselorId, visitOwnerId = counselorId) => {
   const [assignedLeads, upcomingVisits, pendingTasks] =
     await Promise.all([
       // Leads assigned to this counselor (lead.assigned_to holds the user id as text)
@@ -34,7 +50,7 @@ export const getDashboardStats = async (schoolId, counselorId) => {
       prisma.campus_visit.count({
         where: {
           school_id: BigInt(schoolId),
-          assigned_to: BigInt(counselorId),
+          ...ownedBy(visitOwnerId),
           visit_date: {
             gte: new Date()
           }
@@ -72,7 +88,7 @@ export const getVisitsForCounselor = async (
 ) => {
   const where = {
     school_id: BigInt(schoolId),
-    assigned_to: BigInt(counselorId)
+    ...ownedBy(counselorId)
   };
 
   if (filterToday) {
@@ -207,52 +223,66 @@ export const searchLeads = async (
  * @returns {Promise<Object>} The newly created visit record
  */
 export const createCampusVisit = async (data) => {
-  const existingVisit = await prisma.campus_visit.findFirst({
-    where: {
-      school_id: BigInt(data.school_id),
-      assigned_to: BigInt(data.assigned_to),
-      visit_date: new Date(data.visit_date),
-      start_time: toTimeValue(data.start_time),
-      status: {
-        notIn: ['cancelled', 'no_show']
-      }
-    }
-  });
+  const fields = {
+    lead_id: data.lead_id ? BigInt(data.lead_id) : null,
 
-  if (existingVisit) {
-    const error = new Error('This guide is already booked for this time slot');
-    error.code = 'DOUBLE_BOOKING';
-    throw error;
+    visitor_name: data.visitor_name,
+    visitor_phone: data.visitor_phone,
+
+    student_name: data.student_name || null,
+    grade: data.grade || null,
+
+    number_of_visitors: data.number_of_visitors || 1,
+
+    end_time: toTimeValue(data.end_time),
+
+    visit_type: data.visit_type || null,
+
+    status: 'scheduled',
+
+    internal_notes: data.internal_notes || null,
+
+    tour_preferences: data.tour_preferences || null
+  };
+
+  const slot = {
+    school_id: BigInt(data.school_id),
+    assigned_to: BigInt(data.assigned_to),
+    visit_date: new Date(data.visit_date),
+    start_time: toTimeValue(data.start_time)
+  };
+
+  const existingVisit = await prisma.campus_visit.findFirst({ where: slot });
+
+  if (existingVisit && !FREED.includes(existingVisit.status)) {
+    throw doubleBooking();
   }
 
-  return await prisma.campus_visit.create({
-    data: {
-      school_id: BigInt(data.school_id),
-      lead_id: data.lead_id ? BigInt(data.lead_id) : null,
-      assigned_to: BigInt(data.assigned_to),
-
-      visitor_name: data.visitor_name,
-      visitor_phone: data.visitor_phone,
-
-      student_name: data.student_name || null,
-      grade: data.grade || null,
-
-      number_of_visitors: data.number_of_visitors || 1,
-
-      visit_date: new Date(data.visit_date),
-
-      start_time: toTimeValue(data.start_time),
-      end_time: toTimeValue(data.end_time),
-
-      visit_type: data.visit_type || null,
-
-      status: 'scheduled',
-
-      internal_notes: data.internal_notes || null,
-
-      tour_preferences: data.tour_preferences || null
+  try {
+    if (existingVisit) {
+      // The slot's row belongs to a cancelled visit: it becomes the new booking
+      const now = new Date();
+      return await prisma.campus_visit.update({
+        where: { id: existingVisit.id },
+        data: {
+          ...fields,
+          created_by: data.created_by ? BigInt(data.created_by) : null,
+          created_at: now,
+          updated_at: now
+        }
+      });
     }
-  });
+
+    return await prisma.campus_visit.create({
+      data: {
+        ...slot,
+        ...fields,
+        created_by: data.created_by ? BigInt(data.created_by) : null
+      }
+    });
+  } catch (error) {
+    throw asDoubleBooking(error);
+  }
 };
 /**
  * getCampusVisitById(id, schoolId, counselorId)
@@ -271,7 +301,7 @@ export const getCampusVisitById = async (
     where: {
       id: BigInt(id),
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId)
+      ...ownedBy(counselorId)
     },
     include: {
       lead: true
@@ -301,7 +331,7 @@ export const updateCampusVisit = async (
     where: {
       id: BigInt(id),
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId)
+      ...ownedBy(counselorId)
     }
   });
 
@@ -309,7 +339,38 @@ export const updateCampusVisit = async (
     throw new Error('Visit not found');
   }
 
-  return await prisma.campus_visit.update({
+  // The slot this visit will occupy after the change
+  const slot = {
+    school_id: BigInt(schoolId),
+    assigned_to: updates.assigned_to !== undefined ? BigInt(updates.assigned_to) : visit.assigned_to,
+    visit_date: updates.visit_date !== undefined ? new Date(updates.visit_date) : visit.visit_date,
+    start_time: updates.start_time !== undefined ? toTimeValue(updates.start_time) : visit.start_time
+  };
+  const clash = await prisma.campus_visit.findFirst({
+    where: { ...slot, NOT: { id: visit.id } }
+  });
+
+  if (clash && !FREED.includes(clash.status)) {
+    throw doubleBooking();
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      if (clash) {
+        // A cancelled visit still holds the slot: remove it so this one can move in
+        await tx.campus_visit.deleteMany({
+          where: { id: clash.id, school_id: BigInt(schoolId), status: { in: FREED } }
+        });
+      }
+      return await applyVisitUpdate(tx, id, updates);
+    });
+  } catch (error) {
+    throw asDoubleBooking(error);
+  }
+};
+
+const applyVisitUpdate = (tx, id, updates) =>
+  tx.campus_visit.update({
     where: {
       id: BigInt(id)
     },
@@ -370,7 +431,6 @@ export const updateCampusVisit = async (
       updated_at: new Date()
     }
   });
-};
 /**
  * deleteCampusVisit(id, schoolId, counselorId)
  * Delete a campus visit (soft delete via status)
@@ -388,7 +448,7 @@ export const deleteCampusVisit = async (
     where: {
       id: BigInt(id),
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId)
+      ...ownedBy(counselorId)
     },
     data: {
       status: 'cancelled',
@@ -452,7 +512,7 @@ export const getFutureVisits = async (
   return await prisma.campus_visit.findMany({
     where: {
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId),
+      ...ownedBy(counselorId),
       status: 'scheduled',
       visit_date: {
         gte: new Date()
@@ -482,7 +542,7 @@ export const getMissedVisits = async (
   return await prisma.campus_visit.findMany({
     where: {
       school_id: BigInt(schoolId),
-      assigned_to: BigInt(counselorId),
+      ...ownedBy(counselorId),
       status: 'scheduled',
       visit_date: {
         lt: new Date()
@@ -517,7 +577,7 @@ export const updateVisitStatus = async (
     where: {
       id: BigInt(id),
       school_id: BigInt(schoolId),
-      ...(counselorId !== null && { assigned_to: BigInt(counselorId) })
+      ...ownedBy(counselorId)
     },
     data: {
       status,

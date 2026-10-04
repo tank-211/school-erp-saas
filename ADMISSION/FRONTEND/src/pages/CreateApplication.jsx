@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, FileText, Search, Loader } from "lucide-react";
 import { useLeads } from "../hooks/useLeads";
 import { fetchSetupOverview } from "../services/setupService";
+import { getLeadById } from "../services/leadService";
 import {
   createApplicationFromLead,
   createApplicationWithoutLead,
@@ -54,6 +55,34 @@ export function CreateApplication() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
 
+  // Opened from a lead ("Create Application" on Leads / Lead Details): load that
+  // lead and go straight to the confirm step with it selected.
+  const [searchParams] = useSearchParams();
+  const presetLeadId = searchParams.get("leadId");
+  const [presetLoading, setPresetLoading] = useState(Boolean(presetLeadId));
+  const [presetError, setPresetError] = useState("");
+  useEffect(() => {
+    if (!presetLeadId) return undefined;
+    let cancelled = false;
+    setPresetLoading(true);
+    setPresetError("");
+    getLeadById(presetLeadId).then((result) => {
+      if (cancelled) return;
+      if (result.success && result.data) {
+        setSelected(result.data);
+        setStep("confirm");
+      } else {
+        setPresetError(
+          `Could not load the selected lead: ${result.message || "Lead not found"}. Pick a lead from the list below.`,
+        );
+      }
+      setPresetLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [presetLeadId]);
+
   // Handle lead selection
   const handleSelectLead = (lead) => {
     setSelected(lead);
@@ -101,6 +130,14 @@ export function CreateApplication() {
     }
   };
 
+  if (presetLoading) {
+    return (
+      <div className="page-sm" style={{ maxWidth: 700 }}>
+        <div className="loading">Loading lead...</div>
+      </div>
+    );
+  }
+
   // Step 1: Select Lead
   if (step === "select") {
     return (
@@ -112,6 +149,12 @@ export function CreateApplication() {
         <p className="page-sub mb-5">
           Select an eligible lead or start a manual application
         </p>
+
+        {presetError && (
+          <div className="info-box info-box-red mb-4">
+            <div className="info-box-text">{presetError}</div>
+          </div>
+        )}
 
         {/* Search and error handling */}
         <div className="card mb-5">

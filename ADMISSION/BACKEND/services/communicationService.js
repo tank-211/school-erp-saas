@@ -98,22 +98,53 @@ const buildComposeLogPayload = ({ schoolId, userId, recipientType, recipientId, 
   status: 'sent',
 });
 
-const resolveComposeRecipient = (payload) => {
-  if (!payload?.recipient_type) {
-    throw new AppError('recipient_type is required for compose email.', 400);
+// The compose form sends every selected recipient as recipient_refs
+// ("lead:12,parent:7"); recipient_type + recipient_id is the older single form.
+const parseComposeRecipientRefs = (payload) => {
+  const refs = String(payload?.recipient_refs || '')
+    .split(',')
+    .map((ref) => ref.trim())
+    .filter(Boolean)
+    .map((ref) => {
+      const [type, id] = ref.split(':');
+      return { recipient_type: type, recipient_id: id };
+    });
+
+  if (!refs.length) {
+    if (!payload?.recipient_type) {
+      throw new AppError('recipient_type is required for compose email.', 400);
+    }
+    if (!payload?.recipient_id) {
+      throw new AppError('recipient_id is required for compose email.', 400);
+    }
+    refs.push({ recipient_type: payload.recipient_type, recipient_id: payload.recipient_id });
   }
 
-  assertValidRecipientType(payload.recipient_type);
+  return refs.map((ref) => {
+    assertValidRecipientType(ref.recipient_type);
+    return {
+      recipient_type: ref.recipient_type,
+      recipient_id: assertPositiveInteger(ref.recipient_id, 'recipient_id'),
+    };
+  });
+};
 
-  if (!payload?.recipient_id) {
-    throw new AppError('recipient_id is required for compose email.', 400);
+// Every recipient must be a record of the caller's school, and each address must
+// be that record's own address: the log row then names who actually got the email.
+const resolveComposeRecipients = async (schoolId, payload, emails) => {
+  const records = [];
+  for (const ref of parseComposeRecipientRefs(payload)) {
+    const record = await resolveRecipient(schoolId, ref.recipient_type, ref.recipient_id);
+    records.push({ ...ref, email: String(record.email || '').trim().toLowerCase() });
   }
 
-  const recipientId = assertPositiveInteger(payload.recipient_id, 'recipient_id');
-  return {
-    recipient_type: payload.recipient_type,
-    recipient_id: recipientId,
-  };
+  return emails.map((email) => {
+    const match = records.find((record) => record.email === email.toLowerCase());
+    if (!match) {
+      throw new AppError(`${email} is not the email address of a selected recipient of this school.`, 400);
+    }
+    return { email, recipient_type: match.recipient_type, recipient_id: match.recipient_id };
+  });
 };
 
 const sendCommunicationLegacy = async (schoolId, userId, payload) => {
@@ -218,7 +249,6 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
   const message = String(payload.message || '').trim();
   const attachmentMetadata = mapAttachmentMetadata(files);
   const scheduleType = normalizeScheduleType(payload.scheduleType);
-  const composeRecipient = resolveComposeRecipient(payload);
   const channel = payload.channel || 'email';
   assertValidChannel(channel);
 
@@ -240,61 +270,106 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
     scheduleType === 'later' ||
     scheduleType === 'scheduled';
 
-  if (scheduleLater) {
-    if (!scheduledDate) {
-      throw new AppError('scheduledDate is required when scheduling an email.', 400);
-    }
+  if (scheduleLater && !scheduledDate) {
+    throw new AppError('scheduledDate is required when scheduling an email.', 400);
+  }
 
-    const scheduledEmail = await communicationQueries.createScheduledEmail({
-      school_id: schoolId,
-      sender_id: userId,
-      recipient_type: composeRecipient.recipient_type,
-      recipient_id: composeRecipient.recipient_id,
-      recipients: recipients.join(','),
-      subject,
-      message,
-      attachments: attachmentMetadata,
-      scheduled_at: scheduledDate,
-      status: 'pending',
-    });
+  const composeRecipients = await resolveComposeRecipients(schoolId, payload, recipients);
+
+  if (scheduleLater) {
+    // One row per recipient: the scheduler sends each row as one email, so
+    // parents never see each other's addresses.
+    const scheduledEmails = [];
+    for (const recipient of composeRecipients) {
+      scheduledEmails.push(
+        await communicationQueries.createScheduledEmail({
+          school_id: schoolId,
+          sender_id: userId,
+          recipient_type: recipient.recipient_type,
+          recipient_id: recipient.recipient_id,
+          recipients: recipient.email,
+          subject,
+          message,
+          attachments: attachmentMetadata,
+          scheduled_at: scheduledDate,
+          status: 'pending',
+        })
+      );
+    }
 
     return {
       scheduled: true,
-      id: scheduledEmail.id,
+      id: scheduledEmails[0].id,
+      ids: scheduledEmails.map((row) => row.id),
       recipients: recipients.join(','),
       subject,
-      scheduled_at: scheduledEmail.scheduled_at,
+      scheduled_at: scheduledEmails[0].scheduled_at,
     };
   }
 
-  const transporterResponse = await sendMailWithGmail({
-    to: recipients.join(','),
-    subject,
-    text: message,
-    attachments: mapNodemailerAttachments(attachmentMetadata),
-  });
+  // One email per recipient, each logged on its own.
+  const attachments = mapNodemailerAttachments(attachmentMetadata);
+  const sent = [];
+  const failed = [];
 
-  const emailLog = await communicationQueries.createSimpleCommunicationLog(
-    {
-      ...buildComposeLogPayload({
-        schoolId,
-        userId,
-        recipientType: composeRecipient.recipient_type,
-        recipientId: composeRecipient.recipient_id,
+  for (const recipient of composeRecipients) {
+    let transporterResponse;
+    try {
+      transporterResponse = await sendMailWithGmail({
+        to: recipient.email,
         subject,
-        message,
-        channel,
-      }),
-    },
-  );
+        text: message,
+        attachments,
+      });
+    } catch (error) {
+      failed.push({ email: recipient.email, recipient_id: recipient.recipient_id, error: error.message });
+      continue;
+    }
+
+    const entry = {
+      email: recipient.email,
+      recipient_id: recipient.recipient_id,
+      provider_message_id: transporterResponse?.messageId || null,
+    };
+    try {
+      const emailLog = await communicationQueries.createSimpleCommunicationLog(
+        buildComposeLogPayload({
+          schoolId,
+          userId,
+          recipientType: recipient.recipient_type,
+          recipientId: recipient.recipient_id,
+          subject,
+          message,
+          channel,
+        })
+      );
+      entry.id = emailLog.id;
+      entry.sent_at = emailLog.sent_at;
+    } catch (error) {
+      // The email is already delivered: say so instead of reporting the send as failed.
+      entry.log_error = error.message;
+    }
+    sent.push(entry);
+  }
+
+  if (!sent.length) {
+    throw new AppError(
+      `Email could not be sent to ${failed.map((f) => `${f.email} (${f.error})`).join('; ')}`,
+      502
+    );
+  }
 
   return {
     scheduled: false,
-    id: emailLog.id,
-    recipients: emailLog.recipient_email || emailLog.recipients,
-    subject: emailLog.subject,
-    sent_at: emailLog.sent_at,
-    provider_message_id: transporterResponse?.messageId || null,
+    id: sent[0].id ?? null,
+    recipients: sent.map((entry) => entry.email).join(','),
+    subject,
+    sent_at: sent[0].sent_at ?? null,
+    provider_message_id: sent[0].provider_message_id,
+    sent_count: sent.length,
+    failed_count: failed.length,
+    sent,
+    failed,
   };
 };
 

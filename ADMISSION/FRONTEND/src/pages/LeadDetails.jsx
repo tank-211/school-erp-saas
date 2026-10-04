@@ -129,7 +129,7 @@ export default function LeadDetails() {
         </div>
 
         <span className="badge badge-gray">
-          {lead.follow_up_status || "Pending"}
+          {lead.follow_up_status === "new" ? "pending" : lead.follow_up_status || "Pending"}
         </span>
       </div>
 
@@ -174,7 +174,7 @@ export default function LeadDetails() {
 
             <div className="detail-row">
               <strong>Status</strong>
-              <span>{lead.follow_up_status || "N/A"}</span>
+              <span>{lead.follow_up_status === "new" ? "pending" : lead.follow_up_status || "N/A"}</span>
             </div>
 
             <div className="detail-row">

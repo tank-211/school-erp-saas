@@ -36,7 +36,10 @@ export const getAllLeads = async (school_id, filters = {}) => {
     school_id: BigInt(school_id)
   };
 
-  if (follow_up_status) where.follow_up_status = follow_up_status;
+  // 'new' is what older Pipeline moves wrote for "New Inquiry"; it means pending
+  if (follow_up_status) {
+    where.follow_up_status = follow_up_status === 'pending' ? { in: ['pending', 'new'] } : follow_up_status;
+  }
   if (desired_class) where.desired_class = desired_class;
   if (assigned_to) where.assigned_to = assigned_to.toString();
 

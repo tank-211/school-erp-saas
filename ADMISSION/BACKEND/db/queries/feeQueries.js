@@ -117,6 +117,15 @@ export const getInvoiceById = async (
       student: {
         include: {
           parent_detail: true,
+          // Current class and section, for the "Bill To" block
+          admission: {
+            select: {
+              school_class: { select: { class_name: true } },
+              section: { select: { section_name: true } },
+            },
+            orderBy: { id: 'desc' },
+            take: 1,
+          },
         },
       },
       payment: {

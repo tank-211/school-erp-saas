@@ -437,60 +437,8 @@ export function Dashboard() {
           )}
         </div>
       )}
-      {/* Backend Health Status Section */}
-      <div style={{ marginBottom: 16 }}>
-        {backendStatus === "checking" && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              backgroundColor: "#fef3c7",
-              border: "1px solid #fcd34d",
-              borderRadius: 6,
-              fontSize: 13,
-              fontWeight: 500,
-              color: "#92400e",
-            }}
-          >
-            <span>⏳</span>
-            <span>Checking connection...</span>
-          </div>
-        )}
-        {backendStatus === "connected" && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "4px 10px",
-              fontSize: 12,
-              color: "#16a34a",
-              fontWeight: 500,
-            }}
-          >
-            <span>Backend Connected</span>
-            <button
-              onClick={() =>
-                handleCheckBackendHealth(new AbortController().signal)
-              }
-              style={{
-                marginLeft: 8,
-                padding: "2px 6px",
-                fontSize: 11,
-                backgroundColor: "transparent",
-                border: "1px solid #16a34a",
-                color: "#16a34a",
-                borderRadius: 4,
-                cursor: "pointer",
-                fontWeight: 500,
-              }}
-            >
-              Refresh
-            </button>
-          </div>
-        )}
+      {/* Shown only when the server cannot be reached */}
+      <div>
         {backendStatus === "error" && backendError && (
           <div
             style={{

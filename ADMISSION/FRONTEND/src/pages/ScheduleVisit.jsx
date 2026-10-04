@@ -179,6 +179,18 @@ export function ScheduleVisit() {
       return;
     }
 
+    // Same rule as the server: 10 digits, optional +91 / 91 / 0 prefix, spaces and dashes allowed
+    const phoneMatch = String(form.phone)
+      .trim()
+      .replace(/[\s-]/g, "")
+      .match(/^(?:\+91|91|0)?(\d{10})$/);
+    if (!phoneMatch) {
+      setError(
+        "Enter a 10-digit mobile number (an optional +91 or 0 prefix, spaces and dashes are fine)",
+      );
+      return;
+    }
+
     try {
       setSubmitting(true);
 
@@ -188,7 +200,7 @@ export function ScheduleVisit() {
       const payload = {
         lead_id: leadId,
         visitor_name: form.parentName,
-        visitor_phone: form.phone,
+        visitor_phone: phoneMatch[1],
         student_name: form.studentName,
         email: form.email,
         grade: form.grade,

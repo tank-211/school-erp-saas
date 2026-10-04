@@ -1,4 +1,5 @@
 import prisma from '../src/lib/prisma.js';
+import { toBigIntOrNull } from '../utils/bigintSerializer.js';
 import { sendEmail } from '../utils/emailSender.js';
 
 const VALID_RECIPIENT_TYPES = ['lead', 'student', 'parent'];
@@ -317,7 +318,7 @@ export const sendEmailMessage = async (schoolId, userId, body) => {
       message: finalMessage,
       status: 'sent',
       sent_at: new Date(),
-      created_by: String(userId),
+      created_by: toBigIntOrNull(userId),
     },
   });
 };
@@ -380,8 +381,8 @@ export const getEmailLogs = async (schoolId, query) => {
       let recipient = null;
 
       if (log.recipient_type === 'lead') {
-        recipient = await prisma.lead.findUnique({
-          where: { id: log.recipient_id },
+        recipient = await prisma.lead.findFirst({
+          where: { id: log.recipient_id, school_id: BigInt(schoolId) },
           select: {
             first_name: true,
             last_name: true,
@@ -389,8 +390,8 @@ export const getEmailLogs = async (schoolId, query) => {
           },
         });
       } else if (log.recipient_type === 'student') {
-        recipient = await prisma.student.findUnique({
-          where: { id: log.recipient_id },
+        recipient = await prisma.student.findFirst({
+          where: { id: log.recipient_id, school_id: BigInt(schoolId) },
           select: {
             first_name: true,
             last_name: true,
@@ -398,8 +399,8 @@ export const getEmailLogs = async (schoolId, query) => {
           },
         });
       } else if (log.recipient_type === 'parent') {
-        recipient = await prisma.parent_detail.findUnique({
-          where: { id: log.recipient_id },
+        recipient = await prisma.parent_detail.findFirst({
+          where: { id: log.recipient_id, school_id: BigInt(schoolId) },
           select: {
             first_name: true,
             last_name: true,

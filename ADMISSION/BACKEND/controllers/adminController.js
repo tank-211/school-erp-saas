@@ -3,6 +3,7 @@ import * as adminQueries from '../db/queries/adminQueries.js';
 import * as authQueries from '../db/queries/authQueries.js';
 import prisma from '../src/lib/prisma.js';
 import { recordAudit } from '../utils/audit.js';
+import { forgetUserState } from '../middleware/auth.js';
 
 export const getUsers = async (req, res, next) => {
   try {
@@ -66,7 +67,11 @@ export const updatePassword = async (req, res, next) => {
     const { id } = req.params;
     const { newPassword } = req.body;
     const { school_id } = req.user;
-    
+
+    if (!/^\d+$/.test(String(id))) {
+        return res.status(404).json({ success: false, message: 'User not found or you do not have permission to modify this user' });
+    }
+
     if (!newPassword || newPassword.length < 6) {
         return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
     }
@@ -75,7 +80,8 @@ export const updatePassword = async (req, res, next) => {
     const password_hash = await bcrypt.hash(newPassword, salt);
 
     const updated = await adminQueries.updatePassword(id, school_id, password_hash);
-    if (!updated) {
+    // updateMany always returns an object; count says whether a user of this school matched
+    if (!updated?.count) {
         return res.status(404).json({ success: false, message: 'User not found or you do not have permission to modify this user' });
     }
     
@@ -101,6 +107,7 @@ export const deleteUser = async (req, res, next) => {
         return res.status(404).json({ success: false, message: 'User not found or you do not have permission to delete this user' });
     }
 
+    forgetUserState(id);
     await recordAudit(req, { action: 'user.deleted', entity: 'app_user', entityId: id, summary: `Deleted user ${id}` });
     res.status(200).json({ success: true, message: 'User deleted successfully' });
   } catch(err) {
