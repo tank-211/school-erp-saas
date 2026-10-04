@@ -1344,8 +1344,8 @@ export function AdmissionResume() {
             </div>
 
             <div className="page-sub">
-              Upload any documents that are missing from
-              the approved application.
+              Documents are optional. Add any the school wants
+              to keep on file; only the student photo is required.
             </div>
           </div>
         </div>
@@ -1399,8 +1399,8 @@ export function AdmissionResume() {
                         Available
                       </span>
                     ) : (
-                      <span className="badge badge-blue">
-                        Missing
+                      <span className="badge badge-gray">
+                        Not added
                       </span>
                     )}
                   </div>
@@ -1470,10 +1470,9 @@ export function AdmissionResume() {
               fontSize: "13px",
             }}
           >
-            <strong>Important:</strong>{" "}
-            Upload the required missing documents before
-            completing the admission. The final confirmation
-            will check the required document types.
+            <strong>Note:</strong>{" "}
+            The admission can be completed without these documents.
+            The student photo is the only one that is required.
           </div>
         </div>
       </div>
@@ -1609,9 +1608,8 @@ export function AdmissionResume() {
                     opacity: 0.75,
                   }}
                 >
-                  Clicking Complete Admission will run the backend
-                  validation for the mandatory student photo and
-                  documents.
+                  Completing the admission enrols the student and
+                  creates the fee invoice for the class and academic year.
                 </p>
               </>
             )}
@@ -1779,7 +1777,9 @@ export function AdmissionResume() {
             >
               {isAdmissionCompleted
                 ? "Completed"
-                : admission.status || "Processing"}
+                : String(admission.status || "Processing")
+                    .replace(/_/g, " ")
+                    .replace(/^./, (c) => c.toUpperCase())}
             </span>
             </div>
           </div>
