@@ -124,7 +124,7 @@ export const getLeadById = async (req, res) => {
 
 export const updateLead = async (req, res) => {
   try {
-    const lead = await updateLeadService(req.params.id, req.body, req.user.schoolId);
+    const lead = await updateLeadService(req.params.id, req.body, req.user.schoolId, req.user.id);
     res.status(200).json(successResponse(serializeBigInt(lead), "Lead updated successfully"));
   } catch (error) {
     res.status(400).json(errorResponse(error.message));

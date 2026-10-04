@@ -67,44 +67,72 @@ export const inviteUserService = async ({ email, name, role }, schoolId) => {
   };
 };
 
+const fail = (message, statusCode) => {
+  const e = new Error(message); e.statusCode = statusCode; throw e;
+};
+
+const safeUserSelect = { id: true, name: true, email: true, role: true, status: true };
+
+const findSchoolUser = async (userId, schoolId) => {
+  if (!/^\d+$/.test(String(userId ?? ""))) fail("User not found", 404);
+  const user = await prisma.user.findFirst({
+    where: { id: BigInt(userId), school_id: BigInt(schoolId) },
+    select: safeUserSelect,
+  });
+  if (!user) fail("User not found", 404);
+  return user;
+};
+
+// A school must always keep one active admin, or nobody could manage its users.
+const assertNotLastActiveAdmin = async (user, schoolId, message) => {
+  if (user.role !== "admin" || user.status !== "active") return;
+  const otherAdmins = await prisma.user.count({
+    where: { school_id: BigInt(schoolId), role: "admin", status: "active", id: { not: user.id } },
+  });
+  if (otherAdmins === 0) fail(message, 400);
+};
+
 export const updateUserRoleService = async (
   userId,
   role,
   schoolId
 ) => {
-  return await prisma.user.updateMany({
-    where: {
-      id: BigInt(userId),
-      school_id: BigInt(schoolId)
-    },
-    data: {
-      role
-    }
+  const cleanRole = String(role || "").trim().toLowerCase();
+  if (!INVITE_ROLES.includes(cleanRole)) {
+    fail(`Role must be one of: ${INVITE_ROLES.join(", ")}`, 400);
+  }
+
+  const user = await findSchoolUser(userId, schoolId);
+  if (cleanRole !== "admin") {
+    await assertNotLastActiveAdmin(user, schoolId, "The school's last active admin cannot be given another role");
+  }
+
+  return await prisma.user.update({
+    where: { id: user.id },
+    data: { role: cleanRole },
+    select: safeUserSelect,
   });
 };
 export const toggleUserStatusService = async (
   userId,
-  schoolId
+  schoolId,
+  actorId
 ) => {
+  const user = await findSchoolUser(userId, schoolId);
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: BigInt(userId),
-      school_id: BigInt(schoolId)
+  if (user.status === "active") {
+    if (String(user.id) === String(actorId)) {
+      fail("You cannot deactivate your own account", 400);
     }
-  })
-
-  if (!user) {
-    throw new Error("User not found")
+    await assertNotLastActiveAdmin(user, schoolId, "The school's last active admin cannot be deactivated");
   }
 
   return await prisma.user.update({
-    where: {
-      id: BigInt(userId),
-    },
+    where: { id: user.id },
     data: {
       status: user.status === "active" ? "inactive" : "active"
-    }
+    },
+    select: safeUserSelect,
   })
 };
 

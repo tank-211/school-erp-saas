@@ -24,6 +24,7 @@ export const tokenManager = {
   removeToken: () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('role');
+    localStorage.removeItem('user');
   },
 
   // Check if user is authenticated
@@ -42,6 +43,36 @@ export const tokenManager = {
       return false;
     }
   }
+};
+
+// Session expiry: pages call fetch directly as well as through apiRequest, so
+// one guard around window.fetch covers them all. A 401 from the API while a
+// token is stored means the token expired or was rejected: sign out and send
+// the user to the login page, which explains why (session_expired flag).
+export const installSessionGuard = () => {
+  if (typeof window === 'undefined' || window.__sessionGuardInstalled) return;
+  window.__sessionGuardInstalled = true;
+
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+
+    if (response.status === 401 && tokenManager.getToken()) {
+      const target = args[0];
+      const url = typeof target === 'string' ? target : target?.url || String(target);
+      const isApiCall = url.includes('/api/') || (API_BASE_URL && url.startsWith(API_BASE_URL));
+
+      if (isApiCall && !url.includes('/auth/login')) {
+        tokenManager.removeToken();
+        try { sessionStorage.setItem('session_expired', '1'); } catch { /* storage unavailable */ }
+        if (window.location.pathname !== '/login') {
+          window.location.replace('/login');
+        }
+      }
+    }
+
+    return response;
+  };
 };
 
 // Base API configuration

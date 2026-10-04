@@ -41,6 +41,7 @@ export default function ApplicationDetails() {
 
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetchApplication();
@@ -62,16 +63,24 @@ export default function ApplicationDetails() {
         throw new Error(data.message || "Failed to load application");
       }
 
-      console.log("APPLICATION DETAILS:", data);
+      // The API returns the application row itself, with its related rows
+      // under their table names
+      const app = data.data;
+      if (!app) {
+        setApplication(null);
+        return;
+      }
 
+      setError("");
       setApplication({
-        ...data.data.application,
-        student_info: data.data.student_info,
-        parent_info: data.data.parent_info,
-        academic_info: data.data.academic_info,
+        ...app,
+        student_info: app.application_student_info,
+        parent_info: app.application_parent_info,
+        academic_info: app.application_academic_info,
       });
     } catch (err) {
       console.error("APPLICATION DETAILS ERROR:", err);
+      setError(err.message || "Failed to load application");
     } finally {
       setLoading(false);
     }
@@ -91,7 +100,7 @@ export default function ApplicationDetails() {
     return (
       <div className="application-details-page">
         <div className="application-card">
-          Application not found.
+          {error || "Application not found."}
         </div>
       </div>
     );
@@ -286,28 +295,28 @@ export default function ApplicationDetails() {
           <div className="detail-item">
             <span>Guardian Name</span>
             <strong>
-              {parent.guardian_name || "N/A"}
+              {parent.guardian_name || parent.primary_contact_person || parent.father_name || parent.mother_name || "N/A"}
             </strong>
           </div>
 
           <div className="detail-item">
             <span>Relationship</span>
             <strong>
-              {parent.guardian_relation || "N/A"}
+              {parent.guardian_relation || parent.primary_contact_relation || "N/A"}
             </strong>
           </div>
 
           <div className="detail-item">
             <span>Phone</span>
             <strong>
-              {parent.guardian_phone || "N/A"}
+              {parent.guardian_phone || parent.primary_contact_phone || parent.father_phone || parent.mother_phone || "N/A"}
             </strong>
           </div>
 
           <div className="detail-item">
             <span>Email</span>
             <strong>
-              {parent.guardian_email || "N/A"}
+              {parent.guardian_email || parent.father_email || parent.mother_email || "N/A"}
             </strong>
           </div>
 

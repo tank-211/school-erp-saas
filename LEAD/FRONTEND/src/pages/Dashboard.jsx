@@ -58,10 +58,25 @@ const getActivityLabel = (activity) => {
       return activity.activity_type?.replaceAll("_", " ");
   }
 };
+const ACTIVITY_LABELS = {
+  LEAD_CREATED: "Lead created",
+  LEAD_UPDATED: "Lead updated",
+  LEAD_ASSIGNED: "Lead assigned",
+  STAGE_CHANGED: "Stage changed",
+};
+
+// "LEAD_CREATED" -> "Lead created", "whatsapp" -> "Whatsapp"
+const humanizeType = (type) => {
+  if (!type) return "Activity";
+  if (ACTIVITY_LABELS[type]) return ACTIVITY_LABELS[type];
+  const text = String(type).replaceAll("_", " ").toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
 console.log("API URL =", import.meta.env.VITE_API_URL);
 console.log(import.meta.env);
 export default function Dashboard() {
-  const COLORS = ['#10b981', '#8b5cf6', '#ef4444', '#f59e0b'];
+  // One colour per stage the API returns: new, contacted, qualified, admitted, lost (+ other)
+  const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#94a3b8'];
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -183,14 +198,6 @@ export default function Dashboard() {
   return (
     <div className="dashboard">
 
-      <div style={{ marginBottom: 20, fontSize: 16 }}>
-      <strong>Current Time:</strong>{" "}
-      {settings
-        ? new Date().toLocaleString("en-IN", {
-            timeZone: settings.timezone
-          })
-        : "Loading..."}
-    </div>
       {/* Page Header */}
       <div className="page-header">
         <div>
@@ -299,7 +306,7 @@ export default function Dashboard() {
                     >
                     {pieData.filter(item => item.value > 0)
                             .map((entry, idx) => (
-                      <Cell key={idx} fill={COLORS[idx % COLORS.length]} />
+                      <Cell key={idx} fill={COLORS[pieData.indexOf(entry) % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -313,7 +320,7 @@ export default function Dashboard() {
                       className="pie-dot"
                       style={{ background: COLORS[i % COLORS.length] }}
                     />
-                    <span>{item.name} ({item.value})</span>
+                    <span>{humanizeType(item.name)} ({item.value})</span>
                   </div>
                 ))}
               </div>
@@ -411,12 +418,12 @@ export default function Dashboard() {
                 <div className="activity-body">
                 <div className="activity-name">
                   {a.lead
-                    ? `${a.lead.first_name} ${a.lead.last_name}`
+                    ? [a.lead.first_name, a.lead.last_name].filter(Boolean).join(" ")
                     : "Unknown Lead"}
                 </div>
 
                 <div className="activity-action">
-                  {a.activity_type}
+                  {[humanizeType(a.activity_type), a.notes].filter(Boolean).join(": ")}
                 </div>
 
                   <div className="activity-time">
@@ -424,7 +431,7 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <span className={`badge ${getBadgeClass(a.activity_type)}`}>{a.activity_type || 'unknown'}</span>
+                <span className={`badge ${getBadgeClass(a.activity_type)}`}>{humanizeType(a.activity_type)}</span>
               </div>
             ))
           )}

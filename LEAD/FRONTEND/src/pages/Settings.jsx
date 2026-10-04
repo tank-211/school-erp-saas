@@ -26,7 +26,12 @@ const tabs = [
   { key: 'history', label: 'Settings History', Icon: ClockIcon }
 ]
 
-const userRole = localStorage.getItem("role")
+// Roles a school user can have (the backend accepts only these)
+const USER_ROLES = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'counselor', label: 'Counselor' },
+  { value: 'accountant', label: 'Accountant' },
+]
 
 const notifications = [
   { key: 'new_lead', label: 'New Lead Assignments', desc: 'Get notified when a new lead is assigned to you', enabled: true },
@@ -406,6 +411,18 @@ function UsersTab() {
 const [loading, setLoading] = useState(false)
 const [users, setUsers] = useState([])
 
+// PUT that shows the backend's reason when it refuses
+const saveUser = async (path, body, fallback) => {
+  try {
+    const res = await authFetch(path, { method: 'PUT', ...(body && { body: JSON.stringify(body) }) })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || data.success === false) throw new Error(data.message || fallback)
+  } catch (err) {
+    alert(err.message || fallback)
+  }
+  loadUsers()
+}
+
 const loadUsers = () => {
   setLoading(true)
 
@@ -486,24 +503,19 @@ useEffect(() => {
                 </td>
                 <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.email}</td>
                 <td><span className="badge badge-blue">{u.role}</span></td>
-                <td><span className={`badge ${u.isActive ? 'badge-green' : 'badge-red'}`}>{u.isActive ? 'Active' : 'Inactive'}</span></td>
-                <td><select value={u.role} className="form-input" onChange={async e => {const role=e.target.value;try{await authFetch(`/api/users/${u.id}/role`,{method:'PUT',body:JSON.stringify({role})});loadUsers()}catch(err){console.error(err);alert('Failed to update role')}}}><option value="user">User</option><option value="counselor">Counselor</option><option value="manager">Manager</option><option value="admin">Admin</option></select></td>
+                <td><span className={`badge ${u.status === 'active' ? 'badge-green' : 'badge-red'}`}>{u.status === 'active' ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                  <select value={u.role} className="form-input" onChange={e => saveUser(`/api/users/${u.id}/role`, { role: e.target.value }, 'Failed to update role')}>
+                    {!USER_ROLES.some(r => r.value === u.role) && <option value={u.role}>{u.role}</option>}
+                    {USER_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                  </select>
+                </td>
                 <td>
                   <button
                     className="btn-primary-sm"
-                    onClick={async () => {
-                      try {
-                        await authFetch(`/api/users/${u.id}/status`, {
-                          method: 'PUT'
-                        })
-
-                        loadUsers()
-                      } catch (err) {
-                        console.error(err)
-                      }
-                    }}
+                    onClick={() => saveUser(`/api/users/${u.id}/status`, null, 'Failed to update the user status')}
                   >
-                    {u.isActive ? "Deactivate" : "Activate"}
+                    {u.status === 'active' ? "Deactivate" : "Activate"}
                   </button>
                 </td>
               </tr>
@@ -517,6 +529,8 @@ useEffect(() => {
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile')
+  // Read on every render: at module load (before login) there is no role yet
+  const userRole = localStorage.getItem("role")
   const panelMap = { profile: ProfileTab, notifications: NotificationsTab, security: SecurityTab, system: SystemTab, users: UsersTab, history: HistoryTab }
   const ActivePanel = panelMap[activeTab]
 

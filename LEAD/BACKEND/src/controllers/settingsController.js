@@ -238,18 +238,19 @@ export const changePassword = async (req, res) => {
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
+    const user = await prisma.user.findFirst({
+      where: { id: BigInt(req.user.id), school_id: BigInt(req.user.schoolId) },
+      select: { id: true, password_hash: true },
     });
 
     if (!user) {
-      return res.status(500).json({
+      return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
 
     if (!isMatch) {
       return res.status(400).json({
@@ -261,8 +262,8 @@ export const changePassword = async (req, res) => {
     const hashed = await bcrypt.hash(newPassword, 10);
 
     await prisma.user.update({
-      where: { id: req.user.id },
-      data: { password: hashed },
+      where: { id: user.id },
+      data: { password_hash: hashed, updated_at: new Date() },
     });
 
     res.json({ success: true, message: "Password updated" });

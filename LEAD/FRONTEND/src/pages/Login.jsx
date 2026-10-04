@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import '../erp-login.css';
@@ -10,6 +10,16 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Set by the session guard (services/api.js) when the API rejects the token
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('session_expired')) {
+        sessionStorage.removeItem('session_expired');
+        setError('Your session has expired. Please sign in again.');
+      }
+    } catch { /* storage unavailable */ }
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

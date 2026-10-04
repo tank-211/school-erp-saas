@@ -108,16 +108,26 @@ export default function AddLeadModal({ open, onClose }) {
 
     const res = await leadsAPI.bulkImport(file)
 
-    console.log("UPLOAD RESULT:", res)
+    const { created = 0, failed = 0, errors: rowErrors = [] } = res.data || {}
+
+    if (created > 0) window.dispatchEvent(new Event('leads:changed'))
 
     setMessage({
-      type: 'success',
-      text: `✓ Uploaded ${res.data.count} leads`
+      type: created > 0 ? 'success' : 'error',
+      text: failed > 0
+        ? `Uploaded ${created} lead${created === 1 ? '' : 's'}. ${failed} row${failed === 1 ? '' : 's'} could not be imported:`
+        : `✓ Uploaded ${created} lead${created === 1 ? '' : 's'}`,
+      details: rowErrors.map((e) => `Row ${e.row}: ${e.reason}`)
     })
 
-    setTimeout(() => {
-    onClose();
-    }, 1200);
+    // Stay open when rows failed, so the list of failed rows can be read
+    if (failed === 0) {
+      setTimeout(() => {
+      onClose();
+      setMessage(null);
+      setFile(null);
+      }, 1200);
+    }
 
   } catch (err) {
     console.error(err)
@@ -137,7 +147,9 @@ export default function AddLeadModal({ open, onClose }) {
     return () => { document.body.style.overflow = '' }
   }, [open])
 
+  // Fetched each time the modal opens: at first mount (the login page) there is no token yet
   useEffect(() => {
+    if (!open) return;
 
     const fetchCounselors = async () => {
 
@@ -145,10 +157,7 @@ export default function AddLeadModal({ open, onClose }) {
 
         const res = await usersAPI.getCounselors();
 
-        console.log("FULL RESPONSE:", res);
-        console.log("COUNSELORS:", res.data);
-
-        setCounselors(res.data);
+        setCounselors(res.data || []);
 
       } catch (err) {
         console.log(err);
@@ -158,7 +167,7 @@ export default function AddLeadModal({ open, onClose }) {
 
     fetchCounselors();
 
-  }, []);
+  }, [open]);
 
   if (!open) return null
 
@@ -230,6 +239,9 @@ export default function AddLeadModal({ open, onClose }) {
   };
 
       await createLead(leadData)
+
+      // The Leads page listens for this and reloads its list and cards
+      window.dispatchEvent(new Event('leads:changed'))
       
       setMessage({ type: 'success', text: '✓ Lead added successfully!' })
       
@@ -244,9 +256,19 @@ export default function AddLeadModal({ open, onClose }) {
     } catch (error) {
       console.log("🔥 REAL ERROR:", error);
 
+      // Field errors from the backend validator: { field: message }
+      const fieldErrors = error.details?.errors || {};
+      const formField = { fatherName: 'fatherFirstName' };
+      if (Object.keys(fieldErrors).length) {
+        setErrors(Object.fromEntries(
+          Object.entries(fieldErrors).map(([field, text]) => [formField[field] || field, text])
+        ));
+      }
+
       setMessage({
         type: 'error',
-        text: error.message || "Something went wrong"
+        text: error.message || "Something went wrong",
+        details: Object.entries(fieldErrors).map(([field, text]) => `${field}: ${text}`)
       });
     }
        finally {
@@ -259,6 +281,7 @@ export default function AddLeadModal({ open, onClose }) {
     onClose()
     setForm(initialForm)
     setErrors({})
+    setMessage(null)
   }
 
   return (
@@ -300,6 +323,11 @@ export default function AddLeadModal({ open, onClose }) {
             border: `1px solid ${message.type === 'success' ? '#a7f3d0' : '#fecaca'}`
           }}>
             {message.text}
+            {message.details?.length > 0 && (
+              <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontWeight: 400, maxHeight: 120, overflowY: 'auto' }}>
+                {message.details.map((line, i) => <li key={i}>{line}</li>)}
+              </ul>
+            )}
           </div>
         )}
 

@@ -63,12 +63,20 @@ export default function Leads() {
   useEffect(() => {
     reportsAPI.lookups().then((res) => setLookups(res.data)).catch(() => {})
   }, [])
+  // Keys returned by GET /leads/stats: pending = new stage, admitted = enrolled
   const [stats, setStats] = useState({
     total: 0,
-    new: 0,
+    pending: 0,
     qualified: 0,
-    converted: 0,
+    admitted: 0,
   })
+  // Bumped when the Add Lead modal saves, so the list and the cards reload
+  const [refreshKey, setRefreshKey] = useState(0)
+  useEffect(() => {
+    const onLeadsChanged = () => setRefreshKey((k) => k + 1)
+    window.addEventListener('leads:changed', onLeadsChanged)
+    return () => window.removeEventListener('leads:changed', onLeadsChanged)
+  }, [])
   const filtered = leadsData;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -91,9 +99,9 @@ export default function Leads() {
   const enrolledLeads = leadsData.filter(l => l.status === "Enrolled").length;
   const statCards = [
     { label: 'Total Leads', value: stats?.total || 0, color: '#3b82f6', bg: '#eff6ff', Icon: UsersIcon },
-    { label: 'New Leads', value: stats?.new || 0, color: '#10b981', bg: '#d1fae5', Icon: TrendIcon },
+    { label: 'New Leads', value: stats?.pending || 0, color: '#10b981', bg: '#d1fae5', Icon: TrendIcon },
     { label: 'Qualified Leads', value: stats?.qualified || 0, color: '#f59e0b', bg: '#fef3c7', Icon: FireIcon },
-    { label: 'Enrolled', value: stats?.converted || 0, color: '#8b5cf6', bg: '#f5f3ff', Icon: TargetIcon },
+    { label: 'Enrolled', value: stats?.admitted || 0, color: '#8b5cf6', bg: '#f5f3ff', Icon: TargetIcon },
   ];
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -182,7 +190,7 @@ export default function Leads() {
     
 
     fetchLeads();
-  }, [filters, page, search]); // 🔥 THIS IS THE FIX
+  }, [filters, page, search, refreshKey]); // 🔥 THIS IS THE FIX
 
 
   useEffect(() => {
@@ -198,7 +206,7 @@ export default function Leads() {
     };
 
     fetchStats();
-  }, []);
+  }, [refreshKey]);
     
 
 useEffect(() => {

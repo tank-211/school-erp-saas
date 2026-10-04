@@ -205,7 +205,7 @@ export const STATUS_GROUPS = {
 /* =========================
    UPDATE LEAD
 ========================= */
- const updateLeadService = async (id, data, schoolId) => {
+ const updateLeadService = async (id, data, schoolId, actorId) => {
   const existingLead = await prisma.lead.findFirst({
     where: {
       id: BigInt(id),
@@ -250,7 +250,10 @@ export const STATUS_GROUPS = {
     data: {
       lead_id: updatedLead.id,
       activity_type: "LEAD_UPDATED",
-      created_by: BigInt(existingLead.assigned_to)
+      // Who made the change; callers that pass no actor fall back to the lead's owner
+      created_by: /^\d+$/.test(String(actorId ?? existingLead.assigned_to ?? ""))
+        ? BigInt(actorId ?? existingLead.assigned_to)
+        : null
     }
   });
 
@@ -323,7 +326,7 @@ const bulkCreateLeadsService = async (rows, schoolId, actorId) => {
  const getLeadStatsService = async (schoolId) => {
     const sid = BigInt(schoolId);
 
-    const [total, pending, contacted, admitted, inactive] =
+    const [total, pending, contacted, qualified, admitted, inactive] =
       await Promise.all([
         prisma.lead.count({
           where: {
@@ -348,6 +351,13 @@ const bulkCreateLeadsService = async (rows, schoolId, actorId) => {
         prisma.lead.count({
           where: {
             school_id: sid,
+            follow_up_status: { in: STATUS_GROUPS.qualified }
+          }
+        }),
+
+        prisma.lead.count({
+          where: {
+            school_id: sid,
             follow_up_status: { in: STATUS_GROUPS.admitted }
           }
         }),
@@ -364,6 +374,7 @@ const bulkCreateLeadsService = async (rows, schoolId, actorId) => {
       total,
       pending,
       contacted,
+      qualified,
       admitted,
       inactive
     };

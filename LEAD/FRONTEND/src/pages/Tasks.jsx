@@ -82,10 +82,15 @@ export default function Tasks() {
       fetchData();
     }, []);
 
-  const today = new Date();
+  // Compare calendar days: a task due today is not overdue until tomorrow
+  const startOfDay = (value) => {
+    const d = new Date(value);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  };
+  const today = startOfDay(new Date());
 
   const tasksWithStatus = tasks.map(task => {
-    const dueDate = new Date(task.due_date || task.dueDate);
+    const dueDate = startOfDay(task.due_date || task.dueDate);
 
     if (task.is_done) {
       return {
@@ -121,7 +126,7 @@ export default function Tasks() {
   const overdueTasks = tasks.filter(
     task =>
       task.status !== "completed" &&
-      new Date(task.dueDate) < new Date()
+      startOfDay(task.dueDate) < today
   );
   const todayFollowUps = tasks.filter(task => {
     if (!task.followUpDate) return false;
@@ -226,7 +231,7 @@ export default function Tasks() {
 
     const refreshed = await taskAPI.getTasks();
 
-      setTasks(refreshed.data);
+      setTasks((refreshed.data || []).map(formatTask));
 
       setShowModal(false);
       setEditingTask(null);
