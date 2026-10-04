@@ -25,6 +25,14 @@ const getExpiryStatus = (expiryDate) => {
   return "healthy";
 };
 
+// access_state from the API: what the school apps actually allow today
+const ACCESS_PILLS = {
+  active: { label: "Active", className: "sp-pill" },
+  expiring_soon: { label: "Expiring soon", className: "sp-pill sp-pill-warning" },
+  expired: { label: "Expired", className: "sp-pill sp-pill-danger" },
+  suspended: { label: "Suspended", className: "sp-pill sp-pill-danger" },
+};
+
 // Plan codes the backend accepts (superAdminSchoolController allowedPlanTypes)
 const PLAN_OPTIONS = [
   { value: "trial", label: "Trial (1 month)" },
@@ -51,6 +59,9 @@ function SchoolManagement() {
   const [schools, setSchools] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -70,7 +81,11 @@ function SchoolManagement() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.message);
+          setLoadError(err.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
       }
     };
@@ -91,6 +106,7 @@ function SchoolManagement() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setNotice("");
 
     try {
       const result = await superAdminService.createSchool({
@@ -113,6 +129,7 @@ function SchoolManagement() {
 
       const data = await superAdminService.getSchools();
       setSchools(data);
+      setLoadError("");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -136,15 +153,40 @@ function SchoolManagement() {
     });
   }, [schools, search]);
 
-  const updateSchool = async (id, payload) => {
+  const updateSchool = async (id, payload, successNotice = "") => {
     setError("");
+    setNotice("");
     try {
       await superAdminService.updateSchool(id, payload);
+      setNotice(successNotice);
       const data = await superAdminService.getSchools();
       setSchools(data);
+      setLoadError("");
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleSuspend = async (school) => {
+    const ok = window.confirm(
+      `Suspend ${school.name}? Its staff will not be able to log in to Admission, Lead or Fees until you activate it again.`,
+    );
+    if (!ok) {
+      return;
+    }
+    await updateSchool(
+      school.id,
+      { is_active: false, status: "suspended" },
+      `${school.name} is suspended. Its staff cannot log in until you activate it again.`,
+    );
+  };
+
+  const handleActivate = async (school) => {
+    await updateSchool(
+      school.id,
+      { is_active: true, status: "active" },
+      `${school.name} is active again.`,
+    );
   };
 
   const handleEditPlan = async (school) => {
@@ -155,7 +197,11 @@ function SchoolManagement() {
     if (!nextPlan) {
       return;
     }
-    await updateSchool(school.id, { plan_type: nextPlan });
+    await updateSchool(
+      school.id,
+      { plan_type: nextPlan },
+      `${school.name}: plan changed to ${nextPlan.trim().toLowerCase()}.`,
+    );
   };
 
   return (
@@ -168,6 +214,12 @@ function SchoolManagement() {
       {error && (
         <div className="sp-error" style={{ marginTop: "12px" }}>
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="sp-success" style={{ marginTop: "12px" }}>
+          {notice}
         </div>
       )}
 
@@ -418,7 +470,6 @@ function SchoolManagement() {
               <th>Email</th>
               <th>Plan</th>
               <th>Status</th>
-              <th>Active</th>
               <th>Expiry Date</th>
               <th>Actions</th>
             </tr>
@@ -426,6 +477,7 @@ function SchoolManagement() {
           <tbody>
             {filteredSchools.map((school) => {
               const expiryStatus = getExpiryStatus(school.expiry_date);
+              const access = ACCESS_PILLS[school.access_state];
 
               return (
                 <tr
@@ -446,8 +498,13 @@ function SchoolManagement() {
                       {school.plan_type || "trial"}
                     </span>
                   </td>
-                  <td>{school.status || "-"}</td>
-                  <td>{school.is_active ? "Yes" : "No"}</td>
+                  <td>
+                    {access ? (
+                      <span className={access.className}>{access.label}</span>
+                    ) : (
+                      school.status || "-"
+                    )}
+                  </td>
                   <td>
                     <span
                       className={
@@ -469,12 +526,7 @@ function SchoolManagement() {
                         <button
                           className="sp-btn sp-btn-danger"
                           type="button"
-                          onClick={() =>
-                            updateSchool(school.id, {
-                              is_active: false,
-                              status: "suspended",
-                            })
-                          }
+                          onClick={() => handleSuspend(school)}
                         >
                           Suspend
                         </button>
@@ -482,12 +534,7 @@ function SchoolManagement() {
                         <button
                           className="sp-btn sp-btn-success"
                           type="button"
-                          onClick={() =>
-                            updateSchool(school.id, {
-                              is_active: true,
-                              status: "active",
-                            })
-                          }
+                          onClick={() => handleActivate(school)}
                         >
                           Activate
                         </button>
@@ -523,8 +570,18 @@ function SchoolManagement() {
           </tbody>
         </table>
 
-        {!filteredSchools.length && (
-          <p className="sp-empty">No schools match your search.</p>
+        {loading ? (
+          <p className="sp-empty">Loading schools...</p>
+        ) : loadError ? (
+          <div className="sp-error" style={{ marginTop: "12px" }}>
+            Schools could not be loaded: {loadError}
+          </div>
+        ) : (
+          !filteredSchools.length && (
+            <p className="sp-empty">
+              {schools.length ? "No schools match your search." : "No schools yet."}
+            </p>
+          )
         )}
       </div>
     </section>

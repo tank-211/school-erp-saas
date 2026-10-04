@@ -1,12 +1,34 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { superAdminService } from "../../services/superAdminService";
+import { SESSION_ENDED_KEY, superAdminService } from "../../services/superAdminService";
+
+// Set by the API layer when it sends the operator back here
+const readSessionNotice = () => {
+  try {
+    const reason = sessionStorage.getItem(SESSION_ENDED_KEY);
+    if (reason === "deactivated") {
+      return "Your account has been deactivated. Contact a super admin.";
+    }
+    return reason ? "Your session has expired. Please sign in again." : "";
+  } catch {
+    return "";
+  }
+};
 
 function SPLogin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [sessionNotice, setSessionNotice] = useState(readSessionNotice);
+
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(SESSION_ENDED_KEY);
+    } catch {
+      // nothing to clear
+    }
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -17,6 +39,7 @@ function SPLogin() {
     event.preventDefault();
     setLoading(true);
     setError("");
+    setSessionNotice("");
 
     try {
       const response = await superAdminService.login(form.email, form.password);
@@ -33,7 +56,7 @@ function SPLogin() {
   return (
     <div className="sp-shell sp-auth-wrapper">
       <div className="sp-auth-card">
-        <p className="sp-brand-kicker">Dark Slate / Indigo</p>
+        <p className="sp-brand-kicker">School ERP · Control Portal</p>
         <h1 className="sp-title">SP Control Portal</h1>
         <p className="sp-subtitle">
           Internal access for platform operations team.
@@ -66,6 +89,7 @@ function SPLogin() {
             />
           </label>
 
+          {sessionNotice && !error && <div className="sp-error">{sessionNotice}</div>}
           {error && <div className="sp-error">{error}</div>}
 
           <button

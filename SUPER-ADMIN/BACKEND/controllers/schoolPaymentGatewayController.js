@@ -89,12 +89,15 @@ const saveSchoolGateway = async (req, res) => {
       provider: 'razorpay',
       key_id: keyId,
       mode: match[1],
-      // Changed keys must pass the test again before the school takes payments
-      status: 'configured',
-      connected_at: null,
-      last_error: null,
       updated_by: String(req.staffUser?.full_name || req.staffUser?.email || '').slice(0, 150) || null,
     };
+    // Changed keys must pass the test again before the school takes payments;
+    // saving anything else (e.g. only the webhook secret) keeps the status
+    if (keyChanged || keySecret) {
+      data.status = 'configured';
+      data.connected_at = null;
+      data.last_error = null;
+    }
     if (keySecret) data.key_secret_enc = encrypt(keySecret);
     if (webhookSecret) data.webhook_secret_enc = encrypt(webhookSecret);
 
@@ -103,7 +106,10 @@ const saveSchoolGateway = async (req, res) => {
       update: data,
       create: { school_id: id, ...data },
     });
-    return res.json(serializeBigInt({ message: 'Saved. Run "Test keys" to switch on online payments.', gateway: shape(id, row) }));
+    const message = row.status === 'connected'
+      ? 'Saved. The keys did not change, so online payments stay on.'
+      : 'Saved. Run "Test keys" to switch on online payments.';
+    return res.json(serializeBigInt({ message, gateway: shape(id, row) }));
   } catch (err) {
     if (err.code === 'PAYMENT_KEYS_SECRET_MISSING') return res.status(500).json({ error: err.message });
     if (tableMissing(err)) return res.status(501).json({ error: notSetUpMessage });

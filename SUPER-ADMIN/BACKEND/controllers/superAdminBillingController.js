@@ -1,6 +1,7 @@
 const prisma = require("../config/prisma");
 const { Prisma } = require("@prisma/client");
 const { serializeBigInt } = require("../utils/bigintSerializer");
+const { indiaToday, addMonthsClamped } = require("../utils/indiaDate");
 
 
 const renewSchoolSubscription = async (req, res) => {
@@ -48,15 +49,16 @@ const renewSchoolSubscription = async (req, res) => {
         throw error;
       }
 
-      const today = new Date();
+      // Extend from the current expiry if it is still ahead, otherwise from
+      // today's India date; month ends are clamped (31 Jan + 1 month = 28/29 Feb)
+      const today = indiaToday();
 
       const baseDate =
         school.expiry_date && school.expiry_date > today
           ? new Date(school.expiry_date)
           : today;
 
-      const nextExpiryDate = new Date(baseDate);
-      nextExpiryDate.setMonth(nextExpiryDate.getMonth() + renewalMonths);
+      const nextExpiryDate = addMonthsClamped(baseDate, renewalMonths);
 
       const renewal = await tx.school_subscription_renewal.create({
         data: {

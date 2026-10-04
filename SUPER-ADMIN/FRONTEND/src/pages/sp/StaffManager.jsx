@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react'
 import { superAdminService } from '../../services/superAdminService'
 
+const STAFF_ROLES = [
+  { value: 'super_admin', label: 'Super Admin' },
+  { value: 'support', label: 'Support' },
+  { value: 'billing', label: 'Billing' },
+]
+
 function StaffManager() {
   const [staffList, setStaffList] = useState([])
   const [error, setError] = useState('')
@@ -170,13 +176,22 @@ function StaffManager() {
                   <td>
                     <select
                       className="sp-select"
-                      value={staff.internal_role}
+                      value={staff.internal_role || ''}
                       disabled={busyId === staff.id}
                       onChange={(e) => updateStaff(staff, { internal_role: e.target.value }, `role changed to ${e.target.value.replace('_', ' ')}`)}
                     >
-                      <option value="super_admin">Super Admin</option>
-                      <option value="support">Support</option>
-                      <option value="billing">Billing</option>
+                      {/* A stored role outside the list is shown as it is,
+                          not as the first option */}
+                      {!STAFF_ROLES.some((role) => role.value === staff.internal_role) && (
+                        <option value={staff.internal_role || ''}>
+                          {staff.internal_role || 'No role'}
+                        </option>
+                      )}
+                      {STAFF_ROLES.map((role) => (
+                        <option key={role.value} value={role.value}>
+                          {role.label}
+                        </option>
+                      ))}
                     </select>
                   </td>
                   <td>{staff.is_active ? 'Active' : 'Deactivated'}</td>

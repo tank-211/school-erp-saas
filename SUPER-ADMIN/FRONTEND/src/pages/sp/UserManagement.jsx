@@ -12,7 +12,12 @@ function UserManagement() {
   const [schools, setSchools] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  // User whose password is being reset, and the new password being typed
+  const [resetUser, setResetUser] = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
   const [form, setForm] = useState({
     school_id: "",
     name: "",
@@ -94,6 +99,7 @@ function UserManagement() {
     event.preventDefault();
     setSaving(true);
     setError("");
+    setNotice("");
 
     try {
       await superAdminService.createUser({
@@ -114,6 +120,7 @@ function UserManagement() {
         status: "active",
       });
 
+      setNotice(`${form.email} can now sign in with the password you set.`);
       await refreshUsers();
     } catch (err) {
       setError(err.message);
@@ -125,8 +132,10 @@ function UserManagement() {
   const handleToggleStatus = async (user) => {
     const nextStatus = user.status === "active" ? "inactive" : "active";
     setError("");
+    setNotice("");
     try {
       await superAdminService.updateUser(user.id, { status: nextStatus });
+      setNotice(`${user.email} is now ${nextStatus}.`);
       await refreshUsers();
     } catch (err) {
       setError(err.message);
@@ -134,30 +143,50 @@ function UserManagement() {
   };
 
   const handleRoleChange = async (user, nextRole) => {
+    const ok = window.confirm(
+      `Change the role of ${user.email} from ${user.role || "none"} to ${nextRole}?`,
+    );
+    if (!ok) {
+      return;
+    }
+
     setError("");
+    setNotice("");
     try {
       await superAdminService.updateUser(user.id, { role: nextRole });
+      setNotice(`${user.email} is now ${nextRole}.`);
       await refreshUsers();
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const handleResetPassword = async (user) => {
-    const nextPassword = window.prompt(
-      `Enter a new password for ${user.email}:`,
-      "",
-    );
-    if (!nextPassword) {
-      return;
-    }
-
+  const openResetPassword = (user) => {
+    setResetUser(user);
+    setResetPassword("");
     setError("");
+    setNotice("");
+  };
+
+  const closeResetPassword = () => {
+    setResetUser(null);
+    setResetPassword("");
+  };
+
+  const handleResetPassword = async (event) => {
+    event.preventDefault();
+    setResetting(true);
+    setError("");
+    setNotice("");
+
     try {
-      await superAdminService.resetUserPassword(user.id, { password: nextPassword });
-      await refreshUsers();
+      await superAdminService.resetUserPassword(resetUser.id, { password: resetPassword });
+      setNotice(`Password reset for ${resetUser.email}. Share the new password with them privately.`);
+      closeResetPassword();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -168,8 +197,10 @@ function UserManagement() {
     }
 
     setError("");
+    setNotice("");
     try {
       await superAdminService.deleteUser(user.id);
+      setNotice(`${user.email} was deleted.`);
       await refreshUsers();
     } catch (err) {
       setError(err.message);
@@ -186,6 +217,12 @@ function UserManagement() {
       {error && (
         <div className="sp-error" style={{ marginTop: "12px" }}>
           {error}
+        </div>
+      )}
+
+      {notice && (
+        <div className="sp-success" style={{ marginTop: "12px" }}>
+          {notice}
         </div>
       )}
 
@@ -206,7 +243,8 @@ function UserManagement() {
                 <option value="" disabled>
                   Select a school
                 </option>
-                {schools.map((school) => (
+                {/* The server refuses new users for a suspended school */}
+                {schools.filter((school) => school.is_active).map((school) => (
                   <option key={school.id} value={String(school.id)}>
                     {school.name}
                   </option>
@@ -235,7 +273,7 @@ function UserManagement() {
                 name="email"
                 value={form.email}
                 onChange={handleChange}
-                autocomplete="off"
+                autoComplete="off"
                 required
               />
             </label>
@@ -249,7 +287,8 @@ function UserManagement() {
                 name="password"
                 value={form.password}
                 onChange={handleChange}
-                autocomplete="new-password"
+                minLength={8}
+                autoComplete="new-password"
                 required
               />
             </label>
@@ -301,6 +340,42 @@ function UserManagement() {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
+
+          {resetUser && (
+            <form
+              className="sp-form"
+              style={{ marginBottom: "14px" }}
+              onSubmit={handleResetPassword}
+            >
+              <label className="sp-label" htmlFor="reset_password">
+                New password for {resetUser.email}
+                <input
+                  id="reset_password"
+                  className="sp-input"
+                  type="password"
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  minLength={8}
+                  autoComplete="new-password"
+                  autoFocus
+                  required
+                />
+              </label>
+              <div className="sp-row-actions">
+                <button className="sp-btn sp-btn-primary" type="submit" disabled={resetting}>
+                  {resetting ? "Saving..." : "Set new password"}
+                </button>
+                <button
+                  className="sp-btn sp-btn-ghost"
+                  type="button"
+                  onClick={closeResetPassword}
+                  disabled={resetting}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
 
           <table className="sp-table">
             <thead>
@@ -356,7 +431,7 @@ function UserManagement() {
                         <button
                           className="sp-btn sp-btn-ghost"
                           type="button"
-                          onClick={() => handleResetPassword(user)}
+                          onClick={() => openResetPassword(user)}
                         >
                           Reset Password
                         </button>

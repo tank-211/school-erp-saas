@@ -1,10 +1,17 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/prisma');
 
+// Same roles as POST /api/super-admin/staff
+const ALLOWED_ROLES = ['super_admin', 'support', 'billing'];
+
 const signup = async (req, res) => {
-  try { 
+  try {
     const { full_name, email, password, internal_role } = req.body;
-    const role = internal_role || 'staff';
+    const role = internal_role || 'support';
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role value.' });
+    }
 
     if (!full_name || !email || !password) {
       return res.status(400).json({ error: 'full_name, email, and password are required.' });

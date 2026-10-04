@@ -193,8 +193,13 @@ const updatePaymentGateway = async (req, res) => {
       updateData.client_secret = client_secret;
     }
 
-    // New keys or environment are untested until "Test connection" passes
-    if (updateData.environment !== undefined || updateData.client_id !== undefined || updateData.client_secret) {
+    // New keys or environment are untested until "Test connection" passes;
+    // a save that changes none of them keeps the current status
+    const keysChanged =
+      (updateData.environment !== undefined && updateData.environment !== existingGateway.environment) ||
+      (updateData.client_id !== undefined && updateData.client_id !== existingGateway.client_id) ||
+      Boolean(updateData.client_secret);
+    if (keysChanged) {
       updateData.status = "configured";
       updateData.connected_at = null;
     }

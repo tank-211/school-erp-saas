@@ -4,8 +4,6 @@ const prisma = require('../config/prisma');
 
 const login = async (req, res) => {
   try {
-    console.log("=== LOGIN START ===");
-
     // Tolerate stray spaces and capital letters (autofill, phone keyboards)
     const email = String(req.body?.email || '').trim();
     const password = String(req.body?.password || '');
@@ -29,9 +27,7 @@ const login = async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
-    console.log("Comparing password...");
     const isValidPassword = await bcrypt.compare(password, staff.password_hash);
-    console.log("Password valid:", isValidPassword);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: "Invalid credentials." });
@@ -46,7 +42,6 @@ const login = async (req, res) => {
       .update({ where: { id: staff.id }, data: { last_login: new Date() } })
       .catch(() => {});
 
-    console.log("Generating token...");
     const token = jwt.sign(
       {
         id: staff.id,
@@ -56,14 +51,6 @@ const login = async (req, res) => {
       process.env.SP_JWT_SECRET,
       { expiresIn: process.env.SP_JWT_EXPIRY || "8h" }
     );
-
-    console.log("Updating last_login...");
-    await prisma.service_provider_staff.update({
-      where: { id: staff.id },
-      data: { last_login: new Date() },
-    });
-
-    console.log("Login successful");
 
     return res.json({
       message: "Login successful",
@@ -76,10 +63,9 @@ const login = async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("LOGIN ERROR");
-    console.error(err);
+    console.error("Staff login error:", err);
     return res.status(500).json({
-      error: err.message,
+      error: "Sign-in failed. Please try again.",
     });
   }
 };

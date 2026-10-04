@@ -13,6 +13,26 @@ const ALLOWED_STATUSES = new Set([
   "inactive",
 ]);
 
+// A school must keep at least one active admin, or nobody there can sign in
+// to manage it. True when `user` is an active admin and no other one exists.
+const isLastActiveAdmin = async (user) => {
+  if (user.role !== "admin" || user.status !== "active") {
+    return false;
+  }
+  const others = await prisma.app_user.count({
+    where: {
+      school_id: user.school_id,
+      role: "admin",
+      status: "active",
+      NOT: { id: user.id },
+    },
+  });
+  return others === 0;
+};
+
+const LAST_ADMIN_MESSAGE =
+  "This is the school's only active admin. Add or activate another admin for the school first.";
+
 // GET /api/super-admin/users
 const getAllUsers = async (req, res) => {
   try {
@@ -199,6 +219,8 @@ const updateUser = async (req, res) => {
       select: {
         id: true,
         school_id: true,
+        role: true,
+        status: true,
       },
     });
 
@@ -280,6 +302,17 @@ const updateUser = async (req, res) => {
       });
     }
 
+    const losesAdmin =
+      (data.role !== undefined && data.role !== "admin") ||
+      data.status === "inactive" ||
+      (data.school_id !== undefined && data.school_id !== existingUser.school_id);
+
+    if (losesAdmin && (await isLastActiveAdmin(existingUser))) {
+      return res.status(409).json({
+        error: LAST_ADMIN_MESSAGE,
+      });
+    }
+
     data.updated_at = new Date();
 
     const user = await prisma.app_user.update({
@@ -340,14 +373,21 @@ const deleteUser = async (req, res) => {
       },
       select: {
         id: true,
-        name: true,
-        email: true,
+        school_id: true,
+        role: true,
+        status: true,
       },
     });
 
     if (!existingUser) {
       return res.status(404).json({
         error: "User not found.",
+      });
+    }
+
+    if (await isLastActiveAdmin(existingUser)) {
+      return res.status(409).json({
+        error: LAST_ADMIN_MESSAGE,
       });
     }
 

@@ -92,9 +92,10 @@ router.patch(
   updatePaymentGateway
 );
 
+// Writes the gateway status, so super_admin only like the other changes
 router.post(
   "/payment-gateway/test",
-  verifyInternalStaff,
+  verifySuperAdmin,
   testPaymentGateway
 );
 

@@ -19,6 +19,38 @@ superAdminApi.interceptors.request.use((config) => {
   return config
 })
 
+// An expired token (401) or a deactivated operator (403 "Account deactivated.")
+// cannot do anything on any page, so drop the stored session and go back to
+// the login page, which reads this flag to explain why. A failed login is also
+// a 401 but must stay on the form with its own message.
+const LOGIN_PATH = '/sp-control-portal'
+export const SESSION_ENDED_KEY = 'spSessionEnded'
+
+superAdminApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status
+    const deactivated =
+      status === 403 && error?.response?.data?.error === 'Account deactivated.'
+    const isLoginCall = String(error?.config?.url || '').endsWith('/login')
+
+    if ((status === 401 || deactivated) && !isLoginCall) {
+      localStorage.removeItem('spToken')
+      localStorage.removeItem('spUser')
+      try {
+        sessionStorage.setItem(SESSION_ENDED_KEY, deactivated ? 'deactivated' : 'expired')
+      } catch {
+        // storage unavailable: still return to login, just without the notice
+      }
+      if (window.location.pathname.replace(/\/+$/, '') !== LOGIN_PATH) {
+        window.location.assign(LOGIN_PATH)
+      }
+    }
+
+    return Promise.reject(error)
+  },
+)
+
 // Most endpoints answer { error }, the payment gateway ones { message }
 const getErrorMessage = (error, fallback) => {
   const data = error?.response?.data
