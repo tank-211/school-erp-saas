@@ -56,6 +56,16 @@ export function useApplication(applicationId) {
     loadData();
   }, [effectiveApplicationId]);
 
+  // Reload the saved details (the Review step shows them)
+  const refreshDetails = async () => {
+    if (!effectiveApplicationId) return;
+    try {
+      setDetails(await getApplicationDetails(effectiveApplicationId));
+    } catch (err) {
+      console.error('Error reloading application details:', err);
+    }
+  };
+
   // Save student info and advance to next step
   const handleSaveStudentInfo = async (studentData) => {
     try {
@@ -208,6 +218,7 @@ export function useApplication(applicationId) {
     error,
     currentStep,
     isStepCompleted,
+    refreshDetails,
     handleSaveStudentInfo,
     handleSaveParentInfo,
     handleSaveAcademicInfo,

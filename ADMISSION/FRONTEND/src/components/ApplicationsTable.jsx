@@ -133,7 +133,8 @@ export function ApplicationsTable({
               const studentName = app.student_name || app.name || "—";
               const status = app.status || "unknown";
               const statusInfo = statusMap[status] || {
-                label: status,
+                // Unknown status: show it as words, not a database value
+                label: String(status).replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase()),
                 cls: "badge-gray",
               };
 
@@ -147,12 +148,12 @@ export function ApplicationsTable({
                       aria-label={`Select application ${appId}`}
                     />
                   </td>
-                  <td className="td-bold">{appId}</td>
+                  <td className="td-bold">{app.application_number || appId}</td>
                   <td>{studentName}</td>
                   <td>{app.grade || "—"}</td>
                   <td>{app.parent_contact || app.contact || "—"}</td>
                   <td style={{ fontSize: 13 }}>
-                    {formatDate(app.submitted_date || app.submitted)}
+                    {formatDate(app.submitted_at || app.submitted_date || app.submitted)}
                   </td>
                   <td>
                     <span className={`badge ${statusInfo.cls}`}>

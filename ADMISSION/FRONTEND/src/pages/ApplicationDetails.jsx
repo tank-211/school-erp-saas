@@ -54,6 +54,9 @@ const navigate = useNavigate();
 
   const [application, setApplication] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Errors from the action buttons are shown on the page, not in a pop-up
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     fetchApplication();
@@ -102,6 +105,9 @@ const navigate = useNavigate();
   // Enrollment -> Complete), which sends the admission_id the API needs.
 
   const startAdmission = async () => {
+    if (busy) return;
+    setBusy(true);
+    setNotice("");
     try {
       const token = getToken();
 
@@ -136,12 +142,13 @@ const navigate = useNavigate();
         String(admissionId)
       );
 
-      alert("Admission started successfully");
-
-      navigate("/enrollment");
+      // Straight to this student's admission form
+      navigate(`/admission/resume/${admissionId}`);
     } catch (error) {
       console.error("Start admission error:", error);
-      alert(error.message || "Failed to start admission");
+      setNotice(error.message || "Failed to start admission");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -179,7 +186,7 @@ const navigate = useNavigate();
         error
       );
 
-      alert(error.message);
+      setNotice(error.message);
     }
   };
 
@@ -217,7 +224,7 @@ const navigate = useNavigate();
     const reason = window.prompt("Reason for rejecting this application:");
     if (reason === null) return;
     if (!reason.trim()) {
-      alert("A reason is required to reject an application.");
+      setNotice("A reason is required to reject an application.");
       return;
     }
     try {
@@ -233,7 +240,7 @@ const navigate = useNavigate();
       if (!res.ok) throw new Error(data.message || "Failed to reject application");
       setApplication((prev) => ({ ...prev, status: "rejected", rejection_reason: reason.trim() }));
     } catch (error) {
-      alert(error.message);
+      setNotice(error.message);
     }
   };
 
@@ -272,12 +279,21 @@ const navigate = useNavigate();
 
     } catch (error) {
         console.error("APPROVE APPLICATION ERROR:", error);
-        alert(error.message);
+        setNotice(error.message);
     }
     };
 
   return (
     <div className="application-details-page">
+
+      <button
+        type="button"
+        className="back-btn"
+        onClick={() => navigate("/applications")}
+        style={{ marginBottom: 12 }}
+      >
+        ← Back to Applications
+      </button>
 
       {/* Header */}
       <div className="application-header">
@@ -311,13 +327,33 @@ const navigate = useNavigate();
             <button
               className="btn-primary"
               onClick={startAdmission}
+              disabled={busy}
             >
-              Start Admission
+              {busy ? "Starting..." : "Start Admission"}
+            </button>
+          )}
+          {["admission_started", "admission_completed"].includes(application.status) && (
+            <button
+              className="btn-primary"
+              onClick={startAdmission}
+              disabled={busy}
+            >
+              {application.status === "admission_completed" ? "View Admission" : "Continue Admission"}
             </button>
           )}
         </div>
 
       </div>
+
+      {notice && (
+        <div
+          role="alert"
+          className="application-card"
+          style={{ borderColor: "#fecaca", background: "#fef2f2", color: "#991b1b" }}
+        >
+          {notice}
+        </div>
+      )}
 
       {/* Status */}
       <div className="application-card">
@@ -545,7 +581,7 @@ const navigate = useNavigate();
               {student.date_of_birth
                 ? new Date(
                     student.date_of_birth
-                  ).toLocaleDateString()
+                  ).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
                 : "N/A"}
             </strong>
           </div>
@@ -670,7 +706,7 @@ const navigate = useNavigate();
             {application.created_at
               ? new Date(
                   application.created_at
-                ).toLocaleDateString()
+                ).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
               : "N/A"}
           </span>
         </div>

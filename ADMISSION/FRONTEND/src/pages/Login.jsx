@@ -31,6 +31,18 @@ export function Login() {
     return () => window.removeEventListener("keydown", handleSecretShortcut);
   }, []);
 
+  // Sent here because the session ended (see utils/sessionGuard.js)
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("session_expired")) {
+        sessionStorage.removeItem("session_expired");
+        setError("Your session has expired. Please sign in again.");
+      }
+    } catch {
+      // storage unavailable
+    }
+  }, []);
+
   useEffect(() => {
     if (location.pathname === "/admin-login") {
       setShowAdminAccess(true);

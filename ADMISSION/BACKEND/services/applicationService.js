@@ -2,6 +2,7 @@ import path from 'path';
 import { unlink } from 'fs/promises';
 import prisma from '../src/lib/prisma.js';
 import { assignAdmissionFees } from './admissionFeeService.js';
+import { userError, asPublicError } from '../utils/publicError.js';
 import {
   VALID_APPLICATION_DOCUMENT_TYPES,
   normalizeApplicationDocumentType,
@@ -892,14 +893,23 @@ export const saveAcademicInfo = async (applicationId, schoolId, data) => {
         },
       });
 
+      // The year chosen on this step is the year the student is admitted and
+      // billed for: keep the application's own academic year in step with it.
+      const applicationUpdate = { current_step: 4, updated_at: new Date() };
+      const yearName = String(data.academic_year ?? '').trim();
+      if (yearName) {
+        const year = await tx.academic_year.findFirst({
+          where: { school_id: BigInt(schoolId), year_name: yearName },
+          select: { id: true },
+        });
+        if (year) applicationUpdate.academic_year_id = year.id;
+      }
+
       await tx.application.update({
         where: {
           id: BigInt(applicationId),
         },
-        data: {
-          current_step: 4,
-          updated_at: new Date(),
-        },
+        data: applicationUpdate,
       });
 
       return academicInfo;
@@ -945,6 +955,9 @@ export const saveDocuments = async (applicationId, data, uploadedBy = null) => {
       const record = normalizeFileRecord(value);
 
       if (!record) return;
+
+      // Nothing given for this document: neither a file nor a number
+      if (!record.file_name && !record.file_path && !record.document_number) return;
 
       records.push({
         document_type: normalizeApplicationDocumentType(documentType).normalized,
@@ -999,11 +1012,16 @@ export const saveDocuments = async (applicationId, data, uploadedBy = null) => {
             verification_status: 'pending',
           },
           update: {
-            file_name: record.file_name,
-            file_path: record.file_path,
+            // A number entered without a new file keeps the file already saved
+            ...(record.file_path || record.file_name
+              ? {
+                  file_name: record.file_name,
+                  file_path: record.file_path,
+                  file_size: record.file_size,
+                  mime_type: record.mime_type,
+                }
+              : {}),
             document_number: record.document_number,
-            file_size: record.file_size,
-            mime_type: record.mime_type,
             uploaded_by:
               uploadedBy !== null && uploadedBy !== undefined
                 ? BigInt(uploadedBy)
@@ -1462,14 +1480,7 @@ export const startAdmissionFromApprovedApplication = async (
       });
 
       if (!application) {
-        throw new Error('Application not found');
-      }
-
-      // 2. Application must be approved
-      if (application.status !== 'approved') {
-        throw new Error(
-          `Admission can only be started for an approved application. Current status: ${application.status}`
-        );
+        throw userError('Application not found');
       }
 
       // 3. Prevent duplicate admission
@@ -1546,24 +1557,32 @@ export const startAdmissionFromApprovedApplication = async (
         };
       }
 
+      // 2. A new admission needs an approved application (an admission that
+      // already exists was returned above, so "Continue admission" works).
+      if (application.status !== 'approved') {
+        throw userError(
+          `Admission can only be started for an approved application. This one is "${String(application.status).replace(/_/g, ' ')}".`
+        );
+      }
+
       // 4. Get student information from the application
       const studentInfo = application.application_student_info;
 
       if (!studentInfo) {
-        throw new Error(
+        throw userError(
           'Student information is missing from the application'
         );
       }
 
       if (!studentInfo.first_name) {
-        throw new Error('Student first name is required');
+        throw userError('Student first name is required');
       }
 
       // 5. Get academic information
       const academicInfo = application.application_academic_info;
 
       if (!academicInfo?.desired_class) {
-        throw new Error(
+        throw userError(
           'Desired class is required before starting admission'
         );
       }
@@ -1598,7 +1617,7 @@ export const startAdmissionFromApprovedApplication = async (
       });
 
       if (!schoolClass) {
-        throw new Error(
+        throw userError(
           `Class "${academicInfo.desired_class}" not found for this school`
         );
       }
@@ -1615,7 +1634,7 @@ export const startAdmissionFromApprovedApplication = async (
       });
 
       if (!section) {
-        throw new Error(
+        throw userError(
           `No section configured for class "${schoolClass.class_name}"`
         );
       }
@@ -1623,6 +1642,37 @@ export const startAdmissionFromApprovedApplication = async (
       // 8. Generate a unique student admission number
       const admissionNumber =
         `STU-${new Date().getFullYear()}-${Date.now()}`;
+
+      // student.email and student.aadhar_number are unique in the database.
+      // An Aadhaar number that is already used is a real conflict. An email that
+      // is already used is normally the parents' address shared by a sibling:
+      // it stays on the parent record and is left off this student.
+      const studentAadhar = String(studentInfo.aadhar_number || '').trim() || null;
+      let studentEmail = String(studentInfo.email || '').trim() || null;
+
+      if (studentAadhar) {
+        const aadharOwner = await tx.student.findFirst({
+          where: { aadhar_number: studentAadhar },
+          select: { id: true },
+        });
+        if (aadharOwner) {
+          throw userError(
+            'This Aadhaar number is already recorded for another student. Check the number on the application, then start the admission again.'
+          );
+        }
+      }
+
+      let emailNote = null;
+      if (studentEmail) {
+        const emailOwner = await tx.student.findFirst({
+          where: { email: studentEmail },
+          select: { id: true },
+        });
+        if (emailOwner) {
+          emailNote = `The email ${studentEmail} is already used by another student, so it was saved on the parent record only.`;
+          studentEmail = null;
+        }
+      }
 
       // 9. Create the student
       const student = await tx.student.create({
@@ -1637,9 +1687,9 @@ export const startAdmissionFromApprovedApplication = async (
             : null,
           gender: studentInfo.gender || null,
           blood_group: studentInfo.blood_group || null,
-          aadhar_number: studentInfo.aadhar_number || null,
+          aadhar_number: studentAadhar,
           phone: studentInfo.phone || null,
-          email: studentInfo.email || null,
+          email: studentEmail,
           status: 'active',
         },
       });
@@ -1663,9 +1713,14 @@ export const startAdmissionFromApprovedApplication = async (
             phone:
               parentInfo.primary_contact_phone ||
               parentInfo.father_phone ||
-              null,
+              parentInfo.mother_phone ||
+              studentInfo.phone ||
+              '',
             email:
-              parentInfo.father_email || null,
+              parentInfo.father_email ||
+              parentInfo.mother_email ||
+              studentInfo.email ||
+              null,
             occupation:
               parentInfo.father_occupation || null,
             address: parentInfo.address || null,
@@ -1679,6 +1734,8 @@ export const startAdmissionFromApprovedApplication = async (
       // 11. Create admission linked to the application
       const admission = await tx.admission.create({
         data: {
+          // Not complete until the admission form is confirmed
+          is_completed: false,
           school_id: schoolIdBigInt,
           student_id: student.id,
           lead_id: application.lead_id || null,
@@ -1694,7 +1751,7 @@ export const startAdmissionFromApprovedApplication = async (
             createdBy !== null && createdBy !== undefined
               ? String(createdBy)
               : null,
-          application_id: application.id.toString(),
+          application_id: application.id,
         },
       });
 
@@ -1769,6 +1826,7 @@ export const startAdmissionFromApprovedApplication = async (
                 student_id: student.id.toString(),
                 status: 'admission_started',
                 resumed: false,
+                note: emailNote,
               };
             },
             {
@@ -1777,9 +1835,7 @@ export const startAdmissionFromApprovedApplication = async (
             }
           );
   } catch (error) {
-    throw new Error(
-      `Failed to start admission from approved application: ${error.message}`
-    );
+    throw asPublicError(error, 'Could not start the admission');
   }
 };
 
@@ -1829,6 +1885,20 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
       if (step === 'student') {
         if (!studentId) {
           throw new Error('Student not found for admission');
+        }
+
+        // student.email is unique in the database: say so instead of failing
+        const newEmail = String(data.email || data.student_email || '').trim();
+        if (newEmail) {
+          const emailOwner = await tx.student.findFirst({
+            where: { email: newEmail, NOT: { id: studentId } },
+            select: { id: true },
+          });
+          if (emailOwner) {
+            throw userError(
+              'This email is already used by another student. Use a different email for the student, or leave it empty (the parent email is saved in the Parent step).'
+            );
+          }
         }
 
         await tx.student.update({
@@ -1895,6 +1965,10 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
 
           updated_at: new Date(),
         };
+
+        if (!parentData.phone) {
+          throw userError('Enter a phone number for the parent or guardian.');
+        }
 
         // parent_detail is linked to student, not admission.
         // student_id is not unique, so find the existing record first.
@@ -2206,6 +2280,7 @@ export const saveAdmissionStep = async (schoolId, payload = {}) => {
               }
             );
   } catch (error) {
+    if (error?.isUserError) throw error;
     throw new Error(`Failed to save step: ${error.message}`);
   }
 };
@@ -2442,16 +2517,17 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
         select: {
           id: true,
           application_id: true,
+          lead_id: true,
           status: true,
         },
       });
 
       if (!admission) {
-        throw new Error('Admission not found');
+        throw userError('Admission not found');
       }
 
       if (!['draft', 'in_progress', 'submitted'].includes(admission.status)) {
-        throw new Error(
+        throw userError(
           `Admission cannot be completed from status: ${admission.status}`
         );
       }
@@ -2466,15 +2542,6 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
           },
         });
 
-        console.log(
-          "🔎 APPLICATION DOCUMENT TYPES:",
-          applicationDocuments.map(doc => ({
-            id: doc.id?.toString(),
-            document_type: doc.document_type,
-            file_name: doc.file_name,
-            file_path: doc.file_path,
-          }))
-        );
 
         for (const document of applicationDocuments) {
           if (!document?.document_type) continue;
@@ -2526,15 +2593,6 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
         },
       });
 
-      console.log(
-        "🔎 ADMISSION DOCUMENT TYPES:",
-        admissionDocuments.map(doc => ({
-          id: doc.id?.toString(),
-          document_type: doc.document_type,
-          file_name: doc.file_name,
-          file_path: doc.file_path,
-        }))
-      );
 
       const documentTypes = new Set(
         admissionDocuments.map((document) =>
@@ -2544,32 +2602,27 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
         )
       );
 
-      const mandatoryDocuments = [
-        'birth_certificate',
-        'aadhaar_card',
-        'passport_photos',
-        'transfer_certificate',
-        'previous_report_card',
-        'address_proof',
-        'parent_id_proof',
-      ];
+      // Supporting documents are optional (the application form says so), so
+      // none of them blocks completion. To make some compulsory for every
+      // school, list their types here (for example 'birth_certificate').
+      const mandatoryDocuments = [];
 
       const missingDocs = mandatoryDocuments.filter(
         (documentType) => !documentTypes.has(documentType)
       );
 
       if (missingDocs.length > 0) {
-        throw new Error(
-          `Missing required documents: ${missingDocs.join(', ')}`
+        throw userError(
+          `Missing required documents: ${missingDocs.map((d) => d.replace(/_/g, ' ')).join(', ')}`
         );
       }
 
-      // Make sure the student photo exists.
+      // The student photo is compulsory (the application form requires it).
       const hasStudentPhoto = documentTypes.has('student_photo');
 
       if (!hasStudentPhoto) {
-        throw new Error(
-          'Student photo is mandatory before confirmation'
+        throw userError(
+          'The student photo is missing. Upload it in the Documents step, then confirm the admission.'
         );
       }
 
@@ -2631,6 +2684,14 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
       }
 
       // Assign the class's fees and raise the first invoice, in the same transaction.
+      // The lead this admission came from is now a student
+      if (admission.lead_id) {
+        await tx.lead.updateMany({
+          where: { id: admission.lead_id, school_id: schoolIdBigInt },
+          data: { follow_up_status: 'converted', updated_at: new Date() },
+        });
+      }
+
       const fees = await assignAdmissionFees(tx, {
         schoolId: schoolIdBigInt,
         admissionId: admissionIdBigInt,
@@ -2648,11 +2709,12 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
         created_at: updatedAdmission.created_at,
         updated_at: updatedAdmission.updated_at,
       };
-    });
+    },
+    // Document sync, progress, fees and the invoice run in one transaction:
+    // the 5 second default is too short on a cold database connection.
+    { maxWait: 10000, timeout: 60000 });
   } catch (error) {
-    throw new Error(
-      `Failed to complete admission application: ${error.message}`
-    );
+    throw asPublicError(error, 'Could not complete the admission');
   }
 };
 

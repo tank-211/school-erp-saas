@@ -543,6 +543,8 @@ export const createAdmission = async (studentData, parentData, admissionData) =>
       // 3. Create admission
       const admission = await tx.admission.create({
         data: {
+          // A direct admission saved as 'active' is already complete
+          is_completed: (admissionData.status || 'active') === 'active',
           school_id: schoolId,
           student_id: student.id,
 
@@ -1091,6 +1093,8 @@ export const createAdmissionFromFormData = async (user, body, files = {}) => {
        */
       const admission = await tx.admission.create({
         data: {
+          // Not complete until the admission form is confirmed
+          is_completed: false,
           school_id: schoolId,
           student_id: student.id,
 

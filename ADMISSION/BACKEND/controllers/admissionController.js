@@ -416,6 +416,8 @@ export const createFromLead = async (req, res) => {
       // 8. Create admission
       const admission = await tx.admission.create({
         data: {
+          // Not complete until the admission form is confirmed
+          is_completed: false,
           school_id: schoolId,
           student_id: student.id,
           lead_id: leadId,

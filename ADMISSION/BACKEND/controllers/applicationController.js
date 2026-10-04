@@ -1,4 +1,5 @@
 import * as applicationService from '../services/applicationService.js';
+import { statusOf } from '../utils/publicError.js';
 import prisma from '../src/lib/prisma.js';
 import { serializeBigInt } from '../utils/bigintSerializer.js';
 import { describeFeeResult } from '../services/admissionFeeService.js';
@@ -799,20 +800,20 @@ export const startAdmissionFromApprovedApplication = async (req, res) => {
 
     return res.status(result.resumed ? 200 : 201).json({
       success: true,
-      message: result.resumed
-        ? 'Admission resumed successfully'
-        : 'Admission started successfully',
+      message: [
+        result.resumed ? 'Admission resumed successfully' : 'Admission started successfully',
+        result.note,
+      ].filter(Boolean).join(' '),
       data: serializeBigInt(result),
     });
   } catch (error) {
-    console.error(
-      'Error starting admission from approved application:',
-      error
-    );
+    if (!error?.isUserError) {
+      console.error('Error starting admission from approved application:', error);
+    }
 
-    return res.status(500).json({
+    return res.status(statusOf(error)).json({
       success: false,
-      message: error.message,
+      message: error.message || 'Could not start the admission',
     });
   }
 };
@@ -972,9 +973,9 @@ export const completeAdmission = async (req, res) => {
       message: `Admission confirmed successfully. ${describeFeeResult(result.fees)}`.trim(),
     });
   } catch (error) {
-    console.error("Complete Admission Error:", error);
+    if (!error?.isUserError) console.error("Complete Admission Error:", error);
 
-    return res.status(400).json({
+    return res.status(statusOf(error)).json({
       success: false,
       message: error.message || "Failed to complete admission",
     });

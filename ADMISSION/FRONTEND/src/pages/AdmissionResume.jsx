@@ -208,7 +208,7 @@ function openPreview(record, label = "Document") {
   }
 
   if (!previewUrl) {
-    alert(`${label} preview is not available.`);
+    console.warn(`${label} preview is not available.`);
     return;
   }
 
@@ -863,13 +863,14 @@ export function AdmissionResume() {
         "activeAdmissionId"
       );
 
-      // The message also says whether fees were assigned and which invoice was created
-      alert(
+      // The message also says whether fees were assigned and which invoice was
+      // created: keep it on the page (reloaded as a completed admission).
+      await loadAdmission();
+      setSuccess(
         data.message ||
           "Admission completed successfully."
       );
-
-      navigate("/enrollment");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       console.error(
         "COMPLETE ADMISSION ERROR:",
