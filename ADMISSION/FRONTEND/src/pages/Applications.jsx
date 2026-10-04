@@ -22,6 +22,9 @@ const statusMap = {
   waitlisted: { label: "Waitlisted", cls: "badge-purple" },
   in_progress: { label: "Draft", cls: "badge-gray" },
   draft: { label: "Draft", cls: "badge-gray" },
+  documents_pending: { label: "Documents Pending", cls: "badge-yellow" },
+  admission_started: { label: "Admission Started", cls: "badge-blue" },
+  admission_completed: { label: "Admitted", cls: "badge-green" },
 };
 
 export function Applications() {

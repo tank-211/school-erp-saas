@@ -31,7 +31,7 @@ const CLASS_OPTIONS = [
 
 const BOARD_OPTIONS = ["CBSE", "ICSE", "State", "IB", "Other"];
 
-const REQUIRED_DOCUMENT_TYPES = [
+const DOCUMENT_TYPES = [
   "birth_certificate",
   "aadhaar_card",
   "passport_photos",
@@ -195,6 +195,7 @@ export function MultiStepApplication() {
     error: hookError,
     currentStep,
     isStepCompleted,
+    refreshDetails,
     handleSaveStudentInfo,
     handleSaveParentInfo,
     handleSaveAcademicInfo,
@@ -290,8 +291,10 @@ export function MultiStepApplication() {
         ...prev,
         first_name: app.lead_first_name || "",
         last_name: app.lead_last_name || "",
-        student_email: app.lead_email || "",
-        student_phone: app.lead_phone || "",
+        // The lead's email and phone belong to the parent (pre-filled on the
+        // Parent step). A student email must be unique, so it is left empty.
+        student_email: "",
+        student_phone: "",
       }));
 
         // Academic auto-fill
@@ -310,13 +313,15 @@ export function MultiStepApplication() {
     }
   }, [details]);
 
-  // Default the academic year to the school's active year
+  // Default the academic year to the year chosen when the application was
+  // created; if that is unknown, to the school's active year
   useEffect(() => {
-    if (!activeYear) return;
+    const fallback = details?.application?.academic_year_name || activeYear?.year_name;
+    if (!fallback) return;
     setAcademicForm((prev) =>
-      prev.academic_year ? prev : { ...prev, academic_year: activeYear.year_name },
+      prev.academic_year ? prev : { ...prev, academic_year: fallback },
     );
-  }, [activeYear]);
+  }, [activeYear, details]);
 
     useEffect(() => {
       if (!details) {
@@ -416,6 +421,15 @@ export function MultiStepApplication() {
         {},
       );
 
+      setDocumentNumbers((prev) => {
+        const merged = { ...prev };
+        Object.entries(details.documents).forEach(([docType, record]) => {
+          const saved = record?.document_number || record?.documentNumber;
+          if (saved && !merged[docType]) merged[docType] = saved;
+        });
+        return merged;
+      });
+
       if (Object.keys(nextDocs).length) {
         setDocuments((prev) => {
           const merged = { ...prev };
@@ -483,10 +497,15 @@ export function MultiStepApplication() {
           return;
         }
 
-        await handleSaveStudentInfo({
+        const savedStudent = await handleSaveStudentInfo({
           ...studentForm,
           dob: studentForm.date_of_birth,
         });
+        if (!savedStudent) {
+          setMoveError("The student details could not be saved. Please try again.");
+          setSaving(false);
+          return;
+        }
       } else if (step === 2) {
         // Step 2 is handled by ParentForm component's own submit button
         return;
@@ -562,7 +581,7 @@ export function MultiStepApplication() {
           return;
         }
 
-        await handleSaveDocuments({
+        const savedPhotos = await handleSaveDocuments({
           stage: "photos",
           photos: {
             student_photo:
@@ -572,18 +591,26 @@ export function MultiStepApplication() {
           },
           documents: {},
         });
-      } else if (step === 5) {
-        const missingDocumentNumbers = REQUIRED_DOCUMENT_TYPES.filter(
-          (docType) => !String(documentNumbers[docType] || "").trim(),
-        );
-
-        if (missingDocumentNumbers.length > 0) {
-          setMoveError("Document number is required for every document type.");
+        if (!savedPhotos) {
+          setMoveError("The photos could not be saved. Please try again.");
           setSaving(false);
           return;
         }
+      } else if (step === 5) {
+        // Every document is optional: a file, a number, both or neither.
+        // The number travels with its document, which is where the server reads it.
+        const documentsWithNumbers = {};
+        DOCUMENT_TYPES.forEach((docType) => {
+          const record = documents[docType];
+          const number = String(documentNumbers[docType] || "").trim();
+          if (!record && !number) return;
+          documentsWithNumbers[docType] = {
+            ...(record || {}),
+            document_number: number || null,
+          };
+        });
 
-        await handleSaveDocuments({
+        const savedDocuments = await handleSaveDocuments({
           stage: "documents",
           photos: {
             student_photo:
@@ -591,9 +618,15 @@ export function MultiStepApplication() {
             passport_photos:
               photos.find((p) => p.type === "passport_photos") || null,
           },
-          documents,
-          documentNumbers,
+          documents: documentsWithNumbers,
         });
+        if (!savedDocuments) {
+          setMoveError("The documents could not be saved. Please try again.");
+          setSaving(false);
+          return;
+        }
+        // The Review step shows what was saved
+        await refreshDetails();
       }
 
       // Move to next step (handled by hook usually, but we advance state here too)
@@ -637,7 +670,11 @@ export function MultiStepApplication() {
     setSaving(true);
 
     try {
-      await handleSubmitApplication();
+      const submitted = await handleSubmitApplication();
+      if (!submitted) {
+        setMoveError("The application could not be submitted. Please try again.");
+        return;
+      }
       sessionStorage.removeItem("activeAdmissionId");
 
       setTimeout(() => {
@@ -730,6 +767,13 @@ export function MultiStepApplication() {
     { num: 6, label: "Review", icon: CheckCircle },
   ];
 
+  // "birth_certificate" -> "Birth certificate"
+  const fileTypeLabel = (record) => {
+    const type = record.type || record.document_type || record.photo_type || "";
+    const text = String(type).replace(/_/g, " ").trim();
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : record.name || "File";
+  };
+
   const renderFileList = (records, emptyLabel) => {
     if (!records || (Array.isArray(records) && records.length === 0)) {
       return (
@@ -758,15 +802,21 @@ export function MultiStepApplication() {
           >
             <div>
               <div style={{ fontWeight: 600, fontSize: 14 }}>
-                {record.name || "File"}
+                {fileTypeLabel(record)}
               </div>
               <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
-                {record.file_path || record.url || "Uploaded file"}
+                {[
+                  record.name || (record.file_path || record.url ? "Uploaded file" : null),
+                  record.document_number ? `No. ${record.document_number}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "No file"}
               </div>
             </div>
             <button
               type="button"
               className="btn btn-outline btn-sm"
+              disabled={!(record.url || record.file_path)}
               onClick={() =>
                 openPreview(
                   record,
@@ -1152,7 +1202,11 @@ export function MultiStepApplication() {
               "",
           }}
           initialData={details?.parent_info}
-          onSuccess={() => setStep(3)}
+          onSuccess={async () => {
+            // The Review step shows the saved parent details
+            await refreshDetails();
+            setStep(3);
+          }}
         />
       )}
 
@@ -1248,9 +1302,6 @@ export function MultiStepApplication() {
                   <option value="No Formal Schooling / New Admission">
                     No Formal Schooling / New Admission
                   </option>
-                  <option value="Nursery">Nursery</option>
-                  <option value="Jr KG">Jr KG</option>
-                  <option value="Sr KG">Sr KG</option>
                   {CLASS_OPTIONS.map((c) => (
                     <option key={c.value} value={c.value}>
                       {c.label}
@@ -1474,7 +1525,7 @@ export function MultiStepApplication() {
                     marginBottom: 8,
                   }}
                 >
-                  (Optional - provide file, document number, or both)
+                  Optional: upload the file, enter its number, or both
                 </div>
 
                 {/* File Upload Section */}
@@ -1515,8 +1566,8 @@ export function MultiStepApplication() {
                 <input
                   type="text"
                   className="form-input"
-                  required
-                  placeholder={`Enter ${doc.label} number (e.g., roll number, ID number)`}
+                  aria-label={`${doc.label} number`}
+                  placeholder={`${doc.label} number (optional)`}
                   value={documentNumbers[doc.key] || ""}
                   onChange={(e) =>
                     setDocumentNumbers((prev) => ({
@@ -1722,7 +1773,17 @@ export function MultiStepApplication() {
                   style={{ border: "1px solid var(--gray-200)" }}
                 >
                   <div className="card-body">
-                    {renderFileList(documents, "No documents uploaded yet.")}
+                    {renderFileList(
+                      DOCUMENT_TYPES.filter(
+                        (docType) =>
+                          documents[docType] || String(documentNumbers[docType] || "").trim(),
+                      ).map((docType) => ({
+                        ...(documents[docType] || {}),
+                        type: docType,
+                        document_number: String(documentNumbers[docType] || "").trim() || null,
+                      })),
+                      "No documents added (documents are optional).",
+                    )}
                   </div>
                 </div>
               </div>
