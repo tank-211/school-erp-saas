@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { superAdminService } from "../../services/superAdminService";
+import { isSuperAdmin, VIEW_ONLY_HINT } from "../../utils/role";
 
 // One school's own Razorpay account. The school's fees are paid into this
 // account; the Fees app takes online payments only once the keys pass the test.
@@ -13,6 +14,8 @@ const STATUS = {
 };
 
 function SchoolPayments() {
+  // Changes are for Super Admins only; other staff roles view
+  const canEdit = isSuperAdmin();
   const { id } = useParams();
   const navigate = useNavigate();
   const [schoolName, setSchoolName] = useState("");
@@ -96,7 +99,8 @@ function SchoolPayments() {
             <p className="sp-subtle-copy">Last tested {new Date(gateway.last_tested_at).toLocaleString("en-IN")}</p>
           )}
 
-          <form className="sp-form" onSubmit={save} autoComplete="off" style={{ marginTop: 12 }}>
+          <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form className="sp-form" onSubmit={save} autoComplete="off" style={{ marginTop: 12 }}>
             <label className="sp-label" htmlFor="key_id">
               Key ID
               <input id="key_id" className="sp-input" autoComplete="off" spellCheck={false} value={form.key_id} onChange={set("key_id")} placeholder="rzp_live_... or rzp_test_..." required />
@@ -156,6 +160,7 @@ function SchoolPayments() {
               )}
             </div>
           </form>
+</fieldset>
         </article>
 
         <article className="sp-card">

@@ -640,3 +640,25 @@
     width: 100%;
   }
 }
+/* View-only staff (anyone who is not a Super Admin) */
+.sp-readonly-note {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-radius: 10px;
+  background: rgba(250, 204, 21, 0.1);
+  color: #fde68a;
+  font-size: 14px;
+}
+
+/* Wrapper that switches a whole form off without changing its layout */
+.sp-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.sp-fieldset:disabled {
+  opacity: 0.6;
+}
