@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { superAdminService } from "../../services/superAdminService";
+import { isSuperAdmin, VIEW_ONLY_HINT } from "../../utils/role";
 
 const getExpiryStatus = (expiryDate) => {
   if (!expiryDate) {
@@ -56,6 +57,8 @@ const EMPTY_FORM = {
 };
 
 function SchoolManagement() {
+  // Changes are for Super Admins only; other staff roles view
+  const canEdit = isSuperAdmin();
   const [schools, setSchools] = useState([]);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -234,6 +237,8 @@ function SchoolManagement() {
         <button
           className="sp-btn sp-btn-primary"
           type="button"
+          disabled={!canEdit}
+          title={canEdit ? undefined : VIEW_ONLY_HINT}
           onClick={() => setShowAddForm((prev) => !prev)}
         >
           {showAddForm ? "Close" : "Add School"}
@@ -291,7 +296,8 @@ function SchoolManagement() {
       {showAddForm && (
         <div className="sp-card" style={{ marginBottom: "14px" }}>
           <h2 style={{ marginTop: 0 }}>Register New School</h2>
-          <form className="sp-form" onSubmit={handleAddSchool}>
+          <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form className="sp-form" onSubmit={handleAddSchool}>
             <label className="sp-label" htmlFor="name">
               School Name
               <input
@@ -458,6 +464,7 @@ function SchoolManagement() {
               {saving ? "Creating..." : "Create School"}
             </button>
           </form>
+</fieldset>
         </div>
       )}
 
@@ -526,6 +533,8 @@ function SchoolManagement() {
                         <button
                           className="sp-btn sp-btn-danger"
                           type="button"
+                          disabled={!canEdit}
+                          title={canEdit ? undefined : VIEW_ONLY_HINT}
                           onClick={() => handleSuspend(school)}
                         >
                           Suspend
@@ -534,6 +543,8 @@ function SchoolManagement() {
                         <button
                           className="sp-btn sp-btn-success"
                           type="button"
+                          disabled={!canEdit}
+                          title={canEdit ? undefined : VIEW_ONLY_HINT}
                           onClick={() => handleActivate(school)}
                         >
                           Activate
@@ -542,6 +553,8 @@ function SchoolManagement() {
                       <button
                         className="sp-btn sp-btn-ghost"
                         type="button"
+                        disabled={!canEdit}
+                        title={canEdit ? undefined : VIEW_ONLY_HINT}
                         onClick={() => handleEditPlan(school)}
                       >
                         Edit Plan

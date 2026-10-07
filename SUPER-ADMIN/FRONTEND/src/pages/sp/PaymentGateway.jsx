@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { superAdminService } from "../../services/superAdminService";
+import { isSuperAdmin, VIEW_ONLY_HINT } from "../../utils/role";
 
 function PaymentGateway() {
+  // Changes are for Super Admins only; other staff roles view
+  const canEdit = isSuperAdmin();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -193,7 +196,8 @@ function PaymentGateway() {
           </span>
         </div>
 
-        <form onSubmit={handleSave} autoComplete="off">
+        <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form onSubmit={handleSave} autoComplete="off">
           <div className="sp-form-grid">
             <div className="sp-form-group">
               <label htmlFor="environment">
@@ -276,6 +280,7 @@ function PaymentGateway() {
             </button>
           </div>
         </form>
+</fieldset>
       </div>
 
       <div className="sp-card">

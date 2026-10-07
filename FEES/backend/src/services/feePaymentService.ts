@@ -400,7 +400,8 @@ export class FeePaymentService {
 
       prisma.payment.groupBy({
         by: ['payment_method'],
-        where: { school_id: sid },
+        // Refund entries are negative: not a payment method
+        where: { school_id: sid, payment_method: { not: 'refund' } },
         _sum: {
           amount: true,
         },

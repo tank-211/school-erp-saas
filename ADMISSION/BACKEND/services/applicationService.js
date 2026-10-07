@@ -6,6 +6,8 @@ import { userError, asPublicError } from '../utils/publicError.js';
 import {
   VALID_APPLICATION_DOCUMENT_TYPES,
   normalizeApplicationDocumentType,
+  missingMandatoryDocuments,
+  documentLabel,
 } from '../utils/applicationDocumentTypes.js';
 
 const APPLICATION_PHOTO_TYPES = ['student_photo', 'passport_photos'];
@@ -1087,9 +1089,24 @@ export const submitApplication = async (applicationId) => {
       }
 
       if (application.status !== 'in_progress' && application.status !== 'draft') {
-        throw new Error(
-          `Application cannot be submitted from status: ${application.status}`
+        throw userError(
+          `This application is already ${String(application.status).replace(/_/g, ' ')} and cannot be submitted again.`
         );
+      }
+
+      // All documents are compulsory: nothing is submitted without them
+      const savedDocuments = await tx.application_documents.findMany({
+        where: { application_id: id },
+        select: { document_type: true, file_name: true, file_path: true, document_number: true },
+      });
+      const missingDocs = missingMandatoryDocuments(savedDocuments);
+      if (missingDocs.length > 0) {
+        throw userError(
+          `These documents are still missing: ${missingDocs.map(documentLabel).join(', ')}. Add a file or the document number for each on the Documents step.`
+        );
+      }
+      if (!savedDocuments.some((d) => d.document_type === 'student_photo' && (d.file_path || d.file_name))) {
+        throw userError('The student photo is missing. Add it on the Photos step.');
       }
 
       const updatedApplication = await tx.application.update({
@@ -1117,6 +1134,7 @@ export const submitApplication = async (applicationId) => {
 
     return result;
   } catch (error) {
+    if (error?.isUserError) throw error;
     throw new Error(
       `Failed to submit application: ${error.message}`
     );
@@ -2602,18 +2620,12 @@ export const completeAdmissionApplication = async (schoolId, admissionId, actor 
         )
       );
 
-      // Supporting documents are optional (the application form says so), so
-      // none of them blocks completion. To make some compulsory for every
-      // school, list their types here (for example 'birth_certificate').
-      const mandatoryDocuments = [];
-
-      const missingDocs = mandatoryDocuments.filter(
-        (documentType) => !documentTypes.has(documentType)
-      );
+      // Every listed document is compulsory (a file or its number).
+      const missingDocs = missingMandatoryDocuments(admissionDocuments);
 
       if (missingDocs.length > 0) {
         throw userError(
-          `Missing required documents: ${missingDocs.map((d) => d.replace(/_/g, ' ')).join(', ')}`
+          `These documents are still missing: ${missingDocs.map(documentLabel).join(', ')}. Add them in the Documents step, then complete the admission.`
         );
       }
 

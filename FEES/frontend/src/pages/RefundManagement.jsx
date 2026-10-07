@@ -328,7 +328,7 @@ function RefundManagement() {
           onClose={() => setProcessing(null)}
           onDone={() => {
             setStatus(processing.id, 'PROCESSED')
-            setNotice({ ok: true, text: `Refund #${processing.id} marked as refunded.` })
+            setNotice({ ok: true, text: `Refund #${processing.id} marked as refunded. The invoice balance and collections have been updated.` })
             setProcessing(null)
           }}
         />

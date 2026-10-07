@@ -650,8 +650,8 @@ export const submitApplication = async (req, res) => {
       message: 'Application submitted successfully'
     });
   } catch (error) {
-    console.error('Error submitting application:', error);
-    res.status(500).json({
+    if (!error?.isUserError) console.error('Error submitting application:', error);
+    res.status(statusOf(error)).json({
       success: false,
       message: error.message
     });

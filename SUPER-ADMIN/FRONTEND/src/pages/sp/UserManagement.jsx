@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { superAdminService } from "../../services/superAdminService";
+import { isSuperAdmin, VIEW_ONLY_HINT } from "../../utils/role";
 
 const ROLE_OPTIONS = [
   { value: "admin", label: "Admin" },
@@ -8,6 +9,8 @@ const ROLE_OPTIONS = [
 ];
 
 function UserManagement() {
+  // Changes are for Super Admins only; other staff roles view
+  const canEdit = isSuperAdmin();
   const [users, setUsers] = useState([]);
   const [schools, setSchools] = useState([]);
   const [search, setSearch] = useState("");
@@ -229,7 +232,8 @@ function UserManagement() {
       <div className="sp-grid" style={{ marginTop: "16px" }}>
         <article className="sp-card">
           <h2 style={{ marginTop: 0 }}>Create User</h2>
-          <form className="sp-form" onSubmit={handleSubmit}>
+          <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form className="sp-form" onSubmit={handleSubmit}>
             <label className="sp-label" htmlFor="school_id">
               School
               <select
@@ -328,6 +332,7 @@ function UserManagement() {
               {saving ? "Creating..." : "Create User"}
             </button>
           </form>
+</fieldset>
         </article>
 
         <article className="sp-card sp-table-wrap">
@@ -342,7 +347,8 @@ function UserManagement() {
           </div>
 
           {resetUser && (
-            <form
+            <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form
               className="sp-form"
               style={{ marginBottom: "14px" }}
               onSubmit={handleResetPassword}
@@ -375,6 +381,7 @@ function UserManagement() {
                 </button>
               </div>
             </form>
+</fieldset>
           )}
 
           <table className="sp-table">
@@ -404,6 +411,8 @@ function UserManagement() {
                       <select
                         className="sp-select"
                         value={user.role || "counselor"}
+                        disabled={!canEdit}
+                        title={canEdit ? undefined : VIEW_ONLY_HINT}
                         onChange={(event) => handleRoleChange(user, event.target.value)}
                       >
                         {ROLE_OPTIONS.map((option) => (
@@ -419,6 +428,7 @@ function UserManagement() {
                         <input
                           type="checkbox"
                           checked={isActive}
+                          disabled={!canEdit}
                           onChange={() => handleToggleStatus(user)}
                         />
                         <span className={isActive ? "status-active" : "status-inactive"}>
@@ -431,6 +441,8 @@ function UserManagement() {
                         <button
                           className="sp-btn sp-btn-ghost"
                           type="button"
+                          disabled={!canEdit}
+                          title={canEdit ? undefined : VIEW_ONLY_HINT}
                           onClick={() => openResetPassword(user)}
                         >
                           Reset Password
@@ -438,6 +450,8 @@ function UserManagement() {
                         <button
                           className="sp-btn sp-btn-danger"
                           type="button"
+                          disabled={!canEdit}
+                          title={canEdit ? undefined : VIEW_ONLY_HINT}
                           onClick={() => handleDelete(user)}
                         >
                           Delete

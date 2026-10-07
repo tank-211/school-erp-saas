@@ -39,7 +39,9 @@ router.options('/stats', (req, res) => res.sendStatus(204));
 router.options('/schools/:id/renew', (req, res) => res.sendStatus(204));
 router.options('/schools/:id/renewals', (req, res) => res.sendStatus(204));
 router.get('/schools', verifyInternalStaff, getAllSchools);
-router.post('/schools', verifyInternalStaff, createSchool);
+// Changes to schools, subscriptions and school users: super_admin only.
+// Other staff roles (support, billing…) can view.
+router.post('/schools', verifySuperAdmin, createSchool);
 router.get('/schools/:id', verifyInternalStaff, getSchoolById);
 // Each school's own Razorpay account: any staff can view, only super admins change it
 router.options('/schools/:id/payment-gateway', (req, res) => res.sendStatus(204));
@@ -48,7 +50,7 @@ router.get('/schools/:id/payment-gateway', verifyInternalStaff, getSchoolGateway
 router.put('/schools/:id/payment-gateway', verifySuperAdmin, saveSchoolGateway);
 router.post('/schools/:id/payment-gateway/test', verifySuperAdmin, testSchoolGateway);
 router.delete('/schools/:id/payment-gateway', verifySuperAdmin, disconnectSchoolGateway);
-router.patch('/schools/:id', verifyInternalStaff, updateSchool);
+router.patch('/schools/:id', verifySuperAdmin, updateSchool);
 router.get('/stats', verifyInternalStaff, getStats);
 router.get('/staff', verifyInternalStaff, getAllStaff);
 // Only a super_admin may create platform staff (any role, incl. super_admin)
@@ -56,19 +58,19 @@ router.post('/staff', verifySuperAdmin, createStaff);
 router.options('/staff/:id', (req, res) => res.sendStatus(204));
 // Only a super_admin may change a staff member's role or deactivate them
 router.patch('/staff/:id', verifySuperAdmin, updateStaff);
-router.post('/schools/:id/renew', verifyInternalStaff, renewSchoolSubscription);
+router.post('/schools/:id/renew', verifySuperAdmin, renewSchoolSubscription);
 router.get('/schools/:id/renewals', verifyInternalStaff, getSchoolRenewals);
 router.get('/users', verifyInternalStaff, getAllUsers);
 
-router.post('/users', verifyInternalStaff, createUser);
+router.post('/users', verifySuperAdmin, createUser);
 
-router.patch('/users/:id', verifyInternalStaff, updateUser);
+router.patch('/users/:id', verifySuperAdmin, updateUser);
 
-router.delete('/users/:id', verifyInternalStaff, deleteUser);
+router.delete('/users/:id', verifySuperAdmin, deleteUser);
 
 router.post(
   '/users/:id/reset-password',
-  verifyInternalStaff,
+  verifySuperAdmin,
   resetUserPassword
 );
 

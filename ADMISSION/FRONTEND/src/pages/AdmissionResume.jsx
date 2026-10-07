@@ -1344,8 +1344,8 @@ export function AdmissionResume() {
             </div>
 
             <div className="page-sub">
-              Documents are optional. Add any the school wants
-              to keep on file; only the student photo is required.
+              All documents and the student photo are required.
+              Upload any that are still missing.
             </div>
           </div>
         </div>
@@ -1368,7 +1368,8 @@ export function AdmissionResume() {
 
           <div className="grid-2">
             {documentTypes.map(([key, label]) => {
-              const record = documents[key];
+              // Passport photos may have been uploaded on the Photos step
+              const record = documents[key] || photos[key];
               const isAvailable = Boolean(record);
 
               return (
@@ -1399,8 +1400,8 @@ export function AdmissionResume() {
                         Available
                       </span>
                     ) : (
-                      <span className="badge badge-gray">
-                        Not added
+                      <span className="badge badge-red">
+                        Missing
                       </span>
                     )}
                   </div>
@@ -1470,9 +1471,9 @@ export function AdmissionResume() {
               fontSize: "13px",
             }}
           >
-            <strong>Note:</strong>{" "}
-            The admission can be completed without these documents.
-            The student photo is the only one that is required.
+            <strong>Important:</strong>{" "}
+            The admission cannot be completed until every document
+            above and the student photo have been added.
           </div>
         </div>
       </div>
@@ -1608,8 +1609,9 @@ export function AdmissionResume() {
                     opacity: 0.75,
                   }}
                 >
-                  Completing the admission enrols the student and
-                  creates the fee invoice for the class and academic year.
+                  Completing the admission checks that all documents are
+                  present, enrols the student and creates the fee invoice
+                  for the class and academic year.
                 </p>
               </>
             )}

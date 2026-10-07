@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { superAdminService } from '../../services/superAdminService'
+import { isSuperAdmin, VIEW_ONLY_HINT } from "../../utils/role";
 
 const STAFF_ROLES = [
   { value: 'super_admin', label: 'Super Admin' },
@@ -8,6 +9,8 @@ const STAFF_ROLES = [
 ]
 
 function StaffManager() {
+  // Changes are for Super Admins only; other staff roles view
+  const canEdit = isSuperAdmin();
   const [staffList, setStaffList] = useState([])
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -94,7 +97,8 @@ function StaffManager() {
       <div className="sp-grid" style={{ marginTop: '16px' }}>
         <article className="sp-card">
           <h2 style={{ marginTop: 0 }}>Add Staff Member</h2>
-          <form className="sp-form" onSubmit={handleSubmit}>
+          <fieldset disabled={!canEdit} className="sp-fieldset" title={canEdit ? undefined : VIEW_ONLY_HINT}>
+<form className="sp-form" onSubmit={handleSubmit}>
             <label className="sp-label" htmlFor="full_name">
               Name
               <input
@@ -153,6 +157,7 @@ function StaffManager() {
               {saving ? 'Creating...' : 'Add Staff'}
             </button>
           </form>
+</fieldset>
         </article>
 
         <article className="sp-card sp-table-wrap">
@@ -177,7 +182,7 @@ function StaffManager() {
                     <select
                       className="sp-select"
                       value={staff.internal_role || ''}
-                      disabled={busyId === staff.id}
+                      disabled={busyId === staff.id || !canEdit}
                       onChange={(e) => updateStaff(staff, { internal_role: e.target.value }, `role changed to ${e.target.value.replace('_', ' ')}`)}
                     >
                       {/* A stored role outside the list is shown as it is,
@@ -199,7 +204,7 @@ function StaffManager() {
                   <td>
                     <button
                       className={`sp-btn ${staff.is_active ? 'sp-btn-ghost' : 'sp-btn-primary'}`}
-                      disabled={busyId === staff.id}
+                      disabled={busyId === staff.id || !canEdit}
                       onClick={() => {
                         if (staff.is_active && !window.confirm(`Deactivate ${staff.full_name}? They will be signed out and cannot sign in.`)) return
                         updateStaff(staff, { is_active: !staff.is_active }, staff.is_active ? 'deactivated' : 'reactivated')
