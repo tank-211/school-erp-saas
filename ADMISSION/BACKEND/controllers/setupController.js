@@ -38,9 +38,13 @@ const handleError = (res, error, what) => {
   if (isUniqueError(error)) {
     return fail(res, 409, `${what} already exists`);
   }
-  console.error(`Setup error (${what}):`, error.message);
-  return fail(res, 500, error.message || 'Setup request failed');
+  // Database errors are logged, not shown: the user gets a plain message
+  console.error(`Setup error (${what}):`, error);
+  return fail(res, 500, 'This could not be saved. Nothing was changed. Please try again.');
 };
+
+// Limits for multi-step transactions (Prisma defaults: 2s wait, 5s run)
+const TRANSACTION_LIMITS = { maxWait: 10000, timeout: 30000 };
 
 const shapeYear = (year) => ({
   id: String(year.id),
@@ -302,16 +306,14 @@ export const createClass = async (req, res) => {
   if (sections.error) return fail(res, 400, sections.error);
 
   try {
-    const created = await prisma.$transaction(async (tx) => {
-      const schoolClass = await tx.school_class.create({
-        data: { school_id: req.schoolId, ...checked },
-      });
-      for (const section_name of sections.list) {
-        await tx.section.create({
-          data: { school_id: req.schoolId, class_id: schoolClass.id, section_name },
-        });
-      }
-      return schoolClass;
+    const created = await prisma.school_class.create({
+      data: {
+        school_id: req.schoolId,
+        ...checked,
+        section: {
+          create: sections.list.map((section_name) => ({ school_id: req.schoolId, section_name })),
+        },
+      },
     });
 
     res.status(201).json({ success: true, message: 'Class added', data: serializeBigInt(created) });
@@ -344,16 +346,25 @@ export const createClassesBulk = async (req, res) => {
     const taken = new Set(existing.map((c) => c.class_name.toLowerCase()));
     const toCreate = checkedItems.filter((c) => !taken.has(c.class_name.toLowerCase()));
 
-    await prisma.$transaction(async (tx) => {
-      for (const item of toCreate) {
-        const schoolClass = await tx.school_class.create({ data: { school_id: req.schoolId, ...item } });
-        for (const section_name of sections.list) {
-          await tx.section.create({
-            data: { school_id: req.schoolId, class_id: schoolClass.id, section_name },
+    // One statement per class (the class with its sections), and a longer
+    // limit than Prisma's 5 second default: many classes with a statement per
+    // section ran out of time on a cold database connection and failed midway.
+    await prisma.$transaction(
+      async (tx) => {
+        for (const item of toCreate) {
+          await tx.school_class.create({
+            data: {
+              school_id: req.schoolId,
+              ...item,
+              section: {
+                create: sections.list.map((section_name) => ({ school_id: req.schoolId, section_name })),
+              },
+            },
           });
         }
-      }
-    });
+      },
+      TRANSACTION_LIMITS,
+    );
 
     res.status(201).json({
       success: true,
