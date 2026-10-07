@@ -411,7 +411,7 @@ export class RefundService {
           },
         },
       });
-    });
+    }, { maxWait: 10000, timeout: 30000 });
 
     return processed;
   }
