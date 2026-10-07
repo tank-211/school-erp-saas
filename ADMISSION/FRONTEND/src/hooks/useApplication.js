@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   getApplicationProgress,
   getApplicationDetails,
@@ -21,6 +21,9 @@ export function useApplication(applicationId) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [currentStep, setCurrentStep] = useState(1);
+  // Why the last save failed. Kept apart from `error`, which means the
+  // application itself could not be loaded.
+  const lastSaveError = useRef('');
 
   // Load progress and details on mount
   useEffect(() => {
@@ -69,7 +72,7 @@ export function useApplication(applicationId) {
   // Save student info and advance to next step
   const handleSaveStudentInfo = async (studentData) => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await saveStudentInfo(effectiveApplicationId, studentData);
@@ -83,7 +86,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error saving student info:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -93,7 +96,7 @@ export function useApplication(applicationId) {
   // Save parent info and advance to next step
   const handleSaveParentInfo = async (parentData) => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await saveParentInfo(effectiveApplicationId, parentData);
@@ -106,7 +109,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error saving parent info:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -116,7 +119,7 @@ export function useApplication(applicationId) {
   // Save academic info and advance to next step
   const handleSaveAcademicInfo = async (academicData) => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await saveAcademicInfo(effectiveApplicationId, academicData);
@@ -129,7 +132,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error saving academic info:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -139,7 +142,7 @@ export function useApplication(applicationId) {
   // Save documents and advance to next step
   const handleSaveDocuments = async (documents) => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await saveDocuments(effectiveApplicationId, documents);
@@ -152,7 +155,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error saving documents:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -162,7 +165,7 @@ export function useApplication(applicationId) {
   // Submit application
   const handleSubmitApplication = async () => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await submitApplication(effectiveApplicationId);
@@ -174,7 +177,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error submitting application:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -194,7 +197,7 @@ export function useApplication(applicationId) {
   // Delete application (only allowed for draft status)
   const handleDeleteApplication = async () => {
     try {
-      setError(null);
+      lastSaveError.current = '';
       setLoading(true);
 
       await deleteApplication(effectiveApplicationId);
@@ -203,7 +206,7 @@ export function useApplication(applicationId) {
       return true;
     } catch (err) {
       console.error('❌ Error deleting application:', err);
-      setError(err.message);
+      lastSaveError.current = err.message || 'The request failed';
       return false;
     } finally {
       setLoading(false);
@@ -218,6 +221,7 @@ export function useApplication(applicationId) {
     error,
     currentStep,
     isStepCompleted,
+    lastSaveError,
     refreshDetails,
     handleSaveStudentInfo,
     handleSaveParentInfo,

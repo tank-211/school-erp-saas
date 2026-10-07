@@ -130,3 +130,49 @@ export const sanitizeUploadedDocumentFieldName = (fieldName) => {
     originalType: rawFieldName,
   };
 };
+
+/**
+ * Documents every admission must have (school policy: all are compulsory).
+ * A document counts when it has an uploaded file or a document number.
+ * The student photo is checked separately.
+ */
+export const MANDATORY_ADMISSION_DOCUMENTS = [
+  'birth_certificate',
+  'aadhaar_card',
+  'passport_photos',
+  'transfer_certificate',
+  'previous_report_card',
+  'address_proof',
+  'parent_id_proof',
+];
+
+// Older rows used the "aadhar" spelling for the same document
+const SAME_DOCUMENT = { aadhar_card: 'aadhaar_card' };
+
+const DOCUMENT_LABELS = {
+  birth_certificate: 'Birth Certificate',
+  aadhaar_card: 'Aadhaar Card',
+  passport_photos: 'Passport Photos',
+  transfer_certificate: 'Transfer Certificate',
+  previous_report_card: 'Previous Report Card',
+  address_proof: 'Address Proof',
+  parent_id_proof: 'Parent ID Proof',
+};
+
+export const documentLabel = (type) => DOCUMENT_LABELS[type] || String(type).replace(/_/g, ' ');
+
+/** Mandatory document types that the given rows (application or admission documents) do not cover. */
+export const missingMandatoryDocuments = (rows = []) => {
+  const provided = new Set();
+  for (const row of rows) {
+    if (!row?.document_type) continue;
+    const hasContent =
+      String(row.file_path || '').trim() ||
+      String(row.file_name || '').trim() ||
+      String(row.document_number || '').trim();
+    if (!hasContent) continue;
+    const type = normalizeApplicationDocumentType(row.document_type).normalized;
+    provided.add(SAME_DOCUMENT[type] || type);
+  }
+  return MANDATORY_ADMISSION_DOCUMENTS.filter((type) => !provided.has(type));
+};

@@ -41,6 +41,16 @@ const DOCUMENT_TYPES = [
   "parent_id_proof",
 ];
 
+const DOCUMENT_LABELS = {
+  birth_certificate: "Birth Certificate",
+  aadhaar_card: "Aadhaar Card",
+  passport_photos: "Passport Photos",
+  transfer_certificate: "Transfer Certificate",
+  previous_report_card: "Previous Report Card",
+  address_proof: "Address Proof",
+  parent_id_proof: "Parent ID Proof",
+};
+
 const REQUIRED_PHOTO_TYPES = ["student_photo"];
 
 
@@ -196,6 +206,7 @@ export function MultiStepApplication() {
     currentStep,
     isStepCompleted,
     refreshDetails,
+    lastSaveError,
     handleSaveStudentInfo,
     handleSaveParentInfo,
     handleSaveAcademicInfo,
@@ -502,7 +513,7 @@ export function MultiStepApplication() {
           dob: studentForm.date_of_birth,
         });
         if (!savedStudent) {
-          setMoveError("The student details could not be saved. Please try again.");
+          setMoveError(lastSaveError.current || "The student details could not be saved. Please try again.");
           setSaving(false);
           return;
         }
@@ -592,12 +603,32 @@ export function MultiStepApplication() {
           documents: {},
         });
         if (!savedPhotos) {
-          setMoveError("The photos could not be saved. Please try again.");
+          setMoveError(lastSaveError.current || "The photos could not be saved. Please try again.");
           setSaving(false);
           return;
         }
       } else if (step === 5) {
-        // Every document is optional: a file, a number, both or neither.
+        // Every document is compulsory: a file, its number, or both.
+        // (Passport photos uploaded on the Photos step count as well.)
+        const hasFile = (record) =>
+          Boolean(record && (record.file || record.file_path || record.url || record.name));
+        const missingDocuments = DOCUMENT_TYPES.filter((docType) => {
+          if (hasFile(documents[docType])) return false;
+          if (String(documentNumbers[docType] || "").trim()) return false;
+          if (docType === "passport_photos" && photos.some((p) => p.type === "passport_photos")) return false;
+          return true;
+        });
+
+        if (missingDocuments.length > 0) {
+          setMoveError(
+            `All documents are required. Add a file or the document number for: ${missingDocuments
+              .map((docType) => DOCUMENT_LABELS[docType] || docType)
+              .join(", ")}.`,
+          );
+          setSaving(false);
+          return;
+        }
+
         // The number travels with its document, which is where the server reads it.
         const documentsWithNumbers = {};
         DOCUMENT_TYPES.forEach((docType) => {
@@ -621,7 +652,7 @@ export function MultiStepApplication() {
           documents: documentsWithNumbers,
         });
         if (!savedDocuments) {
-          setMoveError("The documents could not be saved. Please try again.");
+          setMoveError(lastSaveError.current || "The documents could not be saved. Please try again.");
           setSaving(false);
           return;
         }
@@ -672,7 +703,7 @@ export function MultiStepApplication() {
     try {
       const submitted = await handleSubmitApplication();
       if (!submitted) {
-        setMoveError("The application could not be submitted. Please try again.");
+        setMoveError(lastSaveError.current || "The application could not be submitted. Please try again.");
         return;
       }
       sessionStorage.removeItem("activeAdmissionId");
@@ -1517,7 +1548,9 @@ export function MultiStepApplication() {
               { key: "parent_id_proof", label: "Parent ID Proof" },
             ].map((doc) => (
               <div className="form-group mb-4" key={doc.key}>
-                <label className="form-label">{doc.label}</label>
+                <label className="form-label">
+                  {doc.label} <span className="req">*</span>
+                </label>
                 <div
                   style={{
                     fontSize: 12,
@@ -1525,7 +1558,7 @@ export function MultiStepApplication() {
                     marginBottom: 8,
                   }}
                 >
-                  Optional: upload the file, enter its number, or both
+                  Required: upload the file, enter its number, or both
                 </div>
 
                 {/* File Upload Section */}
@@ -1567,7 +1600,7 @@ export function MultiStepApplication() {
                   type="text"
                   className="form-input"
                   aria-label={`${doc.label} number`}
-                  placeholder={`${doc.label} number (optional)`}
+                  placeholder={`${doc.label} number`}
                   value={documentNumbers[doc.key] || ""}
                   onChange={(e) =>
                     setDocumentNumbers((prev) => ({
@@ -1582,8 +1615,8 @@ export function MultiStepApplication() {
             <div className="info-box info-box-blue mt-4">
               <File size={16} style={{ flexShrink: 0, marginTop: 2 }} />
               <div className="info-box-text">
-                Upload previous marks cards, disability certificates, or any
-                other supporting documents.
+                All seven documents are required before the application can
+                be submitted. For each one, upload the file or enter its number.
               </div>
             </div>
           </div>
@@ -1782,7 +1815,7 @@ export function MultiStepApplication() {
                         type: docType,
                         document_number: String(documentNumbers[docType] || "").trim() || null,
                       })),
-                      "No documents added (documents are optional).",
+                      "No documents added yet.",
                     )}
                   </div>
                 </div>
