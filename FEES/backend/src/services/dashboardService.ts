@@ -256,6 +256,11 @@ static async getDashboardMetrics(schoolId: string) {
 
           status: {
             not: 'cancelled'
+          },
+
+          // Refund entries are negative: they reduce totals, not a "method" slice
+          payment_method: {
+            not: 'refund'
           }
         }
       });

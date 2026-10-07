@@ -24,6 +24,18 @@ const toId = (value: unknown, what: string): bigint => {
 
 type RefundMethod = string;
 
+// Method name of the negative payment entry written when a refund is paid.
+// Collection totals include it (that is the point); charts by payment method skip it.
+export const REFUND_PAYMENT_METHOD = 'refund';
+
+// Money maths in whole paise, to avoid fraction errors
+const toPaise = (value: unknown): number => Math.round(Number(value ?? 0) * 100);
+const fromPaise = (paise: number): string => (paise / 100).toFixed(2);
+
+// Today's date in India as a date-only value (payment_date is a DATE column)
+const indiaToday = (): Date =>
+  new Date(`${new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })}T00:00:00.000Z`);
+
 export class RefundService {
   async createRefundRequest(data: {
     schoolId: string;
@@ -65,12 +77,25 @@ export class RefundService {
       );
     }
 
-    const paymentAmount = Number(payment.amount);
+    if (payment.payment_method === REFUND_PAYMENT_METHOD || Number(payment.amount) <= 0) {
+      throw new ValidationError('This entry is itself a refund and cannot be refunded');
+    }
+
+    // What is left of this payment after refunds already paid out
+    const paidOut: Array<{ amount: unknown }> = await refundTable().findMany({
+      where: { payment_id: paymentId, school_id: schoolId, status: 'PROCESSED' },
+      select: { amount: true },
+    });
+    const refundablePaise =
+      toPaise(payment.amount) -
+      paidOut.reduce((sum: number, row: { amount: unknown }) => sum + toPaise(row.amount), 0);
 
     // Validate refund amount
-    if (data.amount <= 0 || data.amount > paymentAmount) {
+    if (!(Number(data.amount) > 0) || toPaise(data.amount) > refundablePaise) {
       throw new ValidationError(
-        `Refund amount must be between 0 and ${paymentAmount}`
+        refundablePaise <= 0
+          ? 'This payment has already been refunded in full'
+          : `Refund amount must be more than 0 and at most ${fromPaise(refundablePaise)}`
       );
     }
 
@@ -262,46 +287,130 @@ export class RefundService {
       throw new ValidationError('Refund method is required');
     }
     const accountDigits = String(bankDetails?.accountNumber || '').replace(/\D/g, '');
+    const sid = BigInt(schoolId);
+    const reference = transactionId ? String(transactionId).trim().slice(0, 100) : null;
 
-    const processed = await refundTable().update({
-      where: {
-        id,
-      },
-      data: {
-        status: 'PROCESSED',
-        processed_date: new Date(),
-        refund_method: method.slice(0, 50),
-        refund_reference: transactionId ? String(transactionId).trim().slice(0, 100) : null,
-        account_holder: bankDetails?.accountHolder ? String(bankDetails.accountHolder).trim().slice(0, 150) : null,
-        // Only the last 4 digits are kept: enough to identify the account, not to use it
-        account_last4: accountDigits ? accountDigits.slice(-4) : null,
-        ifsc_code: bankDetails?.ifscCode ? String(bankDetails.ifscCode).trim().toUpperCase().slice(0, 20) : null,
-      },
-      include: {
-        student: {
-          select: {
-            id: true,
-            admission_number: true,
-            first_name: true,
-            last_name: true,
-          },
+    // Paying a refund changes the books in one step: the refund is marked
+    // processed, the invoice gets the amount back as balance due, and a
+    // negative payment entry is recorded so every collection total drops by
+    // the refunded amount. All or nothing.
+    const processed = await prisma.$transaction(async (tx) => {
+      const refunds = (tx as any).refund_request;
+
+      const payment = await tx.payment.findFirst({
+        where: { id: refund.payment_id, school_id: sid },
+        select: { id: true, amount: true, payment_number: true, invoice_id: true, student_id: true },
+      });
+      if (!payment) {
+        throw new NotFoundError('The payment this refund belongs to was not found');
+      }
+
+      // Never refund more than was paid, across all refunds of this payment
+      const refundPaise = toPaise(refund.amount);
+      const earlier: Array<{ amount: unknown }> = await refunds.findMany({
+        where: { payment_id: payment.id, school_id: sid, status: 'PROCESSED' },
+        select: { amount: true },
+      });
+      const alreadyRefundedPaise = earlier.reduce(
+        (sum: number, row: { amount: unknown }) => sum + toPaise(row.amount),
+        0
+      );
+      const paymentPaise = toPaise(payment.amount);
+      if (refundPaise <= 0 || alreadyRefundedPaise + refundPaise > paymentPaise) {
+        throw new ValidationError(
+          `This payment was ${fromPaise(paymentPaise)} and ${fromPaise(alreadyRefundedPaise)} of it has already been refunded, so ${fromPaise(refundPaise)} more cannot be refunded.`
+        );
+      }
+
+      const invoice = await tx.invoice.findFirst({
+        where: { id: payment.invoice_id, school_id: sid },
+        select: { id: true, total_amount: true, paid_amount: true },
+      });
+      if (!invoice) {
+        throw new NotFoundError('The invoice this refund belongs to was not found');
+      }
+
+      // Only one request may win if two people press Process at once
+      const claimed = await refunds.updateMany({
+        where: { id, school_id: sid, status: 'APPROVED' },
+        data: {
+          status: 'PROCESSED',
+          processed_date: new Date(),
+          refund_method: method.slice(0, 50),
+          refund_reference: reference,
+          account_holder: bankDetails?.accountHolder ? String(bankDetails.accountHolder).trim().slice(0, 150) : null,
+          // Only the last 4 digits are kept: enough to identify the account, not to use it
+          account_last4: accountDigits ? accountDigits.slice(-4) : null,
+          ifsc_code: bankDetails?.ifscCode ? String(bankDetails.ifscCode).trim().toUpperCase().slice(0, 20) : null,
         },
-        payment: {
-          select: {
-            id: true,
-            amount: true,
-            payment_method: true,
-            transaction_id: true,
-            invoice: {
-              select: {
-                id: true,
-                invoice_number: true,
-                total_amount: true,
+      });
+      if (claimed.count !== 1) {
+        throw new ValidationError('This refund has already been processed.');
+      }
+
+      // The invoice is owed the refunded amount again
+      const totalPaise = toPaise(invoice.total_amount);
+      const paidPaise = Math.max(toPaise(invoice.paid_amount) - refundPaise, 0);
+      const pendingPaise = Math.max(totalPaise - paidPaise, 0);
+      const invoiceStatus = paidPaise <= 0 ? 'unpaid' : pendingPaise <= 0 ? 'paid' : 'partial';
+      await tx.invoice.update({
+        where: { id: invoice.id },
+        data: {
+          paid_amount: fromPaise(paidPaise),
+          pending_amount: fromPaise(pendingPaise),
+          status: invoiceStatus,
+          updated_at: new Date(),
+        },
+      });
+
+      // Negative entry dated today (India): collections are totals of payment
+      // rows, so this is what reduces them, in the month the money went back.
+      await tx.payment.create({
+        data: {
+          school_id: sid,
+          student_id: payment.student_id,
+          invoice_id: invoice.id,
+          payment_number: `RFD-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+          amount: fromPaise(-refundPaise),
+          payment_date: indiaToday(),
+          payment_method: REFUND_PAYMENT_METHOD,
+          transaction_id: reference || undefined,
+          status: 'refunded',
+          remarks: `Refund of payment ${payment.payment_number} (refund request ${id.toString()}), paid by ${method}`.slice(0, 500),
+        },
+      });
+
+      return refunds.findFirst({
+        where: { id, school_id: sid },
+        include: {
+          student: {
+            select: {
+              id: true,
+              admission_number: true,
+              first_name: true,
+              last_name: true,
+            },
+          },
+          payment: {
+            select: {
+              id: true,
+              amount: true,
+              payment_method: true,
+              transaction_id: true,
+              invoice: {
+                select: {
+                  id: true,
+                  invoice_number: true,
+                  total_amount: true,
+                  paid_amount: true,
+                  pending_amount: true,
+                  status: true,
+                },
               },
             },
           },
         },
-      },
+      });
     });
 
     return processed;

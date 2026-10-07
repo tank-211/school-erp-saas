@@ -38,6 +38,10 @@ export default function ProcessRefundDialog({ refund, onClose, onDone }) {
         <p className="text-muted" style={{ marginBottom: 16 }}>
           ₹{Number(refund.amount || 0).toLocaleString('en-IN')} to {refund.studentName}
         </p>
+        <p className="text-sm text-muted" style={{ marginBottom: 16 }}>
+          Record this after the money has been paid back. The invoice will show this amount as due again
+          and collections will go down by it. This does not send any money itself.
+        </p>
         {error && <div className="alert alert-error" style={{ marginBottom: 12 }}>{error}</div>}
         <div className="form-group">
           <label className="form-label">Refund method</label>
