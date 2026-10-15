@@ -93,6 +93,9 @@ const getAllSchools = async (req, res) => {
     // Each school's own Razorpay account status (empty if not set up yet)
     const { gatewayStatusBySchool } = require("./schoolPaymentGatewayController");
     const gateways = await gatewayStatusBySchool();
+    // Each school's own email, SMS and WhatsApp account status
+    const { communicationStatusBySchool } = require("./schoolCommunicationController");
+    const commStatuses = await communicationStatusBySchool();
 
     return res.json(
       serializeBigInt({
@@ -100,6 +103,9 @@ const getAllSchools = async (req, res) => {
           ...withAccessState(school, today),
           payment_gateway_status: gateways.get(String(school.id))?.status || "not_connected",
           payment_gateway_mode: gateways.get(String(school.id))?.mode || null,
+          email_status: commStatuses.get(String(school.id))?.email || "not_configured",
+          sms_status: commStatuses.get(String(school.id))?.sms || "not_configured",
+          whatsapp_status: commStatuses.get(String(school.id))?.whatsapp || "not_configured",
         })),
       })
     );

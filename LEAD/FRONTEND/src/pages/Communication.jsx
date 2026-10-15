@@ -21,6 +21,14 @@ function ComposePanel({ onClose, onSent }) {
   const [duration, setDuration] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Which channels the school has set up in Super Admin (null while loading)
+  const [channels, setChannels] = useState(null);
+
+  useEffect(() => {
+    communicationAPI.getChannels()
+      .then((res) => setChannels(res.data || {}))
+      .catch(() => setChannels({}));
+  }, []);
 
   // Search the school's leads by name or phone (the list is paginated)
   useEffect(() => {
@@ -33,6 +41,10 @@ function ComposePanel({ onClose, onSent }) {
   }, [leadSearch]);
 
   const selected = leadOptions.find((l) => String(l.id) === String(lead));
+  const channelKey = tab === "WhatsApp" ? "whatsapp" : tab.toLowerCase();
+  // SMS / WhatsApp are sent when the school has them set up, otherwise recorded
+  const canSend = Boolean(channels?.[channelKey]?.enabled);
+  const isPhoneTab = tab === "SMS" || tab === "WhatsApp";
 
   const submit = async () => {
     setError("");
@@ -45,13 +57,13 @@ function ComposePanel({ onClose, onSent }) {
         // Sent to the lead's own email address on record
         await communicationAPI.sendEmail({ leadId: lead, subject, content: message });
       } else if (tab === "WhatsApp") {
-        await communicationAPI.logWhatsApp({ leadId: Number(lead), message });
+        await communicationAPI.logWhatsApp({ leadId: Number(lead), message, send: canSend });
       } else if (tab === "SMS") {
-        await communicationAPI.logSMS({ leadId: Number(lead), message });
+        await communicationAPI.logSMS({ leadId: Number(lead), message, send: canSend });
       } else {
         await communicationAPI.logCall({ leadId: lead, duration: parseInt(duration || 0, 10), notes: message });
       }
-      onSent(tab === "Email" ? "Email sent." : `${tab} logged.`);
+      onSent(tab === "Email" ? "Email sent." : tab === "Call" ? "Call logged." : canSend ? `${tab} sent.` : `${tab} recorded.`);
     } catch (err) {
       setError(err.message || "Could not send");
       setBusy(false);
@@ -93,9 +105,22 @@ function ComposePanel({ onClose, onSent }) {
           )}
         </div>
 
-        {(tab === 'SMS' || tab === 'WhatsApp') && (
+        {tab === 'Email' && channels && !channels.email?.enabled && (
+          <div style={{ background: '#fef2f2', color: '#991b1b', fontSize: 12, padding: '8px 10px', borderRadius: 8, marginBottom: 12 }}>
+            Email is not set up for this school yet, so it cannot be sent. Ask the platform team to set it up in Super Admin → Schools → Communication.
+          </div>
+        )}
+
+        {isPhoneTab && channels && canSend && (
+          <div style={{ background: '#ecfdf5', color: '#065f46', fontSize: 12, padding: '8px 10px', borderRadius: 8, marginBottom: 12 }}>
+            Sent from the school's {tab} account{selected?.phone ? ` to ${selected.phone}` : ''}.
+            {selected && !selected.phone && <strong> This lead has no phone number on record.</strong>}
+          </div>
+        )}
+
+        {isPhoneTab && channels && !canSend && (
           <div style={{ background: '#fffbeb', color: '#92400e', fontSize: 12, padding: '8px 10px', borderRadius: 8, marginBottom: 12 }}>
-            No {tab} provider is connected yet, so this records the message you sent from your phone; nothing is sent from here.
+            {tab} is not set up for this school yet (Super Admin → Schools → Communication), so this only records a message you sent from your phone; nothing is sent from here.
           </div>
         )}
 
@@ -121,8 +146,8 @@ function ComposePanel({ onClose, onSent }) {
       </div>
 
       <div className="compose-footer">
-        <button className="compose-send-btn" disabled={busy} onClick={submit}>
-          {busy ? 'Working...' : tab === 'Email' ? 'Send Email' : tab === 'Call' ? 'Log Call' : `Log ${tab}`}
+        <button className="compose-send-btn" disabled={busy || (isPhoneTab && channels === null)} onClick={submit}>
+          {busy ? 'Working...' : tab === 'Email' ? 'Send Email' : tab === 'Call' ? 'Log Call' : canSend ? `Send ${tab}` : `Record ${tab}`}
         </button>
       </div>
     </div>

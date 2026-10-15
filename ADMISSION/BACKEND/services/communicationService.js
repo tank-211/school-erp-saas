@@ -1,6 +1,5 @@
 import * as communicationQueries from '../db/queries/communicationQueries.js';
-import { dispatchCommunication } from '../utils/communicationProviders.js';
-import { sendMailWithGmail } from '../config/mailer.js';
+import { sendSchoolEmail, sendSchoolMessage, schoolEmailStatus, EmailNotSetUpError, ChannelNotSetUpError } from '../utils/schoolMessenger.js';
 import AppError from '../utils/appError.js';
 import {
   assertPositiveInteger,
@@ -193,11 +192,25 @@ const sendCommunicationLegacy = async (schoolId, userId, payload) => {
     );
   }
 
-  const providerResult = await dispatchCommunication(
-    payload.channel,
-    recipient,
-    resolvedPayload
-  );
+  // Sent through the school's own account for this channel (Super Admin →
+  // Schools → Communication); nothing is logged when it was not sent.
+  const address = payload.channel === 'email' ? recipient.email : recipient.phone;
+  if (!address) {
+    throw new AppError(
+      payload.channel === 'email' ? 'This recipient has no email address on record.' : 'This recipient has no phone number on record.',
+      400
+    );
+  }
+  let providerResult;
+  try {
+    const sent = await sendSchoolMessage(schoolId, payload.channel, payload.channel === 'email'
+      ? { to: address, subject: resolvedPayload.subject, text: resolvedPayload.message }
+      : { to: address, text: resolvedPayload.message });
+    providerResult = { status: 'sent', sentAt: new Date(), providerMessageId: sent?.messageId || null };
+  } catch (error) {
+    if (error instanceof ChannelNotSetUpError) throw new AppError(error.message, 409);
+    throw new AppError(error.message || 'The message could not be sent.', error.statusCode || 502);
+  }
 
   const communicationLog =
     await communicationQueries.createCommunicationLog(null, {
@@ -260,6 +273,11 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
     throw new AppError('message is required.', 400);
   }
 
+  // Nothing is sent or scheduled for a school without its own email account
+  if (channel === 'email' && !(await schoolEmailStatus(schoolId)).enabled) {
+    throw new AppError(new EmailNotSetUpError().message, 409);
+  }
+
   const scheduledDate = payload.scheduledDate ? new Date(payload.scheduledDate) : null;
   if (payload.scheduledDate && Number.isNaN(scheduledDate?.getTime())) {
     throw new AppError('scheduledDate must be a valid date-time value.', 400);
@@ -315,7 +333,7 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
   for (const recipient of composeRecipients) {
     let transporterResponse;
     try {
-      transporterResponse = await sendMailWithGmail({
+      transporterResponse = await sendSchoolEmail(schoolId, {
         to: recipient.email,
         subject,
         text: message,

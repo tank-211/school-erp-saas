@@ -208,6 +208,47 @@ export const superAdminService = {
     }
   },
 
+  // Each school's own email, SMS and WhatsApp accounts (Schools → Communication)
+  async getSchoolCommunication(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}/communication`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to load the school communication settings.')
+    }
+  },
+
+  // channel: 'email' | 'sms' | 'whatsapp'
+  async saveSchoolCommunication(id, channel, data) {
+    try {
+      const response = await superAdminApi.put(`/schools/${id}/communication/${channel}`, data)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to save the settings.')
+    }
+  },
+
+  async testSchoolCommunication(id, channel, to) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/communication/${channel}/test`, { to })
+      return response.data
+    } catch (error) {
+      // A failed test still returns the updated settings (status "failed")
+      const e = createServiceError(error, 'Test failed.')
+      e.settings = error?.response?.data?.email ? error.response.data : null
+      throw e
+    }
+  },
+
+  async disconnectSchoolCommunication(id, channel) {
+    try {
+      const response = await superAdminApi.delete(`/schools/${id}/communication/${channel}`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Failed to disconnect.')
+    }
+  },
+
   async disconnectSchoolGateway(id) {
     try {
       const response = await superAdminApi.delete(`/schools/${id}/payment-gateway`)

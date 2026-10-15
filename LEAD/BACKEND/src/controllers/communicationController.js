@@ -7,6 +7,7 @@ import {
   logWhatsAppService,
   logSMSService,
   listCommunicationsService,
+  channelStatusService,
 } from "../services/communicationService.js";
 import { successResponse, errorResponse } from "../utils/response.js";
 import { serializeBigInt } from "../utils/bigintSerializer.js";
@@ -115,7 +116,7 @@ export const logWhatsApp = async (req, res) => {
       serializeBigInt({
         success: true,
         data: result,
-        message: "WhatsApp logged successfully",
+        message: result.sent ? "WhatsApp sent" : "WhatsApp recorded",
       })
     );
 
@@ -138,7 +139,7 @@ export const logSMS = async (req, res) => {
       serializeBigInt({
         success: true,
         data: result,
-        message: "SMS logged successfully",
+        message: result.sent ? "SMS sent" : "SMS recorded",
       })
     );
 
@@ -155,5 +156,15 @@ export const listCommunications = async (req, res) => {
     res.json(successResponse(serializeBigInt(data), "Communications retrieved"));
   } catch (error) {
     res.status(error.statusCode || 500).json(errorResponse(error.message));
+  }
+};
+
+// Which channels the school can send through (set up in Super Admin)
+export const getChannels = async (req, res) => {
+  try {
+    const data = await channelStatusService(req.user.schoolId);
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Could not check the school's messaging settings." });
   }
 };

@@ -2,7 +2,7 @@ import prisma from '../src/lib/prisma.js';
 import AppError from '../utils/appError.js';
 import { sendSMS } from '../utils/smsSender.js';
 import { sendWhatsApp } from '../utils/whatsappSender.js';
-import { sendMailWithGmail } from '../config/mailer.js';
+import { sendSchoolEmail, schoolChannelStatus, ChannelNotSetUpError } from '../utils/schoolMessenger.js';
 
 const MAX_RECIPIENTS = 500;
 
@@ -45,13 +45,13 @@ const ensureMessageForChannel = (channel, payload) => {
   };
 };
 
-const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) => {
+const dispatchCampaignMessage = async (schoolId, channel, recipient, normalizedPayload) => {
   if (channel === 'sms') {
     if (!recipient.phone) {
       return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient phone is missing' };
     }
 
-    const result = await sendSMS(recipient.phone, normalizedPayload.message);
+    const result = await sendSMS(schoolId, recipient.phone, normalizedPayload.message);
     return {
       status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
@@ -65,7 +65,7 @@ const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) =>
       return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient phone is missing' };
     }
 
-    const result = await sendWhatsApp(recipient.phone, normalizedPayload.message);
+    const result = await sendWhatsApp(schoolId, recipient.phone, normalizedPayload.message);
     return {
       status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
@@ -78,9 +78,9 @@ const dispatchCampaignMessage = async (channel, recipient, normalizedPayload) =>
     return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient email is missing' };
   }
 
-  // Real email through the school's configured mailbox (same as Compose)
+  // Real email through the school's own email account (Super Admin → Communication)
   try {
-    const info = await sendMailWithGmail({
+    const info = await sendSchoolEmail(schoolId, {
       to: recipient.email,
       subject: normalizedPayload.subject,
       text: normalizedPayload.message,
@@ -171,6 +171,11 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
 
   assertAudienceType(audienceType);
   assertChannel(campaign.channel);
+
+  // Nothing is sent to anyone when the school has not set up this channel
+  if (!(await schoolChannelStatus(schoolIdBigInt))[campaign.channel]?.enabled) {
+    throw new AppError(new ChannelNotSetUpError(campaign.channel).message, 409);
+  }
 
   const normalizedPayload = ensureMessageForChannel(
     campaign.channel,
@@ -268,7 +273,7 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
         .filter(Boolean)
         .join(' ');
 
-      const dispatch = await dispatchCampaignMessage(
+      const dispatch = await dispatchCampaignMessage(schoolIdBigInt, 
         campaign.channel,
         {
           ...recipient,

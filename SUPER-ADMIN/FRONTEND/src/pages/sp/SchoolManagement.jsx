@@ -575,6 +575,23 @@ function SchoolManagement() {
                           ? `Payments · ${school.payment_gateway_mode || "on"}`
                           : "Set up payments"}
                       </Link>
+                      {/* The school's own email, SMS and WhatsApp accounts */}
+                      {(() => {
+                        const on = [
+                          school.email_status === "connected" && "Email",
+                          school.sms_status === "connected" && "SMS",
+                          school.whatsapp_status === "connected" && "WhatsApp",
+                        ].filter(Boolean);
+                        return (
+                          <Link
+                            className={`sp-btn ${on.length ? "sp-btn-ghost" : "sp-btn-secondary"}`}
+                            to={`/sp-control-portal/schools/${school.id}/communication`}
+                            title="The school's own email, SMS and WhatsApp accounts"
+                          >
+                            {on.length ? on.join(" · ") : "Set up messaging"}
+                          </Link>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

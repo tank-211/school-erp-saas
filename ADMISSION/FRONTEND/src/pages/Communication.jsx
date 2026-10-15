@@ -1119,8 +1119,8 @@ const AUDIENCES = [
   { value: "student", label: "All students" },
 ];
 
-// Creates a campaign and/or sends it. Email goes through the school mailbox;
-// SMS and WhatsApp report clearly when no provider is connected.
+// Creates a campaign and/or sends it through the school's own email, SMS or
+// WhatsApp account (set up in Super Admin → Schools → Communication).
 function CampaignModal({ existing, onClose, onDone }) {
   const [form, setForm] = useState({
     name: existing?.name || "",
@@ -1217,7 +1217,7 @@ function CampaignModal({ existing, onClose, onDone }) {
           </div>
           {form.channel !== "email" && (
             <div style={{ fontSize: 12, color: "var(--gray-500)" }}>
-              SMS and WhatsApp need a messaging provider. Until one is connected, sends are recorded as failed.
+              Sent from the school's own {form.channel === "sms" ? "SMS" : "WhatsApp"} account. If it is not set up yet, nothing is sent and you will see a message; the platform team sets it up in Super Admin → Schools → Communication.
             </div>
           )}
           <div className="flex justify-end gap-3">
