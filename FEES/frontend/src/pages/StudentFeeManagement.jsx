@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { fetchStudents, recordPayment, fetchSchoolLookups, fetchStudentStats, sendSMSMessage, sendWhatsAppMessage, createRefundRequest } from "../services/apiService";
+import { fetchStudents, recordPayment, fetchSchoolLookups, fetchStudentStats, sendSMSMessage, sendWhatsAppMessage, createRefundRequest, getOnlinePaymentStatus } from "../services/apiService";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, Download, RefreshCw, Plus, CreditCard, Eye, History as HistoryIcon,
@@ -439,6 +439,13 @@ export default function StudentFeeManagement() {
     });
   };
 
+  // Whether this school can take online (Razorpay) payments at all
+  const [onlinePaymentsEnabled, setOnlinePaymentsEnabled] = useState(false);
+  const [paying, setPaying] = useState(false);
+  useEffect(() => {
+    getOnlinePaymentStatus().then((r) => setOnlinePaymentsEnabled(Boolean(r.success && r.data?.enabled)));
+  }, []);
+
   const submitPayment = async () => {
     if (!selectedStudent) {
       notify("No student selected.", "error");
@@ -477,7 +484,9 @@ export default function StudentFeeManagement() {
     const paymentMethod =
       paymentMethodMap[payForm.mode] || payForm.mode.toLowerCase();
 
+    if (paying) return;
     try {
+      setPaying(true);
       setLoading(true);
 
       const result = await recordPayment(
@@ -516,6 +525,7 @@ export default function StudentFeeManagement() {
       );
     } finally {
       setLoading(false);
+      setPaying(false);
     }
   };
 
@@ -805,6 +815,8 @@ export default function StudentFeeManagement() {
             payForm={payForm}
             setPayForm={setPayForm}
             onSubmitPayment={submitPayment}
+            onlinePaymentsEnabled={onlinePaymentsEnabled}
+            saving={paying}
             onQuickAction={quickAction}
             onRefund={confirmRefund}
           />
@@ -828,7 +840,7 @@ export default function StudentFeeManagement() {
 /*  DRAWER                                                             */
 /* ------------------------------------------------------------------ */
 
-function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onSubmitPayment, onQuickAction, onRefund }) {
+function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onSubmitPayment, onlinePaymentsEnabled, saving, onQuickAction, onRefund }) {
   const totalPaid = student.paid;
   const balance = student.balance;
 
@@ -958,10 +970,22 @@ function StudentDrawer({ student, tab, setTab, onClose, payForm, setPayForm, onS
               </div>
             </div>
 
-            <div className="modal-actions" style={{ borderTop: "none", paddingTop: 0 }}>
-              <button className="btn btn-primary w-full" onClick={onSubmitPayment}><Wallet size={14} /> Collect Payment</button>
-              {balance > 0 && student.invoiceId && (
-                <button className="btn btn-outline w-full" type="button" onClick={() => onQuickAction("payonline")}><CreditCard size={14} /> Pay online</button>
+            {/* Stacked: side by side, the drawer squeezed "Collect Payment" to a sliver */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button className="btn btn-primary w-full" type="button" onClick={onSubmitPayment} disabled={saving}>
+                <Wallet size={14} /> {saving ? "Recording..." : `Record ${payForm.mode} payment`}
+              </button>
+              {/* Online checkout is a different way to pay, not for money already
+                  received at the counter (cash or cheque) */}
+              {onlinePaymentsEnabled && balance > 0 && student.invoiceId && !["Cash", "Cheque"].includes(payForm.mode) && (
+                <>
+                  <div className="text-sm text-muted" style={{ textAlign: "center" }}>
+                    or let the parent pay now through the school's Razorpay checkout
+                  </div>
+                  <button className="btn btn-outline w-full" type="button" onClick={() => onQuickAction("payonline")}>
+                    <CreditCard size={14} /> Pay online
+                  </button>
+                </>
               )}
             </div>
           </div>
