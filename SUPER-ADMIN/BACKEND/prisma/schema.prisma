@@ -619,6 +619,7 @@ model school {
   parent_detail               parent_detail[]
   payment                     payment[]
   school_payment_gateway      school_payment_gateway?
+  school_communication_settings school_communication_settings?
   school_class                school_class[]
   school_subscription_renewal school_subscription_renewal[]
   section                     section[]
@@ -886,4 +887,30 @@ enum visit_status {
   completed
   cancelled
   no_show
+}
+
+// Each school's own email account (prisma/sql/2026-10-15_school_communication_settings.sql).
+// Secrets are AES-256-GCM encrypted with PAYMENT_KEYS_SECRET and never returned.
+// Lead and Admission read this table with raw SQL to send the school's email.
+model school_communication_settings {
+  id                   BigInt    @id @default(autoincrement())
+  school_id            BigInt    @unique
+  email_provider       String?   @db.VarChar(20)
+  email_from_name      String?   @db.VarChar(150)
+  email_from_address   String?   @db.VarChar(150)
+  email_reply_to       String?   @db.VarChar(150)
+  email_api_key_enc    String?   @db.Text
+  smtp_host            String?   @db.VarChar(150)
+  smtp_port            Int?
+  smtp_secure          Boolean?
+  smtp_user            String?   @db.VarChar(150)
+  smtp_pass_enc        String?   @db.Text
+  email_status         String    @default("not_configured") @db.VarChar(30)
+  email_last_tested_at DateTime? @db.Timestamp(6)
+  email_last_error     String?   @db.Text
+  updated_by           String?   @db.VarChar(150)
+  created_at           DateTime  @default(now()) @db.Timestamp(6)
+  updated_at           DateTime  @default(now()) @db.Timestamp(6)
+
+  school school @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }

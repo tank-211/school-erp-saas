@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { sendRealEmail } from "./emailService.js";
+import { sendSchoolEmail } from "../utils/schoolMailer.js";
 
 const prisma = new PrismaClient();
 
@@ -43,10 +43,11 @@ export const sendEmailService = async (data, userId, schoolId) => {
     throw new Error("Lead has no email address");
   }
 
-  await sendRealEmail({
+  // Sent from the school's own email account (Super Admin → Communication)
+  await sendSchoolEmail(schoolId, {
     to: recipientEmail,
     subject: data.subject,
-    content: data.content,
+    text: data.content,
   });
 
   const communication = await prisma.communication.create({

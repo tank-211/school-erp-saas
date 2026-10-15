@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import * as communicationQueries from '../db/queries/communicationQueries.js';
-import { sendMailWithGmail } from '../config/mailer.js';
+import { sendSchoolEmail } from '../utils/schoolMailer.js';
 
 let schedulerTask = null;
 const MAX_LATE_MS = 24 * 60 * 60 * 1000;
@@ -46,7 +46,7 @@ const processPendingScheduledEmails = async () => {
           throw new Error('Scheduled email is missing recipient_id or recipient_type.');
         }
 
-        await sendMailWithGmail({
+        await sendSchoolEmail(scheduledEmail.school_id, {
           to: recipientList.join(','),
           subject: scheduledEmail.subject,
           text: scheduledEmail.message,

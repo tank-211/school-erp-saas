@@ -575,6 +575,14 @@ function SchoolManagement() {
                           ? `Payments · ${school.payment_gateway_mode || "on"}`
                           : "Set up payments"}
                       </Link>
+                      {/* The school's own email account */}
+                      <Link
+                        className={`sp-btn ${school.email_status === "connected" ? "sp-btn-ghost" : "sp-btn-secondary"}`}
+                        to={`/sp-control-portal/schools/${school.id}/communication`}
+                        title="The school's own email account"
+                      >
+                        {school.email_status === "connected" ? "Email · on" : "Set up email"}
+                      </Link>
                     </div>
                   </td>
                 </tr>

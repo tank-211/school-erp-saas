@@ -1,6 +1,6 @@
 import * as communicationQueries from '../db/queries/communicationQueries.js';
 import { dispatchCommunication } from '../utils/communicationProviders.js';
-import { sendMailWithGmail } from '../config/mailer.js';
+import { sendSchoolEmail, schoolEmailStatus, EmailNotSetUpError } from '../utils/schoolMailer.js';
 import AppError from '../utils/appError.js';
 import {
   assertPositiveInteger,
@@ -260,6 +260,11 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
     throw new AppError('message is required.', 400);
   }
 
+  // Nothing is sent or scheduled for a school without its own email account
+  if (channel === 'email' && !(await schoolEmailStatus(schoolId)).enabled) {
+    throw new AppError(new EmailNotSetUpError().message, 409);
+  }
+
   const scheduledDate = payload.scheduledDate ? new Date(payload.scheduledDate) : null;
   if (payload.scheduledDate && Number.isNaN(scheduledDate?.getTime())) {
     throw new AppError('scheduledDate must be a valid date-time value.', 400);
@@ -315,7 +320,7 @@ export const sendCommunication = async (schoolId, userId, payload = {}, files = 
   for (const recipient of composeRecipients) {
     let transporterResponse;
     try {
-      transporterResponse = await sendMailWithGmail({
+      transporterResponse = await sendSchoolEmail(schoolId, {
         to: recipient.email,
         subject,
         text: message,
