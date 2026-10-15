@@ -56,13 +56,18 @@ router.get('/schools/:id/payment-gateway', verifyInternalStaff, getSchoolGateway
 router.put('/schools/:id/payment-gateway', verifySuperAdmin, saveSchoolGateway);
 router.post('/schools/:id/payment-gateway/test', verifySuperAdmin, testSchoolGateway);
 router.delete('/schools/:id/payment-gateway', verifySuperAdmin, disconnectSchoolGateway);
-// Each school's own email account: any staff can view, only super admins change it
+// Each school's own email, SMS and WhatsApp accounts: any staff can view,
+// only super admins change them. Without :channel the routes mean email.
 router.options('/schools/:id/communication', (req, res) => res.sendStatus(204));
-router.options('/schools/:id/communication/test', (req, res) => res.sendStatus(204));
+router.options('/schools/:id/communication/:channel', (req, res) => res.sendStatus(204));
+router.options('/schools/:id/communication/:channel/test', (req, res) => res.sendStatus(204));
 router.get('/schools/:id/communication', verifyInternalStaff, getSchoolCommunication);
 router.put('/schools/:id/communication', verifySuperAdmin, saveSchoolCommunication);
 router.post('/schools/:id/communication/test', verifySuperAdmin, testSchoolCommunication);
 router.delete('/schools/:id/communication', verifySuperAdmin, disconnectSchoolCommunication);
+router.put('/schools/:id/communication/:channel', verifySuperAdmin, saveSchoolCommunication);
+router.post('/schools/:id/communication/:channel/test', verifySuperAdmin, testSchoolCommunication);
+router.delete('/schools/:id/communication/:channel', verifySuperAdmin, disconnectSchoolCommunication);
 router.patch('/schools/:id', verifySuperAdmin, updateSchool);
 router.get('/stats', verifyInternalStaff, getStats);
 router.get('/staff', verifyInternalStaff, getAllStaff);

@@ -1,12 +1,14 @@
 import { PrismaClient } from "@prisma/client";
-import { sendSchoolEmail } from "../utils/schoolMailer.js";
+import { sendSchoolEmail, sendSchoolSms, sendSchoolWhatsApp, schoolChannelStatus } from "../utils/schoolMessenger.js";
 
 const prisma = new PrismaClient();
 
 // communication_log columns: school_id, recipient_type, recipient_id, channel,
 // subject, message, status, sent_at, created_by, created_at.
-// Call / SMS / WhatsApp are LOGGED here, not sent: no SMS or WhatsApp provider
-// is connected, so their status is "logged", never "sent".
+// SMS and WhatsApp are SENT through the school's own accounts (Super Admin →
+// Schools → Communication) when the request asks to send ({ send: true });
+// otherwise they are only recorded ("logged"), e.g. a message sent from a
+// staff phone. Calls are always recorded.
 
 const isId = (value) => /^\d+$/.test(String(value ?? ""));
 
@@ -18,7 +20,7 @@ const findSchoolLead = async (leadId, schoolId) => {
   }
   const lead = await prisma.lead.findFirst({
     where: { id: BigInt(leadId), school_id: BigInt(schoolId) },
-    select: { id: true, email: true, first_name: true, last_name: true },
+    select: { id: true, email: true, phone: true, first_name: true, last_name: true },
   });
   if (!lead) {
     const error = new Error("Lead not found");
@@ -75,9 +77,9 @@ export const sendEmailService = async (data, userId, schoolId) => {
   return withAliases(communication);
 };
 
-// Shared by call, WhatsApp and SMS logging.
-const logInteraction = async ({ channel, leadId, message, activityNote }, userId, schoolId) => {
-  const lead = await findSchoolLead(leadId, schoolId);
+// Shared by call, WhatsApp and SMS. status "sent" only when it was really sent.
+const logInteraction = async ({ channel, leadId, message, activityNote, status = "logged", lead: knownLead }, userId, schoolId) => {
+  const lead = knownLead || (await findSchoolLead(leadId, schoolId));
 
   const communication = await prisma.communication.create({
     data: {
@@ -86,7 +88,7 @@ const logInteraction = async ({ channel, leadId, message, activityNote }, userId
       recipient_id: lead.id,
       channel,
       message: message || null,
-      status: "logged",
+      status,
       created_by: BigInt(userId),
     },
   });
@@ -109,6 +111,54 @@ const logInteraction = async ({ channel, leadId, message, activityNote }, userId
   return withAliases(communication);
 };
 
+/** Which channels this school can send through (no secrets). */
+export const channelStatusService = async (schoolId) => {
+  const status = await schoolChannelStatus(schoolId);
+  const one = (c) => ({ enabled: status[c].enabled, status: status[c].status });
+  return { email: one("email"), sms: one("sms"), whatsapp: one("whatsapp") };
+};
+
+const LABEL = { sms: "SMS", whatsapp: "WhatsApp" };
+const SENDERS = { sms: sendSchoolSms, whatsapp: sendSchoolWhatsApp };
+
+// SMS / WhatsApp to a lead: sent through the school's account when data.send
+// is true, otherwise only recorded.
+const phoneMessage = async (channel, data, userId, schoolId) => {
+  const message = String(data.message || "").trim();
+  if (!message) {
+    const error = new Error("Message is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const lead = await findSchoolLead(data.leadId, schoolId);
+
+  if (data.send !== true && data.send !== "true") {
+    const result = await logInteraction({
+      channel,
+      lead,
+      message,
+      activityNote: `${LABEL[channel]} (recorded): ${message}`,
+    }, userId, schoolId);
+    return { ...result, sent: false };
+  }
+
+  if (!lead.phone) {
+    const error = new Error("This lead has no phone number on record.");
+    error.statusCode = 400;
+    throw error;
+  }
+  // Throws 409 "not set up" or the provider's reason; nothing is recorded then
+  await SENDERS[channel](schoolId, { to: lead.phone, text: message });
+  const result = await logInteraction({
+    channel,
+    lead,
+    message,
+    status: "sent",
+    activityNote: `${LABEL[channel]} sent to ${lead.phone}: ${message}`,
+  }, userId, schoolId);
+  return { ...result, sent: true };
+};
+
 export const logCallService = (data, userId, schoolId) => {
   const duration = Number(data.duration) > 0 ? ` - ${Number(data.duration)}s` : "";
   return logInteraction({
@@ -119,33 +169,9 @@ export const logCallService = (data, userId, schoolId) => {
   }, userId, schoolId);
 };
 
-export const logWhatsAppService = (data, userId, schoolId) => {
-  if (!data.message) {
-    const error = new Error("Message is required");
-    error.statusCode = 400;
-    throw error;
-  }
-  return logInteraction({
-    channel: "whatsapp",
-    leadId: data.leadId,
-    message: data.message,
-    activityNote: `WhatsApp: ${data.message}`,
-  }, userId, schoolId);
-};
+export const logWhatsAppService = (data, userId, schoolId) => phoneMessage("whatsapp", data, userId, schoolId);
 
-export const logSMSService = (data, userId, schoolId) => {
-  if (!data.message) {
-    const error = new Error("Message is required");
-    error.statusCode = 400;
-    throw error;
-  }
-  return logInteraction({
-    channel: "sms",
-    leadId: data.leadId,
-    message: data.message,
-    activityNote: `SMS: ${data.message}`,
-  }, userId, schoolId);
-};
+export const logSMSService = (data, userId, schoolId) => phoneMessage("sms", data, userId, schoolId);
 
 export const getCommunicationHistoryService = async (leadId, filters = {}) => {
   const page = Math.max(Number(filters.page) || 1, 1);

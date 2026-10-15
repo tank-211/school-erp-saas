@@ -2,23 +2,23 @@ import prisma from '../config/database';
 import { NotFoundError } from '../middleware/errorHandler';
 import logger from '../config/logger';
 
-/**
- * No SMS or WhatsApp provider is connected yet. Instead of logging a message
- * and reporting it as sent, the request fails with 503 and says so.
- * Connect a provider (e.g. MSG91, Twilio, WhatsApp Business API) in send().
- */
-class ProviderNotConfiguredError extends Error {
-  status = 503;
-  code = 'PROVIDER_NOT_CONFIGURED';
-  constructor(channel: 'sms' | 'whatsapp') {
-    super(`${channel === 'sms' ? 'SMS' : 'WhatsApp'} is not set up yet: no provider is connected, so nothing was sent.`);
-    this.name = 'ProviderNotConfiguredError';
-  }
-}
+import { sendSchoolMessage, schoolChannelEnabled, ChannelNotSetUpError } from './schoolMessenger';
 
-const send = async (channel: 'sms' | 'whatsapp', _phone: string, _message: string): Promise<never> => {
-  throw new ProviderNotConfiguredError(channel);
+/**
+ * Fee reminders go out through the school's own SMS / WhatsApp account
+ * (Super Admin → Schools → Communication). A school without one gets a clear
+ * 409 "not set up"; nothing is reported as sent unless the provider took it.
+ */
+const send = async (channel: 'sms' | 'whatsapp', phone: string, message: string, schoolId: string, invoiceId: string) => {
+  const result = await sendSchoolMessage(schoolId, channel, phone, message);
+  logger.info(`${channel} fee message sent`, { invoiceId, provider: result.provider });
+  return { invoiceId, channel, status: 'sent', messageId: result.messageId, sentAt: new Date().toISOString() };
 };
+
+const feeMessage = (studentName: string, pending: number, total: number, rupee: string) =>
+  pending > 0
+    ? `Hello ${studentName}, your pending fee is ${rupee}${pending.toLocaleString('en-IN')}. Please pay soon.`
+    : `Hello ${studentName}, your fee of ${rupee}${total.toLocaleString('en-IN')} has been paid. Thank you!`;
 
 export class NotificationService {
   async sendWhatsAppNotification(invoiceId: string, schoolId: string) {
@@ -83,10 +83,9 @@ export class NotificationService {
         totalAmount - amountPaid
       );
 
-    const message =
-      `Hello ${studentName}, your pending fee is ₹${pending.toLocaleString('en-IN')}. Please pay soon.`;
+    const message = feeMessage(studentName, pending, totalAmount, '₹');
 
-    return send('whatsapp', phone, message);
+    return send('whatsapp', phone, message, schoolId, invoiceId);
   }
 
   async sendSMSNotification(invoiceId: string, schoolId: string) {
@@ -151,10 +150,10 @@ export class NotificationService {
         totalAmount - amountPaid
       );
 
-    const message =
-      `Hello ${studentName}, your pending fee is Rs.${pending.toLocaleString('en-IN')}. Please pay soon.`;
+    // SMS: "Rs." because DLT templates and some phones handle the ₹ sign badly
+    const message = feeMessage(studentName, pending, totalAmount, 'Rs.');
 
-    return send('sms', phone, message);
+    return send('sms', phone, message, schoolId, invoiceId);
   }
 
   async sendBulkNotification(data: {
@@ -167,6 +166,11 @@ export class NotificationService {
 
     message?: string;
   }) {
+    // Nothing is attempted when the school has not set up this channel
+    if (!(await schoolChannelEnabled(data.schoolId, data.channel))) {
+      throw new ChannelNotSetUpError(data.channel);
+    }
+
     const results: Array<{
       invoiceId: string;
       success: boolean;

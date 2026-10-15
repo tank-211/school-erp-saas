@@ -560,6 +560,11 @@ export const communicationAPI = {
       body: data,
     }),
 
+  // Which of email / SMS / WhatsApp the school can send through
+  getChannels: () => apiRequest("/communications/channels"),
+
+  // { leadId, message, send: true } sends through the school's account;
+  // without send it only records a message sent from a phone
   logWhatsApp: (data) =>
     apiRequest("/communications/whatsapp", {
       method: "POST",

@@ -908,6 +908,24 @@ model school_communication_settings {
   email_status         String    @default("not_configured") @db.VarChar(30)
   email_last_tested_at DateTime? @db.Timestamp(6)
   email_last_error     String?   @db.Text
+  sms_provider            String?   @db.VarChar(20)
+  sms_api_key_enc         String?   @db.Text
+  sms_account_sid         String?   @db.VarChar(100)
+  sms_sender              String?   @db.VarChar(100)
+  sms_template_id         String?   @db.VarChar(100)
+  sms_template_var        String?   @db.VarChar(50)
+  sms_status              String    @default("not_configured") @db.VarChar(30)
+  sms_last_tested_at      DateTime? @db.Timestamp(6)
+  sms_last_error          String?   @db.Text
+  whatsapp_provider       String?   @db.VarChar(20)
+  whatsapp_token_enc      String?   @db.Text
+  whatsapp_account_sid    String?   @db.VarChar(100)
+  whatsapp_sender         String?   @db.VarChar(100)
+  whatsapp_template       String?   @db.VarChar(150)
+  whatsapp_template_lang  String?   @db.VarChar(20)
+  whatsapp_status         String    @default("not_configured") @db.VarChar(30)
+  whatsapp_last_tested_at DateTime? @db.Timestamp(6)
+  whatsapp_last_error     String?   @db.Text
   updated_by           String?   @db.VarChar(150)
   created_at           DateTime  @default(now()) @db.Timestamp(6)
   updated_at           DateTime  @default(now()) @db.Timestamp(6)

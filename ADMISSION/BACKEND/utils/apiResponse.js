@@ -1,7 +1,11 @@
+import { serializeBigInt } from './bigintSerializer.js';
+
 export const sendSuccess = (res, data, message = 'Request completed successfully.', statusCode = 200, meta) => {
+  // BigInt ids (e.g. a saved communication_log row) cannot go through
+  // res.json as they are; they are sent as strings, like everywhere else.
   const payload = {
     success: true,
-    data,
+    data: data === undefined ? undefined : serializeBigInt(data),
     message,
   };
 

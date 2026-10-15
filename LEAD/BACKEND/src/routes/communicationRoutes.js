@@ -8,6 +8,7 @@ import {
   getCommunicationHistory,
   updateCommunication,
   deleteCommunication,
+  getChannels,
 } from "../controllers/communicationController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 import { requireOwnedLeadParam, requireOwnedCommunication } from "../middlewares/tenantGuards.js";
@@ -19,6 +20,8 @@ const router = express.Router();
 router.use(authMiddleware);
 // All messages of the school with lead and staff names (?channel=&search=&page=&limit=)
 router.get("/", listCommunications);
+// Which of email / SMS / WhatsApp the school can send through
+router.get("/channels", getChannels);
 router.post("/email", validate(emailSchema), sendEmail);
 router.post("/call", validate(callSchema), logCall);
 router.post("/whatsapp", logWhatsApp);

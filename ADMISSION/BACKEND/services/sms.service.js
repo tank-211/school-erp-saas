@@ -105,9 +105,15 @@ export const sendSms = async (schoolId, userId, payload) => {
   }
 
   const dispatchResult = await sendSMS(
+    schoolId,
     recipient.phone,
     message
   );
+
+  // Not set up for this school: nothing was attempted, so nothing is logged
+  if (dispatchResult.not_set_up) {
+    throw new AppError(dispatchResult.error, 409);
+  }
 
   const communicationLog =
     await prisma.communication_log.create({
@@ -139,7 +145,7 @@ export const sendSms = async (schoolId, userId, payload) => {
 
   if (dispatchResult.status === 'failed') {
     // The attempt is kept in the log as 'failed'; tell the user why
-    throw new AppError(dispatchResult.error || 'SMS could not be sent', 503);
+    throw new AppError(dispatchResult.error || 'SMS could not be sent', dispatchResult.statusCode || 502);
   }
 
   return {

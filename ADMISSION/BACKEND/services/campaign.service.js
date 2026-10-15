@@ -2,7 +2,7 @@ import prisma from '../src/lib/prisma.js';
 import AppError from '../utils/appError.js';
 import { sendSMS } from '../utils/smsSender.js';
 import { sendWhatsApp } from '../utils/whatsappSender.js';
-import { sendSchoolEmail } from '../utils/schoolMailer.js';
+import { sendSchoolEmail, schoolChannelStatus, ChannelNotSetUpError } from '../utils/schoolMessenger.js';
 
 const MAX_RECIPIENTS = 500;
 
@@ -51,7 +51,7 @@ const dispatchCampaignMessage = async (schoolId, channel, recipient, normalizedP
       return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient phone is missing' };
     }
 
-    const result = await sendSMS(recipient.phone, normalizedPayload.message);
+    const result = await sendSMS(schoolId, recipient.phone, normalizedPayload.message);
     return {
       status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
@@ -65,7 +65,7 @@ const dispatchCampaignMessage = async (schoolId, channel, recipient, normalizedP
       return { status: 'failed', provider_message_id: null, sent_at: null, error: 'Recipient phone is missing' };
     }
 
-    const result = await sendWhatsApp(recipient.phone, normalizedPayload.message);
+    const result = await sendWhatsApp(schoolId, recipient.phone, normalizedPayload.message);
     return {
       status: result.status || 'failed',
       provider_message_id: result.provider_message_id || null,
@@ -171,6 +171,11 @@ export const sendCampaign = async (schoolId, userId, campaignId, payload) => {
 
   assertAudienceType(audienceType);
   assertChannel(campaign.channel);
+
+  // Nothing is sent to anyone when the school has not set up this channel
+  if (!(await schoolChannelStatus(schoolIdBigInt))[campaign.channel]?.enabled) {
+    throw new AppError(new ChannelNotSetUpError(campaign.channel).message, 409);
+  }
 
   const normalizedPayload = ensureMessageForChannel(
     campaign.channel,

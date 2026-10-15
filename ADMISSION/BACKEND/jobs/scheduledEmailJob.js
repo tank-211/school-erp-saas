@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import * as communicationQueries from '../db/queries/communicationQueries.js';
-import { sendSchoolEmail } from '../utils/schoolMailer.js';
+import { sendSchoolEmail } from '../utils/schoolMessenger.js';
 
 let schedulerTask = null;
 const MAX_LATE_MS = 24 * 60 * 60 * 1000;
