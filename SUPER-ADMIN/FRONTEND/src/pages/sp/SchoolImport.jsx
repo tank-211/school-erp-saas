@@ -111,6 +111,9 @@ function ImportPanel({ id, canEdit, onImported }) {
                     {c.with_errors} row{c.with_errors === 1 ? " has" : "s have"} problems. Fix them in the file and press "Check again". Nothing has been imported.
                   </div>
                 )}
+                {c.rows_shown < c.rows && (
+                  <p className="sp-subtle-copy">Showing {c.rows_shown} of {c.rows} rows (all rows with problems first). Every row was checked.</p>
+                )}
                 <div className="sp-table-wrap" style={{ maxHeight: 460, overflowY: "auto", marginBottom: 12 }}>
                   <table className="sp-table">
                     <thead><tr><th>Row</th><th>Adm. No</th><th>Student</th><th>Class</th><th>Fee</th><th>Docs pending</th><th>Problems / notes</th></tr></thead>
@@ -199,7 +202,7 @@ function FollowUpPanel({ id, canEdit, refreshKey }) {
       {error && <div className="sp-error" style={{ marginBottom: 12 }}>{error}</div>}
       {notice && <div className="sp-success" style={{ marginBottom: 12 }}>{notice}</div>}
       <article className="sp-card" style={{ marginBottom: 16 }}>
-        <h2 style={{ marginTop: 0 }}>Class or section pending ({data.class_pending.length})</h2>
+        <h2 style={{ marginTop: 0 }}>Class or section pending ({data.class_pending_total ?? data.class_pending.length})</h2>
         {data.class_pending.length ? (
           <div className="sp-table-wrap">
             <table className="sp-table">
@@ -210,7 +213,7 @@ function FollowUpPanel({ id, canEdit, refreshKey }) {
         ) : <p className="sp-subtle-copy">Every imported student has a class.</p>}
       </article>
       <article className="sp-card">
-        <h2 style={{ marginTop: 0 }}>Documents pending ({data.documents_pending.length})</h2>
+        <h2 style={{ marginTop: 0 }}>Documents pending ({data.documents_pending_total ?? data.documents_pending.length})</h2>
         <p className="sp-subtle-copy">Mark a document received when the school has a paper copy. The school uploads scans from its Admission app.</p>
         {data.documents_pending.length ? (
           <div className="sp-table-wrap">

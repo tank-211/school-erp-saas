@@ -7,9 +7,17 @@ import { getAuthHeader } from '../utils/authToken.js';
 
 const API_BASE_URL = '/api/student-import';
 
+// getAuthHeader() also sets Content-Type: application/json. A file upload must
+// not carry that header: the browser sets multipart/form-data with its boundary.
+const headersFor = (data) => {
+  const headers = { ...(getAuthHeader() || {}) };
+  if (typeof FormData !== 'undefined' && data instanceof FormData) delete headers['Content-Type'];
+  return headers;
+};
+
 const call = async (method, path, data) => {
   try {
-    const response = await axios({ method, url: `${API_BASE_URL}${path}`, data, headers: getAuthHeader() });
+    const response = await axios({ method, url: `${API_BASE_URL}${path}`, data, headers: headersFor(data) });
     if (response.data && response.data.success) return response.data;
     throw new Error(response.data?.message || 'Request failed');
   } catch (error) {
@@ -28,7 +36,7 @@ const withFile = (file) => {
 /** Downloads the Excel template (filled with the school's classes). */
 export const downloadTemplate = async () => {
   try {
-    const response = await axios.get(`${API_BASE_URL}/template`, { headers: getAuthHeader(), responseType: 'blob' });
+    const response = await axios.get(`${API_BASE_URL}/template`, { headers: headersFor(null), responseType: 'blob' });
     const url = URL.createObjectURL(response.data);
     const link = document.createElement('a');
     link.href = url;
