@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2, Upload } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSchool, initialsOf } from "../hooks/useSchool.js";
@@ -20,6 +20,7 @@ const navItems = [
   { path: "/security",      label: "Security & Compliance", icon: Shield, adminOnly: true },
   { path: "/admin",         label: "Admin Dashboard",     icon: Shield },
   { path: "/admin/setup",   label: "School Setup",        icon: Building2 },
+  { path: "/admin/import-students", label: "Import Students", icon: Upload },
   { path: "/settings",      label: "Settings",            icon: SettingsIcon },
 ];
 

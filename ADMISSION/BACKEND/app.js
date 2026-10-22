@@ -24,6 +24,7 @@ import userRoutes from './routes/userRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import feesRoutes from './routes/feesRoutes.js';
 import setupRoutes from './routes/setupRoutes.js';
+import studentImportRoutes from './routes/studentImport.routes.js';
 import pipelineRoutes from './routes/pipelineRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
 import { signUploadUrlsInResponse, verifySignedUpload } from './utils/signedUploads.js';
@@ -160,6 +161,9 @@ app.use('/api/fees', feesRoutes);
 
 // School setup routes (academic years, classes, sections)
 app.use('/api/setup', setupRoutes);
+
+// Import of the school's existing students (school admins)
+app.use('/api/student-import', studentImportRoutes);
 
 // Admission pipeline (derived from leads, visits, applications, admissions)
 app.use('/api/pipeline', pipelineRoutes);

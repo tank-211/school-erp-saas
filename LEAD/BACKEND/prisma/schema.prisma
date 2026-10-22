@@ -289,8 +289,8 @@ model admission {
   student_id             BigInt
   lead_id                BigInt?
   academic_year_id       BigInt
-  class_id               BigInt
-  section_id             BigInt
+  class_id               BigInt?
+  section_id             BigInt?
   admission_date         DateTime                 @db.Date
   status                 String?                  @default("active") @db.VarChar(50)
   current_step           String?                  @default("student") @db.VarChar(30)
@@ -304,10 +304,10 @@ model admission {
   application_id         BigInt?
   academic_year          academic_year            @relation(fields: [academic_year_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   application            Application?             @relation(fields: [application_id], references: [id], onUpdate: NoAction)
-  school_class           school_class             @relation(fields: [class_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  school_class           school_class?             @relation(fields: [class_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   lead                   Lead?                    @relation(fields: [lead_id], references: [id], onUpdate: NoAction)
   school                 School                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  section                section                  @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  section                section?                  @relation(fields: [section_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   student                student                  @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   application_progress   application_progress?
   documents              documents[]
@@ -709,7 +709,7 @@ model service_provider_staff {
 model student {
   id                     BigInt                   @id @default(autoincrement())
   school_id              BigInt
-  admission_number       String                   @unique @db.VarChar(50)
+  admission_number       String                   @db.VarChar(50)
   first_name             String                   @db.VarChar(100)
   middle_name            String?                  @db.VarChar(100)
   last_name              String?                  @db.VarChar(100)
@@ -735,6 +735,7 @@ model student {
   school                 School                   @relation(fields: [school_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   student_fee_assignment student_fee_assignment[]
 
+  @@unique([school_id, admission_number], map: "student_school_id_admission_number_key")
   @@index([admission_number], map: "idx_student_admission_number")
   @@index([email], map: "idx_student_email")
   @@index([school_id], map: "idx_student_school_id")

@@ -22,6 +22,7 @@ import { Settings } from "./pages/Settings";
 import { Login } from "./pages/Login";
 import { AdminPortal } from "./pages/AdminPortal";
 import { SchoolSetup } from "./pages/SchoolSetup";
+import { ImportStudents } from "./pages/ImportStudents";
 import LeadDetails from "./pages/LeadDetails";
 import ApplicationDetails from "./pages/ApplicationDetails";
 import { AdmissionResume } from "./pages/AdmissionResume";
@@ -82,6 +83,14 @@ export default function App() {
           <Route path="admin" element={adminRouteElement} />
           <Route path="admin/users" element={adminRouteElement} />
           <Route path="admin/management" element={adminRouteElement} />
+          <Route
+            path="admin/import-students"
+            element={
+              <ProtectedRoute role="admin">
+                <ImportStudents />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="admin/setup"
             element={

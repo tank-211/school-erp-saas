@@ -21,6 +21,7 @@ const {
   disconnectSchoolCommunication,
 } = require('../controllers/schoolCommunicationController');
 const { renewSchoolSubscription, getSchoolRenewals } = require('../controllers/superAdminBillingController');
+const studentImport = require('../controllers/schoolStudentImportController');
 const {
   getAllUsers,
   createUser,
@@ -68,6 +69,27 @@ router.delete('/schools/:id/communication', verifySuperAdmin, disconnectSchoolCo
 router.put('/schools/:id/communication/:channel', verifySuperAdmin, saveSchoolCommunication);
 router.post('/schools/:id/communication/:channel/test', verifySuperAdmin, testSchoolCommunication);
 router.delete('/schools/:id/communication/:channel', verifySuperAdmin, disconnectSchoolCommunication);
+// Import of a school's existing students: any staff can look, only super admins change data
+for (const path of [
+  '/schools/:id/student-import',
+  '/schools/:id/student-import/template',
+  '/schools/:id/student-import/batches',
+  '/schools/:id/student-import/follow-up',
+  '/schools/:id/student-import/preview',
+  '/schools/:id/student-import/batches/:batchId/undo',
+  '/schools/:id/student-import/admissions/:admissionId/class',
+  '/schools/:id/student-import/admissions/:admissionId/documents',
+]) {
+  router.options(path, (req, res) => res.sendStatus(204));
+}
+router.get('/schools/:id/student-import/template', verifyInternalStaff, studentImport.downloadTemplate);
+router.get('/schools/:id/student-import/batches', verifyInternalStaff, studentImport.getBatches);
+router.get('/schools/:id/student-import/follow-up', verifyInternalStaff, studentImport.getFollowUp);
+router.post('/schools/:id/student-import/preview', verifySuperAdmin, studentImport.previewImport);
+router.post('/schools/:id/student-import', verifySuperAdmin, studentImport.runImport);
+router.post('/schools/:id/student-import/batches/:batchId/undo', verifySuperAdmin, studentImport.undoImport);
+router.patch('/schools/:id/student-import/admissions/:admissionId/class', verifySuperAdmin, studentImport.setClass);
+router.post('/schools/:id/student-import/admissions/:admissionId/documents', verifySuperAdmin, studentImport.addDocument);
 router.patch('/schools/:id', verifySuperAdmin, updateSchool);
 router.get('/stats', verifyInternalStaff, getStats);
 router.get('/staff', verifyInternalStaff, getAllStaff);

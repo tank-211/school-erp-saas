@@ -44,7 +44,8 @@
     "prisma": "6.19.3",
     "sequelize": "^3.30.0",
     "typeorm": "^0.3.17",
-    "uuid": "^14.0.2"
+    "uuid": "^14.0.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.4",

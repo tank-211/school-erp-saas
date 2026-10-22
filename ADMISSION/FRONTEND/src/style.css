@@ -302,6 +302,7 @@ input, select, textarea { font-family: var(--font); }
    BUTTONS
 ══════════════════════════════════════════════════════════ */
 .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: var(--r); font-size: 14px; font-weight: 500; cursor: pointer; transition: var(--tr); border: 1.5px solid transparent; white-space: nowrap; line-height: 1; font-family: var(--font); }
+.btn:disabled, .btn[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; transform: none; }
 .btn-primary { background: var(--primary); color: var(--white); border-color: var(--primary); }
 .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); box-shadow: 0 4px 12px rgba(20,184,166,.3); }
 .btn-outline { background: var(--white); color: var(--gray-700); border-color: var(--gray-200); }

@@ -37,6 +37,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('/api/super-admin/login', cors(corsOptions), (req, res) => res.sendStatus(204));
 app.options('/api/super-admin/stats', cors(corsOptions), (req, res) => res.sendStatus(204));
+// Student import files arrive as base64 in JSON (up to 5 MB of file)
+app.use('/api/super-admin/schools/:id/student-import', express.json({ limit: '8mb' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
