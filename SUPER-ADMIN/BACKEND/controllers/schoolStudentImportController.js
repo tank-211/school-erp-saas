@@ -12,7 +12,7 @@ const { serializeBigInt } = require('../utils/bigintSerializer');
 const { readSheetRows, writeWorkbook } = require('../utils/sheetFile');
 
 const importer = () => import('../utils/studentImport.mjs');
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const schoolIdOf = (req) => (/^\d+$/.test(String(req.params.id || '')) ? BigInt(req.params.id) : null);
 const actorOf = (req) => String(req.staffUser?.full_name || req.staffUser?.email || 'Platform team').slice(0, 100);
@@ -45,7 +45,7 @@ const sheetRowsFrom = async (req) => {
   if (!b64) throw new ImportError('Choose the filled-in Excel or CSV file.', 400);
   if (!/\.(xlsx|xls|csv)$/i.test(String(req.body?.file_name || ''))) throw new ImportError('Upload the template as .xlsx, .xls or .csv.', 400);
   const buffer = Buffer.from(b64, 'base64');
-  if (!buffer.length || buffer.length > MAX_FILE_BYTES) throw new ImportError('The file must be under 5 MB.', 400);
+  if (!buffer.length || buffer.length > MAX_FILE_BYTES) throw new ImportError('The file must be under 10 MB.', 400);
   let rows;
   try {
     rows = readSheetRows(buffer);

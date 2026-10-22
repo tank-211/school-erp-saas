@@ -179,6 +179,11 @@ function ImportTab({ onImported }) {
                     "Check again". Nothing has been imported.
                   </Banner>
                 )}
+                {c.rows_shown < c.rows && (
+                  <p style={{ fontSize: 13, color: "var(--gray-500)", margin: "0 0 8px" }}>
+                    Showing {c.rows_shown} of {c.rows} rows (all rows with problems first). Every row was checked.
+                  </p>
+                )}
                 <div className="table-wrap" style={{ marginBottom: 14, maxHeight: 460, overflowY: "auto" }}>
                   <table className="table">
                     <thead>
@@ -305,7 +310,7 @@ function FollowUpTab({ refreshKey }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div>
-            <div className="card-title">Class or section pending ({data.class_pending.length})</div>
+            <div className="card-title">Class or section pending ({data.class_pending_total ?? data.class_pending.length})</div>
             <div className="card-sub">Imported students who still need a class and section.</div>
           </div>
         </div>
@@ -329,7 +334,7 @@ function FollowUpTab({ refreshKey }) {
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-title">Documents pending ({data.documents_pending.length})</div>
+            <div className="card-title">Documents pending ({data.documents_pending_total ?? data.documents_pending.length})</div>
             <div className="card-sub">Mark a document Received when the school has a paper copy, or Upload a scan.</div>
           </div>
         </div>

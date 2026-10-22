@@ -20,7 +20,9 @@
  * SUPER-ADMIN/BACKEND/utils/studentImport.mjs (platform team); keep them identical.
  */
 
-export const MAX_IMPORT_ROWS = 1000;
+export const MAX_IMPORT_ROWS = 10000;
+// The preview screen gets at most this many rows (rows with problems first)
+export const MAX_PREVIEW_ROWS = 1000;
 
 // Columns of the template, in order. key -> header shown to the school.
 export const COLUMNS = [
@@ -489,11 +491,17 @@ export const validateImport = async (db, schoolId, sheetRows) => {
   return { rows: results, counts };
 };
 
-/** What the preview screen shows (no internal ids). */
-export const previewForClient = (result) => ({
-  counts: result.counts,
-  rows: result.rows.map(({ plan, ...rest }) => rest),
-});
+/** What the preview screen shows (no internal ids; rows with problems first, at most MAX_PREVIEW_ROWS). */
+export const previewForClient = (result) => {
+  const strip = ({ plan, ...rest }) => rest;
+  const bad = result.rows.filter((r) => r.errors.length);
+  const good = result.rows.filter((r) => !r.errors.length);
+  const shown = bad.concat(good).slice(0, MAX_PREVIEW_ROWS).sort((a, b) => a.row - b.row);
+  return {
+    counts: { ...result.counts, rows_shown: shown.length },
+    rows: shown.map(strip),
+  };
+};
 
 /* ---------- import ---------- */
 
@@ -694,7 +702,8 @@ export const commitImport = async (db, { schoolId, sheetRows, fileName, actor })
   };
 
   try {
-    return await db.$transaction(write, { maxWait: 10000, timeout: 60000 });
+    // Large schools: up to MAX_IMPORT_ROWS students, written in a few bulk statements
+    return await db.$transaction(write, { maxWait: 10000, timeout: 180000 });
   } catch (error) {
     if (error instanceof ImportError) throw error;
     if (error?.code === 'P2002') {
@@ -806,7 +815,7 @@ export const followUpList = async (db, schoolId) => {
     select: { student_ids: true },
   });
   const ids = [...new Set(batches.flatMap((b) => idList(b.student_ids).map(String)))].map((v) => BigInt(v));
-  if (!ids.length) return { class_pending: [], documents_pending: [] };
+  if (!ids.length) return { class_pending_total: 0, documents_pending_total: 0, class_pending: [], documents_pending: [] };
 
   const admissions = await db.admission.findMany({
     where: { school_id: sid, student_id: { in: ids } },
@@ -842,9 +851,13 @@ export const followUpList = async (db, schoolId) => {
     };
   });
   const byName = (x, y) => String(x.admission_number).localeCompare(String(y.admission_number), 'en', { numeric: true });
+  const classPending = shaped.filter((a) => !a.class_id || !a.section_id).sort(byName);
+  const docsPending = shaped.filter((a) => a.documents_pending.length).sort(byName);
   return {
-    class_pending: shaped.filter((a) => !a.class_id || !a.section_id).sort(byName),
-    documents_pending: shaped.filter((a) => a.documents_pending.length).sort(byName),
+    class_pending_total: classPending.length,
+    documents_pending_total: docsPending.length,
+    class_pending: classPending.slice(0, 500),
+    documents_pending: docsPending.slice(0, 500),
   };
 };
 
