@@ -492,11 +492,13 @@ export class BulkUploadService {
         }
 
         const existingStudent =
-          await prisma.student.findUnique({
+          await prisma.student.findFirst({
             where: {
+              school_id: BigInt(schoolId),
               admission_number:
                 admissionNumber,
             },
+            select: { id: true },
           });
 
         if (existingStudent) {

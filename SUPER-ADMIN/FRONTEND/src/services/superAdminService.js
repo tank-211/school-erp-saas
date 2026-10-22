@@ -11,6 +11,15 @@ const superAdminApi = axios.create({
   withCredentials: true,
 })
 
+// A chosen file as { file_name, file_base64 } (the import endpoints take JSON)
+const fileAsJson = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve({ file_name: file.name, file_base64: String(reader.result).replace(/^data:[^,]*,/, '') })
+    reader.onerror = () => reject(new Error('The file could not be read.'))
+    reader.readAsDataURL(file)
+  })
+
 superAdminApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('spToken')
   if (token) {
@@ -246,6 +255,92 @@ export const superAdminService = {
       return response.data
     } catch (error) {
       throw createServiceError(error, 'Failed to disconnect.')
+    }
+  },
+
+  // Import of a school's existing students (Schools → Import students)
+  async downloadStudentImportTemplate(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}/student-import/template`, { responseType: 'blob' })
+      const name = /filename="([^"]+)"/.exec(response.headers?.['content-disposition'] || '')?.[1] || 'existing-students.xlsx'
+      const url = URL.createObjectURL(response.data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (error) {
+      let message = 'Could not download the template.'
+      try {
+        const text = await error?.response?.data?.text?.()
+        if (text) message = JSON.parse(text).error || message
+      } catch { /* keep the generic message */ }
+      throw new Error(message)
+    }
+  },
+
+  async previewStudentImport(id, file) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/student-import/preview`, await fileAsJson(file))
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not check the file.')
+    }
+  },
+
+  async runStudentImport(id, file) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/student-import`, await fileAsJson(file))
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not import the students.')
+    }
+  },
+
+  async getStudentImports(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}/student-import/batches`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not load the imports.')
+    }
+  },
+
+  async undoStudentImport(id, batchId) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/student-import/batches/${batchId}/undo`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not undo the import.')
+    }
+  },
+
+  async getStudentImportFollowUp(id) {
+    try {
+      const response = await superAdminApi.get(`/schools/${id}/student-import/follow-up`)
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not load the follow-up list.')
+    }
+  },
+
+  async assignImportedStudentClass(id, admissionId, classId, sectionId) {
+    try {
+      const response = await superAdminApi.patch(`/schools/${id}/student-import/admissions/${admissionId}/class`, { class_id: classId, section_id: sectionId })
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not set the class.')
+    }
+  },
+
+  async markImportedStudentDocument(id, admissionId, documentType) {
+    try {
+      const response = await superAdminApi.post(`/schools/${id}/student-import/admissions/${admissionId}/documents`, { document_type: documentType })
+      return response.data
+    } catch (error) {
+      throw createServiceError(error, 'Could not save the document.')
     }
   },
 

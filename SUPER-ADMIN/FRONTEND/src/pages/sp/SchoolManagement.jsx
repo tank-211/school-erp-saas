@@ -592,6 +592,14 @@ function SchoolManagement() {
                           </Link>
                         );
                       })()}
+                      {/* Students admitted before the ERP */}
+                      <Link
+                        className="sp-btn sp-btn-ghost"
+                        to={`/sp-control-portal/schools/${school.id}/import`}
+                        title="Import this school's existing students"
+                      >
+                        Import students
+                      </Link>
                     </div>
                   </td>
                 </tr>

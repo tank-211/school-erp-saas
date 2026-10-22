@@ -12,6 +12,7 @@ import SPLogin from "./pages/sp/SPLogin";
 import RenewalManager from "./pages/sp/RenewalManager";
 import SchoolPayments from "./pages/sp/SchoolPayments";
 import SchoolCommunication from "./pages/sp/SchoolCommunication";
+import SchoolImport from "./pages/sp/SchoolImport";
 import SchoolManagement from "./pages/sp/SchoolManagement";
 import StaffManager from "./pages/sp/StaffManager";
 import UserManagement from "./pages/sp/UserManagement";
@@ -66,6 +67,11 @@ function App() {
             <Route
               path="schools/:id/communication"
               element={<SchoolCommunication />}
+            />
+
+            <Route
+              path="schools/:id/import"
+              element={<SchoolImport />}
             />
 
             <Route

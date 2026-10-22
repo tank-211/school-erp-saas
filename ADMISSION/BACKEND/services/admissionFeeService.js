@@ -53,6 +53,12 @@ export const assignAdmissionFees = async (tx, { schoolId, admissionId, actor }) 
     throw error;
   }
 
+  // An imported student whose class is not assigned yet has no class fees
+  const empty = { fee_types: [], total_amount: null, invoice_id: null, invoice_number: null };
+  if (admission.class_id === null || admission.class_id === undefined) {
+    return { status: 'no_class', ...empty };
+  }
+
   const structures = await tx.fee_structure.findMany({
     where: {
       school_id: sid,
@@ -64,7 +70,6 @@ export const assignAdmissionFees = async (tx, { schoolId, admissionId, actor }) 
     orderBy: { id: 'asc' },
   });
 
-  const empty = { fee_types: [], total_amount: null, invoice_id: null, invoice_number: null };
   if (!structures.length) {
     return { status: 'no_fee_structure', ...empty };
   }
@@ -146,6 +151,9 @@ export const assignAdmissionFees = async (tx, { schoolId, admissionId, actor }) 
 /** One line for the user, e.g. after completing an admission. */
 export const describeFeeResult = (fees) => {
   if (!fees) return '';
+  if (fees.status === 'no_class') {
+    return 'This student has no class yet, so no class fees were assigned. Assign a class first.';
+  }
   if (fees.status === 'no_fee_structure') {
     return 'No fee structure is set up for this class and academic year yet, so no fees were assigned. Add one in the Fees app, then assign fees from Fees & Payments.';
   }

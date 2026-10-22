@@ -21,10 +21,13 @@ export class StudentService {
     parentId?: string;
   }) {
     // In the current schema, studentId maps to admission_number.
-    const existing = await prisma.student.findUnique({
+    // Admission numbers are unique within a school (not across schools)
+    const existing = await prisma.student.findFirst({
       where: {
+        school_id: BigInt(data.schoolId),
         admission_number: data.studentId,
       },
+      select: { id: true },
     });
 
     if (existing) {
@@ -404,10 +407,12 @@ export class StudentService {
 
     for (const studentData of data) {
       try {
-        const existing = await prisma.student.findUnique({
+        const existing = await prisma.student.findFirst({
           where: {
+            school_id: BigInt(studentData.schoolId),
             admission_number: studentData.studentId,
           },
+          select: { id: true },
         });
 
         if (existing) {
