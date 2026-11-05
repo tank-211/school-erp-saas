@@ -217,7 +217,7 @@ export default function Leads() {
 
 useEffect(() => {
   let active = true;
-  usersAPI.getUsers()
+  usersAPI.getCounselors()
     .then((res) => { if (active) setUsers(res.data || []); })
     .catch((err) => console.error('Could not load users:', err));
   return () => { active = false; };
