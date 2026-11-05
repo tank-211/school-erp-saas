@@ -81,7 +81,6 @@ export default function Leads() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const selectedLeadId = searchParams.get("leadId");
-  console.log("SELECTED LEAD:", selectedLeadId);
     useEffect(() => {
     if (selectedLeadId) {
       setTimeout(() => {
@@ -170,13 +169,10 @@ export default function Leads() {
           page,
           limit: 6, // you can change later
         });
-          console.log("API FULL RESPONSE:", res);
         const data = res.data || [];
         const pages = res.pagination?.totalPages || 1;
-          console.log("API FULL RESPONSE:", res);
-
+  
         setLeadsData(data.map(mapLead));
-        console.log("RAW LEAD FROM API:", data[0]);
         setTotalPages(pages);
 
         data.forEach((lead) => {
@@ -197,7 +193,6 @@ export default function Leads() {
     const fetchStats = async () => {
       try {
         const res = await leadsAPI.getStats();
-        console.log("STATS RESPONSE:", res);
 
         setStats(res.data || {});
       } catch (err) {
