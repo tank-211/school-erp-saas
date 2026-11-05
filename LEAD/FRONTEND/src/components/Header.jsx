@@ -30,8 +30,6 @@ export default function Header({ onAddLead }) {
         const res = await notificationAPI.getAll();
         const unreadRes = await notificationAPI.getUnreadCount();
 
-        console.log("🔥 FULL NOTIFICATION RESPONSE:", res);
-        console.log("🔥 FULL UNREAD RESPONSE:", unreadRes);
 
         // ✅ CLEAN & CORRECT
         setNotifications(res.data || []);
@@ -43,9 +41,6 @@ export default function Header({ onAddLead }) {
         setLoadingNotif(false);
       }
     };
-    useEffect(() => {
-    console.log("✅ FINAL notifications:", notifications);
-  }, [notifications]);
 
   return (
     <header className="header">

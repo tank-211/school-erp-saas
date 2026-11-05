@@ -166,7 +166,6 @@ const apiRequest = async (endpoint, options = {}) => {
       throw new Error('Request timeout - please try again');
     }
 
-      console.log("🔥 REAL ERROR:", error);
     throw error;
   }
 };
