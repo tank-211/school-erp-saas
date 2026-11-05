@@ -397,6 +397,13 @@ export const leadsAPI = {
     return apiRequest('/leads/stats');
   },
 
+  assign: async (id, assignedTo) => {
+    return apiRequest(`/leads/${id}/assign`, {
+      method: 'PUT',
+      body: { assignedTo: Number(assignedTo) },
+    });
+  },
+
   /**
    * Get lead by ID
    * @param {number} id - Lead ID
