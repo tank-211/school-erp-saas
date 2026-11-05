@@ -183,3 +183,17 @@
 .user-info { display: flex; flex-direction: column; }
 .user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); white-space: nowrap; }
 .user-role-tag { font-size: 11px; color: var(--text-muted); }
+
+/* Compact account menu: keep sign-out out of the persistent header. */
+.logout-btn { display: none; }
+.profile-menu-wrap { position: relative; }
+.header-user { border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.profile-chevron { transition: transform .18s ease; }
+.profile-chevron.is-open { transform: rotate(180deg); }
+.profile-dropdown { position: absolute; top: calc(100% + 10px); right: 0; width: 220px; padding: 8px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 14px 36px rgba(15,23,42,.16); z-index: 120; }
+.profile-dropdown-user { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 12px; border-bottom: 1px solid var(--border); }
+.profile-dropdown-user strong { color: var(--text-primary); font-size: 13px; }
+.profile-dropdown-user span { color: var(--text-muted); font-size: 11px; text-transform: capitalize; }
+.profile-signout { display: flex; align-items: center; gap: 9px; width: 100%; margin-top: 6px; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: #dc2626; font: inherit; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; }
+.profile-signout:hover { background: #fef2f2; }
+@media (max-width: 640px) { .header { padding: 0 12px; } .campus-pill { display: none; } .header-search { max-width: none; } }
