@@ -1,6 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./LeadDetails.css";
+import { communicationAPI } from "../services/api";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // Stages a lead can be moved to; the values are statuses PUT /leads/:id accepts
@@ -39,13 +40,16 @@ export default function LeadDetails() {
     setLead(null);
     setLoadError("");
     fetchLead();
-    // Emails, SMS, WhatsApp and calls with this lead
-    fetch(`${API_URL}/communications/history/${id}?limit=100`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("authToken")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setMessages(data.data?.communications || []))
-      .catch(() => setMessages([]));
+    // Load the lead's communication history through the shared authenticated API client.
+    let active = true;
+    communicationAPI.getHistory(id, { limit: 100 })
+      .then((res) => {
+        if (active) setMessages(res.data?.communications || []);
+      })
+      .catch(() => {
+        if (active) setMessages([]);
+      });
+    return () => { active = false; };
   }, [id]);
 
   const fetchLead = async () => {

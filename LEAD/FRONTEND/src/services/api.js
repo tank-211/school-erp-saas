@@ -544,8 +544,8 @@ export const communicationAPI = {
   // All messages of the school (?channel=&search=&page=&limit=)
   list: (params) => apiRequest(`/communications${query(params)}`),
 
-  getHistory: (leadId) =>
-    apiRequest(`/communications/history/${leadId}`),
+  getHistory: (leadId, params = {}) =>
+    apiRequest(`/communications/history/${leadId}${query(params)}`),
 
   sendEmail: (data) =>
     apiRequest("/communications/email", {
