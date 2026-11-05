@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import './Communication.css'
 import { leadsAPI, communicationAPI } from "../services/api";
 
@@ -166,17 +166,24 @@ export default function Communication() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const requestIdRef = useRef(0)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const load = async () => {
+    const requestId = ++requestIdRef.current
     setLoading(true)
     setError('')
     try {
       const res = await communicationAPI.list({ channel: filter, search, page, limit: 50 })
-      setData(res.data)
+      if (requestId === requestIdRef.current) {
+        setData(res.data || { items: [], counts: {}, pagination: { page: 1, totalPages: 1 } })
+      }
     } catch (err) {
-      setError(err.message || 'Could not load messages')
+      if (requestId === requestIdRef.current) {
+        setError(err.message || 'Could not load messages')
+      }
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }
 
@@ -184,7 +191,7 @@ export default function Communication() {
     const t = setTimeout(load, search ? 300 : 0)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, search, page])
+  }, [filter, search, page, refreshKey])
 
   const counts = data.counts || {}
   const cards = [
@@ -225,7 +232,7 @@ export default function Communication() {
       {showCompose && (
         <ComposePanel
           onClose={() => setShowCompose(false)}
-          onSent={(text) => { setShowCompose(false); setNotice(text); setPage(1); load() }}
+          onSent={(text) => { setShowCompose(false); setNotice(text); setPage(1); setRefreshKey((key) => key + 1) }}
         />
       )}
 
