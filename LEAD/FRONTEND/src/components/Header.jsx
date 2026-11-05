@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 
 export default function Header({ onAddLead }) {
   const [notifOpen, setNotifOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [count, setCount] = useState(0);
   const [loadingNotif, setLoadingNotif] = useState(true);
@@ -103,17 +104,20 @@ export default function Header({ onAddLead }) {
           )}
         </div>
 
-        {/* User */}
-        <div className="header-user">
-          <div className="user-avatar">{(user?.name||"U").split(" ").map(word=>word[0]).join("").toUpperCase()}</div>
-          <div className="user-info">
-            <span className="user-name">{user?.name||"User"}</span>
-            <span className="user-role-tag">{user?.role || ""}</span>
-            <button onClick={handleLogout} className="logout-btn">Logout</button>
-          </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
+        {/* User menu */}
+        <div className="profile-menu-wrap">
+          <button type="button" className="header-user" aria-expanded={profileOpen} aria-haspopup="menu" onClick={() => setProfileOpen((open) => !open)}>
+            <div className="user-avatar">{(user?.name||"U").split(" ").map(word=>word[0]).join("").toUpperCase()}</div>
+            <span className="user-info">
+              <span className="user-name">{user?.name||"User"}</span>
+              <span className="user-role-tag">{user?.role || "Account"}</span>
+            </span>
+            <svg className={`profile-chevron ${profileOpen ? "is-open" : ""}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          {profileOpen && <div className="profile-dropdown" role="menu">
+            <div className="profile-dropdown-user"><strong>{user?.name || "User"}</strong><span>{user?.role || ""}</span></div>
+            <button type="button" className="profile-signout" role="menuitem" onClick={handleLogout}><span aria-hidden="true">↪</span> Sign out</button>
+          </div>}
         </div>
       </div>
     </header>
