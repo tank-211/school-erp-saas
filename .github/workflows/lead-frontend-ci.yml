@@ -39,7 +39,7 @@ jobs:
         run: npm ci
 
       - name: Lint frontend
-        run: npx --yes eslint@9 .
+        run: npx --yes eslint@9 --no-inline-config .
 
       - name: Build frontend
         run: npm run build
