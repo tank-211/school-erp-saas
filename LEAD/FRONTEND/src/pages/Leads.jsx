@@ -52,7 +52,7 @@ const formatDate = (date) =>
 const statusMap = { New: 'badge-blue', Contacted: 'badge-gray', Qualified: 'badge-green', Admitted: 'badge-green', Lost: 'badge-red' }
 
 export default function Leads() {
-  const [viewMode, setViewMode] = useState('grid')
+  const [viewMode, setViewMode] = useState('list')
   const [leadsData, setLeadsData] = useState([]);
   const [leadsLoading, setLeadsLoading] = useState(true);
   const [leadsError, setLeadsError] = useState('');
@@ -417,11 +417,10 @@ return (
           ))}
         </div>
       ) : (
-        <div className="leads-table-wrap">
+        <div className="leads-table-section"><div className="leads-table-toolbar"><div><h2>All Leads</h2><p>Review, filter and manage your admission enquiries.</p></div><span className="leads-result-count">{leadsData.length} shown · Page {page} of {totalPages}</span></div><div className="leads-table-wrap">
           <table className="leads-table">
             <thead><tr>
-              <th>Student</th><th>Grade</th><th>Contact</th>
-              <th>Source</th><th>Status</th><th>Counselor</th><th>Last Contact</th>
+              <th>Student &amp; Contact</th><th>Grade</th><th>Source</th><th>Status</th><th>Assigned Counselor</th><th>Last Contact</th><th>Action</th>
             </tr></thead>
             <tbody>
               {filtered.map(lead => (
@@ -429,28 +428,28 @@ return (
                   <td>
                     <div className="lead-name-cell">
                       <div className="lead-avatar">{(lead.name || "L")[0]}</div>
-                      <div><div className="lead-table-name">{lead.name}</div></div>
+                      <div><div className="lead-table-name">{lead.name}</div><div className="lead-table-contact">{lead.phone} · {lead.email}</div></div>
                     </div>
                   </td>
                   <td><span className="badge badge-gray">{lead.grade}</span></td>
-                  <td><div style={{ fontSize: 12 }}>{lead.phone}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.email}</div></td>
+                  
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><span className="src-dot" style={{ background: lead.sourceColor }} />{lead.source}</div></td>
                   <td><span className={`badge ${statusMap[lead.status] || 'badge-gray'}`}>{lead.status}</span></td>
                   <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} disabled={assigningLeadId === lead.id} onChange={e=>handleAssignLead(lead.id,e.target.value)} aria-label={`Assign ${lead.name} to counselor`} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
-                  <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{lead.lastContact}</td>
+                  <td><span className="lead-last-contact">{lead.lastContact}</span></td><td><button type="button" className="lead-open-btn" onClick={(event) => { event.stopPropagation(); navigate(`/leads/${lead.id}`); }}>View lead <span aria-hidden="true">→</span></button></td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </div></div>
       )}
         {/* Pagination */}
-        <div style={{ marginTop: 20, display: "flex", justifyContent: "center", gap: 10 }}>
+        <div className="leads-pagination">
           <button
             onClick={() => setPage(prev => Math.max(prev - 1, 1))}
             disabled={page === 1}
           >
-            Prev
+            Previous
           </button>
 
           <span>Page {page} of {totalPages}</span>
