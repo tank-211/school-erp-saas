@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { leadsAPI, reportsAPI } from '../services/api'
+import { leadsAPI, reportsAPI, communicationAPI, usersAPI } from '../services/api'
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
@@ -54,6 +54,10 @@ const statusMap = { New: 'badge-blue', Contacted: 'badge-gray', Qualified: 'badg
 export default function Leads() {
   const [viewMode, setViewMode] = useState('grid')
   const [leadsData, setLeadsData] = useState([]);
+  const [leadsLoading, setLeadsLoading] = useState(true);
+  const [leadsError, setLeadsError] = useState('');
+  const [statsError, setStatsError] = useState('');
+  const [lookupsError, setLookupsError] = useState('');
   const [users, setUsers] = useState([]);
   const [communicationHistory, setCommunicationHistory] = useState({});
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '')
@@ -61,7 +65,18 @@ export default function Leads() {
   // Sources and classes for the filters, from the school's own data
   const [lookups, setLookups] = useState({ sources: [], classes: [] })
   useEffect(() => {
-    reportsAPI.lookups().then((res) => setLookups(res.data)).catch(() => {})
+    let active = true;
+    reportsAPI.lookups()
+      .then((res) => {
+        if (active) {
+          setLookups(res.data || { sources: [], classes: [] });
+          setLookupsError('');
+        }
+      })
+      .catch((error) => {
+        if (active) setLookupsError(error.message || 'Could not load filter options.');
+      });
+    return () => { active = false; };
   }, [])
   // Keys returned by GET /leads/stats: pending = new stage, admitted = enrolled
   const [stats, setStats] = useState({
@@ -106,30 +121,22 @@ export default function Leads() {
   const [totalPages, setTotalPages] = useState(1);
   const fetchHistory = async (leadId) => {
     try {
-      const token = localStorage.getItem("authToken");
-
-      const res = await fetch(
-        `${API_URL}/communications/history/${leadId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await res.json();
-
+      const res = await communicationAPI.getHistory(leadId, { limit: 5 });
       setCommunicationHistory((prev) => ({
         ...prev,
-        [leadId]: data.data?.communications || [],
+        [leadId]: res.data?.communications || [],
       }));
     } catch (err) {
-      console.error(err);
+      console.error(`Could not load communication history for lead ${leadId}:`, err);
+      setCommunicationHistory((prev) => ({ ...prev, [leadId]: [] }));
     }
   };
 
   useEffect(() => {
+    let active = true;
     const fetchLeads = async () => {
+      setLeadsLoading(true);
+      setLeadsError('');
       try {
       const apiFilters = {};
       if (search.trim()) {
@@ -172,31 +179,35 @@ export default function Leads() {
         const data = res.data || [];
         const pages = res.pagination?.totalPages || 1;
   
+        if (!active) return;
         setLeadsData(data.map(mapLead));
         setTotalPages(pages);
-
-        data.forEach((lead) => {
-          fetchHistory(lead.id);
-        });
-
+        data.forEach((lead) => { fetchHistory(lead.id); });
       } catch (err) {
+        if (!active) return;
         console.error("Error fetching leads:", err);
+        setLeadsError(err.message || 'Unable to load leads. Please try again.');
+        setLeadsData([]);
+        setTotalPages(1);
+      } finally {
+        if (active) setLeadsLoading(false);
       }
     };
-    
 
     fetchLeads();
-  }, [filters, page, search, refreshKey]); // 🔥 THIS IS THE FIX
+    return () => { active = false; };
+  }, [filters, page, search, refreshKey]);
 
 
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await leadsAPI.getStats();
-
         setStats(res.data || {});
+        setStatsError('');
       } catch (err) {
         console.error("Stats error:", err);
+        setStatsError(err.message || 'Could not load lead statistics.');
       }
     };
 
@@ -205,18 +216,11 @@ export default function Leads() {
     
 
 useEffect(() => {
-  const token = localStorage.getItem("authToken");
-
-  fetch(`${API_URL}/users`, {
-    headers: {
-      Authorization: `Bearer ${token}`
-    }
-  })
-    .then(res => res.json())
-    .then(data => {
-      setUsers(data.data || []);
-    })
-    .catch(console.error);
+  let active = true;
+  usersAPI.getUsers()
+    .then((res) => { if (active) setUsers(res.data || []); })
+    .catch((err) => console.error('Could not load users:', err));
+  return () => { active = false; };
 }, []);
 
 const handleAssignLead = async (leadId, userId) => {
@@ -330,6 +334,8 @@ return (
       </div>
 
       {/* Stat Cards */}
+      {statsError && <div role="status" className="error-message">{statsError}</div>}
+      {lookupsError && <div role="status" className="error-message">{lookupsError}</div>}
       <div className="leads-stats">
         {statCards.map((c, i) => (
           <div key={i} className="lead-stat-card">
@@ -372,7 +378,16 @@ return (
       </div>
 
       {/* Grid View */}
-      {viewMode === 'grid' ? (
+      {leadsLoading ? (
+        <div role="status" className="loading-state">Loading leads...</div>
+      ) : leadsError ? (
+        <div role="alert" className="error-state">
+          <p>{leadsError}</p>
+          <button type="button" onClick={() => setRefreshKey((key) => key + 1)}>Retry</button>
+        </div>
+      ) : leadsData.length === 0 ? (
+        <div className="empty-state">No leads found for the selected filters.</div>
+      ) : viewMode === 'grid' ? (
         <div className="leads-grid">
           {filtered.map(lead=> ( <div id={`lead-${lead.id}`} key={lead.id} className="lead-card-full" onClick={()=>navigate(`/leads/${lead.id}`)} style={{cursor:"pointer",border:lead.id===Number(selectedLeadId)?"3px solid #10b981":""}}>
               <div className="lcf-header">

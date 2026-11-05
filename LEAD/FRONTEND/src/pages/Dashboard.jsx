@@ -72,8 +72,6 @@ const humanizeType = (type) => {
   const text = String(type).replaceAll("_", " ").toLowerCase();
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
-console.log("API URL =", import.meta.env.VITE_API_URL);
-console.log(import.meta.env);
 export default function Dashboard() {
   // One colour per stage the API returns: new, contacted, qualified, admitted, lost (+ other)
   const COLORS = ['#3b82f6', '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#94a3b8'];
@@ -86,42 +84,35 @@ export default function Dashboard() {
   const [todayData, setTodayData] = useState(null);
   const [activities, setActivities] = useState([]);
   const { settings } = useSettings() || {}
+  const [refreshKey, setRefreshKey] = useState(0);
+
   useEffect(() => {
-  const fetchAll = async () => {
-    try {
+    let active = true;
+    const fetchAll = async () => {
       setLoading(true);
+      setError(null);
+      try {
+        const response = await dashboardAPI.getCompleteDashboard();
+        const data = response?.data || {};
+        if (!active) return;
+        setStats(data.stats || {});
+        setPieData(Array.isArray(data.statusDistribution) ? data.statusDistribution : []);
+        setTrendData(Array.isArray(data.enrollmentTrend) ? data.enrollmentTrend : []);
+        setGradeData(Array.isArray(data.gradeDistribution) ? data.gradeDistribution : []);
+        setTodayData(data.todayOverview || {});
+        setActivities(Array.isArray(data.recentActivities) ? data.recentActivities : []);
+      } catch (err) {
+        if (!active) return;
+        console.error('Dashboard error:', err);
+        setError(err.message || 'Failed to load dashboard. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
 
-  const response = await dashboardAPI.getCompleteDashboard();
-
-  console.log("FULL RESPONSE:", response);
-  console.log(
-    "STATUS DISTRIBUTION:",
-    response.data.statusDistribution
-  );
-
-  const data = response.data;
-
-  console.log("DATA:", data);
-
-  setStats(data.stats || {});
-  setPieData(data.statusDistribution || []);
-  setTrendData(data.enrollmentTrend || []);
-  setGradeData(data.gradeDistribution || []);
-  setTodayData(data.todayOverview || {});
-  setActivities(data.recentActivities || []);
-
-  console.log("ACTIVITIES STATE INPUT:", data.recentActivities);
-  
-    } catch (err) {
-      console.error("Dashboard error:", err);
-      setError("Failed to load dashboard");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  fetchAll();
-}, []);
+    fetchAll();
+    return () => { active = false; };
+  }, [refreshKey]);
 
   const buildStatCards = () => {
     if (!stats) {
@@ -176,24 +167,14 @@ export default function Dashboard() {
   const statCards = React.useMemo(() => buildStatCards(), [stats]);
   const formatDate = (date) => {
     if (!date) return "No date";
-
-    return new Date(date).toLocaleString("en-IN", {
-      timeZone: settings?.timezone || "UTC"
-    });
+    const parsedDate = new Date(date);
+    if (Number.isNaN(parsedDate.getTime())) return "Invalid date";
+    try {
+      return parsedDate.toLocaleString("en-IN", { timeZone: settings?.timezone || "UTC" });
+    } catch {
+      return parsedDate.toLocaleString("en-IN");
+    }
   };
-
-  useEffect(() => {
-    console.log("📈 trendData UPDATED:", trendData);
-  }, [trendData]);
-
-  useEffect(() => {
-    console.log("🥧 pieData UPDATED:", pieData);
-  }, [pieData]);
-
-  useEffect(() => {
-    console.log("📊 gradeData UPDATED:", gradeData);
-  }, [gradeData]);
-
 
   return (
     <div className="dashboard">
@@ -211,7 +192,7 @@ export default function Dashboard() {
         <div className="error-banner">
           <div style={{ color: '#dc2626', marginBottom: '8px' }}>⚠️ {error}</div>
           <button 
-            onClick={() => {setError(null);window.location.reload();}}
+            onClick={() => setRefreshKey((key) => key + 1)}
             style={{
               padding: '6px 12px',
               background: '#dc2626',
@@ -289,7 +270,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {!pieData || pieData.length === 0 ? (
+          {pieData.filter(item => Number(item.value) > 0).length === 0 ? (
             <div className="empty-chart">No status data</div>
           ) : (
             <div className="pie-wrapper">
@@ -398,7 +379,7 @@ export default function Dashboard() {
     </div>        
       {/* Recent Activities */}
     <div className="charts-row">
-      <div className="charts-card">
+      <div className="chart-card">
         <div className="chart-header">
           <div>
             <h3 className="chart-title">Recent Activities</h3>

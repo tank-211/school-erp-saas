@@ -1,0 +1,45 @@
+name: Lead CRM Frontend CI
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "LEAD/FRONTEND/**"
+      - ".github/workflows/lead-frontend-ci.yml"
+  push:
+    branches:
+      - fix/lead-crm-frontend-glitches
+    paths:
+      - "LEAD/FRONTEND/**"
+      - ".github/workflows/lead-frontend-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Install and production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: LEAD/FRONTEND
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: LEAD/FRONTEND/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npx --yes eslint@9 --no-inline-config .
+
+      - name: Build frontend
+        run: npm run build
