@@ -7,7 +7,8 @@ const browserGlobals = [
   'HTMLElement', 'Element', 'Node', 'MutationObserver', 'IntersectionObserver',
   'ResizeObserver', 'Image', 'Audio', 'Event', 'CustomEvent',
   'requestAnimationFrame', 'cancelAnimationFrame', 'performance',
-  'crypto', 'atob', 'btoa', 'Intl', 'structuredClone'
+  'crypto', 'atob', 'btoa', 'Intl', 'structuredClone',
+  'require', 'module', 'process', '__dirname', '__filename', 'Buffer', 'global'
 ]
 
 const globals = Object.fromEntries(browserGlobals.map((name) => [name, 'readonly']))
