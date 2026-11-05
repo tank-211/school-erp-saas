@@ -1,5 +1,3 @@
-import { defineConfig } from 'eslint/config'
-
 const browserGlobals = [
   'window', 'document', 'navigator', 'localStorage', 'sessionStorage',
   'location', 'history', 'fetch', 'Headers', 'Request', 'Response',
@@ -14,7 +12,7 @@ const browserGlobals = [
 
 const globals = Object.fromEntries(browserGlobals.map((name) => [name, 'readonly']))
 
-export default defineConfig([
+export default [
   {
     ignores: ['dist/**', 'node_modules/**', 'coverage/**']
   },
@@ -43,4 +41,4 @@ export default defineConfig([
       }]
     }
   }
-])
+]
