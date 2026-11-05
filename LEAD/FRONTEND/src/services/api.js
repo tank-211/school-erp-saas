@@ -96,14 +96,33 @@ const createAuthHeaders = (additionalHeaders = {}) => {
   return headers;
 };
 
-// Generic API request handler with authentication and error handling
+// Consistent error shape for every request made through this service.
+export class APIError extends Error {
+  constructor(message, { status = null, code = null, details = null } = {}) {
+    super(message);
+    this.name = 'APIError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+// Generic API request handler. The global session guard above owns 401 logout
+// behavior; this function only reports the rejected request to its caller.
 const apiRequest = async (endpoint, options = {}) => {
   const {
     method = 'GET',
     body = null,
     headers = {},
     requiresAuth = true,
+    signal,
   } = options;
+
+  if (!apiConfig.baseURL) {
+    throw new APIError('API URL is not configured. Set VITE_API_URL and redeploy.', {
+      code: 'API_URL_NOT_CONFIGURED',
+    });
+  }
 
   const url = `${apiConfig.baseURL}${endpoint}`;
   const requestOptions = {
@@ -111,62 +130,81 @@ const apiRequest = async (endpoint, options = {}) => {
     headers: requiresAuth
       ? createAuthHeaders(headers)
       : { 'Content-Type': 'application/json', ...headers },
-};
+  };
 
-  if (body && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+  if (body !== null && body !== undefined && ['POST', 'PUT', 'PATCH'].includes(method)) {
     requestOptions.body = JSON.stringify(body);
   }
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), apiConfig.timeout);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), apiConfig.timeout);
+  const abortFromCaller = () => controller.abort();
 
+  if (signal) {
+    if (signal.aborted) controller.abort();
+    else signal.addEventListener('abort', abortFromCaller, { once: true });
+  }
+
+  try {
     const response = await fetch(url, {
       ...requestOptions,
       signal: controller.signal,
     });
 
-    clearTimeout(timeoutId);
+    const contentType = response.headers.get('content-type') || '';
+    const isJson = contentType.includes('application/json');
+    const responseData = isJson
+      ? await response.json().catch(() => null)
+      : null;
 
-    // Handle 401 Unauthorized - token expired or invalid
-    if (response.status === 401) {
-      console.error("❌ Unauthorized request");
-
-      // ❗ DO NOT AUTO LOGOUT blindly
-      throw new Error("Unauthorized");
-    }
-
-    // Handle other error status codes
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      const error = new Error(errorData.message || 'API error');
-        error.details = errorData;
-        throw error;
-
+      const message = responseData?.message ||
+        (response.status === 401 ? 'Your session is invalid or has expired. Please sign in again.' : `Request failed with status ${response.status}.`);
+      throw new APIError(message, {
+        status: response.status,
+        code: responseData?.code || (response.status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR'),
+        details: responseData,
+      });
     }
 
-    // Handle successful responses
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const result = await response.json();
-
-      // Backend returns { success: boolean, data: any, message?: string }
-      if (!result.success) {
-        throw new Error(result.message || 'API request failed');
+    if (isJson) {
+      if (responseData === null) {
+        throw new APIError('The server returned an invalid JSON response.', {
+          status: response.status,
+          code: 'INVALID_JSON',
+        });
       }
 
-      return result;
+      // Preserve the backend envelope contract while allowing plain JSON payloads.
+      if (responseData.success === false) {
+        throw new APIError(responseData.message || 'API request failed.', {
+          status: response.status,
+          code: responseData.code || 'API_REQUEST_FAILED',
+          details: responseData,
+        });
+      }
+
+      return responseData;
     }
 
-    // For non-JSON responses (like file downloads)
+    // Non-JSON responses are returned for downloads and other binary endpoints.
     return response;
-
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Request timeout - please try again');
+      const timedOut = !signal?.aborted;
+      throw new APIError(
+        timedOut ? 'Request timed out. Please try again.' : 'Request was cancelled.',
+        { code: timedOut ? 'REQUEST_TIMEOUT' : 'REQUEST_ABORTED' }
+      );
     }
-
-    throw error;
+    if (error instanceof APIError) throw error;
+    throw new APIError(error.message || 'Network request failed. Check your connection and try again.', {
+      code: 'NETWORK_ERROR',
+      details: error,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abortFromCaller);
   }
 };
 
