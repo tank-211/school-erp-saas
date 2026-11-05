@@ -340,7 +340,7 @@ if (!lead) {
           </div>
 
           <button
-            className="btn-secondary"
+            className="app-open-btn"
             onClick={() => navigate(`/applications/${application[0].id}`)}
             >
             Open Application
