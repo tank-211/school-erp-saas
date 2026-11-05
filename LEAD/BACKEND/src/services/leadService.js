@@ -223,7 +223,7 @@ export const STATUS_GROUPS = {
   if (data.assignedTo !== undefined) {
     if (data.assignedTo === null || data.assignedTo === "") assignedTo = null;
     else {
-      if (!/^\\d+$/.test(String(data.assignedTo))) throw new AppError("Invalid counselor", 400);
+      if (!/^\d+$/.test(String(data.assignedTo))) throw new AppError("Invalid counselor", 400);
       const assignee = await prisma.user.findFirst({
         where: { id: BigInt(data.assignedTo), school_id: BigInt(schoolId), status: "active" },
         select: { id: true },
@@ -239,7 +239,8 @@ export const STATUS_GROUPS = {
     ...(data.fatherEmail !== undefined && { email: data.fatherEmail.trim() || null }),
     ...(data.grade !== undefined && { desired_class: data.grade.trim() || null }),
     ...(data.source !== undefined && { source: data.source || null }),
-    ...(data.status !== undefined && { follow_up_status: data.status }),\n    ...(data.assignedTo !== undefined && { assigned_to: assignedTo }),
+    ...(data.status !== undefined && { follow_up_status: data.status }),
+    ...(data.assignedTo !== undefined && { assigned_to: assignedTo }),
     ...(data.notes !== undefined || Object.values(detailFields).some(v => v !== undefined) ? { notes: combinedNotes } : {}),
     updated_at: new Date(),
   }});
