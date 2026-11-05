@@ -58,6 +58,8 @@ export default function Leads() {
   const [leadsError, setLeadsError] = useState('');
   const [statsError, setStatsError] = useState('');
   const [lookupsError, setLookupsError] = useState('');
+  const [usersError, setUsersError] = useState('');
+  const [assigningLeadId, setAssigningLeadId] = useState(null);
   const [users, setUsers] = useState([]);
   const [communicationHistory, setCommunicationHistory] = useState({});
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '')
@@ -196,7 +198,7 @@ export default function Leads() {
 
     fetchLeads();
     return () => { active = false; };
-  }, [filters, page, search, refreshKey]);
+  }, [filters, page, search, refreshKey, users]);
 
 
   useEffect(() => {
@@ -218,106 +220,71 @@ export default function Leads() {
 useEffect(() => {
   let active = true;
   usersAPI.getCounselors()
-    .then((res) => { if (active) setUsers(res.data || []); })
-    .catch((err) => console.error('Could not load users:', err));
+    .then((res) => { if (active) { setUsers(Array.isArray(res.data) ? res.data : []); setUsersError(''); } })
+    .catch((err) => { if (active) setUsersError(err.message || 'Could not load counselors.'); });
   return () => { active = false; };
 }, []);
 
 const handleAssignLead = async (leadId, userId) => {
+  if (!userId) return;
+  setAssigningLeadId(leadId);
   try {
-    const token = localStorage.getItem("authToken");
-
-    const res = await fetch(`${API_URL}/leads/${leadId}/assign`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        assignedTo: Number(userId)
-      })
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(body.message || "Could not assign the lead");
-    }
-
-    setLeadsData(prev =>
-      prev.map(lead =>
-        lead.id === leadId
-          ? {
-              ...lead,
-              assignedTo: String(userId),
-              counselor:
-                users.find(u => String(u.id) === String(userId))?.name ||
-                lead.counselor
-            }
-          : lead
-      )
-    );
+    await leadsAPI.assign(leadId, userId);
+    const counselor = users.find((u) => String(u.id) === String(userId));
+    setLeadsData((prev) => prev.map((lead) => lead.id === leadId
+      ? { ...lead, assignedTo: String(userId), counselor: counselor?.name || lead.counselor }
+      : lead
+    ));
   } catch (err) {
-    alert(err.message || "Could not assign the lead");
+    window.alert(err.message || "Could not assign the lead");
+  } finally {
+    setAssigningLeadId(null);
   }
 };
 
 const exportToExcel = async () => {
-
-    try {
-
-        // The list API returns at most 100 per page: fetch every page
-        const all = [];
-        for (let p = 1, pages = 1; p <= pages; p++) {
-            const res = await leadsAPI.getAll({ limit: 100, page: p });
-            all.push(...(res.data || []));
-            pages = res.pagination?.totalPages || 1;
-        }
-
-        const data = all.map(lead => ({
-            Name: lead.name,
-            Phone: lead.phone,
-            Email: lead.email,
-            Grade: lead.grade,
-            Source: lead.source,
-            Status: lead.status,
-            Counselor: lead.counselor,
-            "Last contacted": lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleDateString("en-IN") : "",
-            Created: lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("en-IN") : ""
-        }));
-
-        const worksheet =
-            XLSX.utils.json_to_sheet(data);
-
-        const workbook =
-            XLSX.utils.book_new();
-
-        XLSX.utils.book_append_sheet(
-            workbook,
-            worksheet,
-            "Leads"
-        );
-
-        const excelBuffer =
-            XLSX.write(workbook,{
-                bookType:"xlsx",
-                type:"array"
-            });
-
-        const blob =
-            new Blob(
-                [excelBuffer],
-                {
-                    type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                }
-            );
-
-        saveAs(blob,"Leads.xlsx");
-
-    } catch(err){
-
-        console.error(err);
-
+  try {
+    const apiFilters = {};
+    if (search.trim()) apiFilters.search = search.trim();
+    if (filters.status !== "All Statuses") apiFilters.status = statusMapUIToBackend[filters.status];
+    if (filters.source !== "All Sources") apiFilters.source = filters.source;
+    if (filters.grade !== "All Grades") apiFilters.grade = filters.grade;
+    if (filters.counselor !== "All Counselors") {
+      const selectedUser = users.find((user) => user.name === filters.counselor);
+      if (selectedUser) apiFilters.counselor = selectedUser.id;
     }
+    if (filters.date !== "All Time") apiFilters.date = filters.date;
 
+    const all = [];
+    for (let p = 1, pages = 1; p <= pages; p += 1) {
+      const res = await leadsAPI.getAll({ ...apiFilters, limit: 100, page: p });
+      all.push(...(Array.isArray(res.data) ? res.data : []));
+      pages = res.pagination?.totalPages || 1;
+    }
+    if (!all.length) {
+      window.alert("There are no leads matching the current filters to export.");
+      return;
+    }
+    const rows = all.map((lead) => ({
+      Name: lead.name || "",
+      Phone: lead.phone || "",
+      Email: lead.email || "",
+      Grade: lead.grade || "",
+      Source: lead.source || "",
+      Status: lead.status || "",
+      Counselor: lead.counselor || "Unassigned",
+      "Last contacted": lead.lastContactedAt ? new Date(lead.lastContactedAt).toLocaleDateString("en-IN") : "",
+      Created: lead.createdAt ? new Date(lead.createdAt).toLocaleDateString("en-IN") : "",
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Leads");
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    saveAs(new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "Leads.xlsx");
+  } catch (err) {
+    console.error("Lead export failed:", err);
+    window.alert(err.message || "Could not export leads. Please try again.");
+  }
 };
 
 return (
@@ -336,6 +303,7 @@ return (
       {/* Stat Cards */}
       {statsError && <div role="status" className="error-message">{statsError}</div>}
       {lookupsError && <div role="status" className="error-message">{lookupsError}</div>}
+      {usersError && <div role="status" className="error-message">{usersError}</div>}
       <div className="leads-stats">
         {statCards.map((c, i) => (
           <div key={i} className="lead-stat-card">
@@ -372,7 +340,7 @@ return (
           ))}
           <div className="filt-group">
             <label className="filt-label">Search</label>
-            <input className="filt-search" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="filt-search" placeholder="Search..." value={search} onChange={e => { setPage(1); setSearch(e.target.value); }} />
           </div>
         </div>
       </div>
@@ -468,7 +436,7 @@ return (
                   <td><div style={{ fontSize: 12 }}>{lead.phone}</div><div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{lead.email}</div></td>
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><span className="src-dot" style={{ background: lead.sourceColor }} />{lead.source}</div></td>
                   <td><span className={`badge ${statusMap[lead.status] || 'badge-gray'}`}>{lead.status}</span></td>
-                  <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} onChange={e=>handleAssignLead(lead.id,e.target.value)} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
+                  <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} disabled={assigningLeadId === lead.id} onChange={e=>handleAssignLead(lead.id,e.target.value)} aria-label={`Assign ${lead.name} to counselor`} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
                   <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{lead.lastContact}</td>
                 </tr>
               ))}
