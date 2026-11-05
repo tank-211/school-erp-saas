@@ -160,3 +160,9 @@ gap: 12px;
 .lead-edit-field input,.lead-edit-field select,.lead-edit-field textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;font-weight:400;color:#0f172a;background:#fff}
 .lead-edit-actions{justify-content:flex-end;margin-top:18px}.lead-edit-error{color:#b91c1c;font-size:13px}
 @media(max-width:600px){.lead-edit-grid{grid-template-columns:1fr}.lead-edit-modal{padding:18px}.lead-header-actions{align-items:flex-start;flex-direction:column}}
+
+/* Primary application action */
+.app-open-btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; margin-top: 14px; padding: 10px 16px; border: 1px solid #059669; border-radius: 9px; background: #059669; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+.app-open-btn::after { content: "→"; font-size: 16px; }
+.app-open-btn:hover { background: #047857; transform: translateY(-1px); }
+.app-open-btn:focus-visible { outline: 3px solid rgba(59,130,246,.25); outline-offset: 2px; }

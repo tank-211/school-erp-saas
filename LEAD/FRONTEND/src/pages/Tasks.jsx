@@ -189,6 +189,9 @@ export default function Tasks() {
   ]
 
   const deleteTask = async (id) => {
+    const taskToDelete = tasks.find((task) => String(task.id) === String(id));
+    const confirmed = window.confirm(`Delete "${taskToDelete?.title || "this task"}"? This action cannot be undone.`);
+    if (!confirmed) return;
     try {
       await taskAPI.deleteTask(id);
 
@@ -455,8 +458,14 @@ export default function Tasks() {
                 </div>
                 <div className="task-right">
                   {task.leadId && <button className="task-lead-link" onClick={() => navigate(`/leads/${task.leadId}`)} style={{background:"none",border:"none",color:"#10b981",cursor:"pointer"}}>View Lead: {task.leadName || `#${task.leadId}`} →</button>}
-                  <button onClick={() => deleteTask(task.id)} style={{background:"#ef4444",color:"white",border:"none",padding:"8px 12px",borderRadius:"6px",cursor:"pointer"}}>Delete</button>
-                  <button onClick={() => {setEditingTask(task);setFormData({title:task.title,description:task.task_description||"",dueDate:task.dueDate?.split("T")[0],priority:task.priority,status:task.status,leadId:task.leadId,assignedTo:task.assignedTo});setShowModal(true);}} style={{background:"#3b82f6",color:"white",border:"none",padding:"8px 14px",borderRadius:"8px",cursor:"pointer",fontWeight:"600",marginRight:"8px"}}>✏ Edit</button>
+                  <div className="task-action-buttons">
+                    <button type="button" className="task-edit-btn" title="Edit task" aria-label={`Edit task: ${task.title}`} onClick={() => {setEditingTask(task);setFormData({title:task.title,description:task.task_description||"",dueDate:task.dueDate?.split("T")[0],priority:task.priority,status:task.status,leadId:task.leadId,assignedTo:task.assignedTo});setShowModal(true);}}>
+                      <span aria-hidden="true">✎</span><span>Edit</span>
+                    </button>
+                    <button type="button" className="task-delete-btn" title="Delete task" aria-label={`Delete task: ${task.title}`} onClick={() => deleteTask(task.id)}>
+                      <span aria-hidden="true">⌫</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

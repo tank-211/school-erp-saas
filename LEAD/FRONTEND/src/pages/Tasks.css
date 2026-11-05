@@ -83,3 +83,14 @@
 .task-lead-link {background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;padding:0}
 .task-lead-link:hover{text-decoration:underline}
 
+
+/* Clear, consistent task actions */
+.task-right { min-width: 190px; }
+.task-action-buttons { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.task-edit-btn, .task-delete-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; border-radius: 9px; font-size: 12px; font-weight: 700; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
+.task-edit-btn { padding: 0 12px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1d4ed8; }
+.task-edit-btn:hover { background: #dbeafe; border-color: #93c5fd; }
+.task-delete-btn { width: 36px; padding: 0; border: 1px solid #fecaca; background: #fff7f7; color: #dc2626; font-size: 18px; }
+.task-delete-btn:hover { background: #fee2e2; border-color: #fca5a5; }
+.task-edit-btn:focus-visible, .task-delete-btn:focus-visible { outline: 3px solid rgba(59,130,246,.25); outline-offset: 2px; }
+@media (max-width: 760px) { .tasks-page { padding: 16px; } .task-row { flex-wrap: wrap; } .task-right { width: 100%; min-width: 0; flex-direction: row; justify-content: space-between; align-items: center; padding-left: 34px; } }
