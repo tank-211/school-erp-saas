@@ -340,7 +340,7 @@ return (
           ))}
           <div className="filt-group">
             <label className="filt-label">Search</label>
-            <input className="filt-search" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="filt-search" placeholder="Search..." value={search} onChange={e => { setPage(1); setSearch(e.target.value); }} />
           </div>
         </div>
       </div>
