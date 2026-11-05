@@ -219,6 +219,19 @@ export const STATUS_GROUPS = {
   const retained = Object.entries(detailFields).filter(([,v]) => v !== undefined && v !== "").map(([k,v]) => `${k}: ${String(v).trim()}`);
   const notes = data.notes !== undefined ? String(data.notes || "").trim() : baseNotes;
   const combinedNotes = [notes, ...retained].filter(Boolean).join("\n\n") || null;
+  let assignedTo = undefined;
+  if (data.assignedTo !== undefined) {
+    if (data.assignedTo === null || data.assignedTo === "") assignedTo = null;
+    else {
+      if (!/^\\d+$/.test(String(data.assignedTo))) throw new AppError("Invalid counselor", 400);
+      const assignee = await prisma.user.findFirst({
+        where: { id: BigInt(data.assignedTo), school_id: BigInt(schoolId), status: "active" },
+        select: { id: true },
+      });
+      if (!assignee) throw new AppError("Counselor not found in this school", 400);
+      assignedTo = String(assignee.id);
+    }
+  }
   const updatedLead = await prisma.lead.update({ where: { id: existingLead.id }, data: {
     ...(data.studentFirstName !== undefined && { first_name: data.studentFirstName.trim() }),
     ...(data.studentLastName !== undefined && { last_name: data.studentLastName.trim() }),
@@ -226,7 +239,7 @@ export const STATUS_GROUPS = {
     ...(data.fatherEmail !== undefined && { email: data.fatherEmail.trim() || null }),
     ...(data.grade !== undefined && { desired_class: data.grade.trim() || null }),
     ...(data.source !== undefined && { source: data.source || null }),
-    ...(data.status !== undefined && { follow_up_status: data.status }),
+    ...(data.status !== undefined && { follow_up_status: data.status }),\n    ...(data.assignedTo !== undefined && { assigned_to: assignedTo }),
     ...(data.notes !== undefined || Object.values(detailFields).some(v => v !== undefined) ? { notes: combinedNotes } : {}),
     updated_at: new Date(),
   }});
