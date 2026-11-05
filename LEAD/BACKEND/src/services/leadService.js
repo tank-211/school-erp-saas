@@ -210,15 +210,40 @@ export const STATUS_GROUPS = {
   const existingLead = await prisma.lead.findFirst({ where: { id: BigInt(id), school_id: BigInt(schoolId) } });
   if (!existingLead) throw new AppError("Lead not found", 404);
   const detailFields = {
-    "Father": data.fatherName, "Mother": data.motherName, "Mother phone": data.motherPhone,
-    "Mother email": data.motherEmail, "Current school": data.currentSchool,
-    "Date of birth": data.dob ? String(data.dob).slice(0, 10) : undefined, "Gender": data.gender,
+    "Father": data.fatherName,
+    "Mother": data.motherName,
+    "Mother phone": data.motherPhone,
+    "Mother email": data.motherEmail,
+    "Current school": data.currentSchool,
+    "Date of birth": data.dob !== undefined ? (data.dob ? String(data.dob).slice(0, 10) : "") : undefined,
+    "Gender": data.gender,
   };
-  const oldNotes = String(existingLead.notes || "");
-  const baseNotes = oldNotes.split(/\n(?=(?:Father|Mother|Mother phone|Mother email|Current school|Date of birth|Gender): )/)[0].trim();
-  const retained = Object.entries(detailFields).filter(([,v]) => v !== undefined && v !== "").map(([k,v]) => `${k}: ${String(v).trim()}`);
-  const notes = data.notes !== undefined ? String(data.notes || "").trim() : baseNotes;
-  const combinedNotes = [notes, ...retained].filter(Boolean).join("\n\n") || null;
+  // Merge partial updates into the structured details stored in notes.
+  // Omitted fields retain their existing values instead of being erased.
+  const detailLabels = Object.keys(detailFields);
+  const oldLines = String(existingLead.notes || "").split(/\r?\n/);
+  const existingDetails = new Map();
+  const freeTextLines = [];
+  for (const line of oldLines) {
+    const match = line.match(/^([^:]+):\s*(.*)$/);
+    if (match && detailLabels.includes(match[1])) existingDetails.set(match[1], match[2]);
+    else freeTextLines.push(line);
+  }
+  for (const [label, value] of Object.entries(detailFields)) {
+    if (value !== undefined) {
+      const normalized = String(value ?? "").trim();
+      if (normalized) existingDetails.set(label, normalized);
+      else existingDetails.delete(label);
+    }
+  }
+  const notes = data.notes !== undefined
+    ? String(data.notes || "").trim()
+    : freeTextLines.join("\n").trim();
+  const combinedNotes = [
+    notes,
+    ...detailLabels.filter((label) => existingDetails.has(label))
+      .map((label) => `${label}: ${existingDetails.get(label)}`),
+  ].filter(Boolean).join("\n\n") || null;
   let assignedTo = undefined;
   if (data.assignedTo !== undefined) {
     if (data.assignedTo === null || data.assignedTo === "") assignedTo = null;
