@@ -21,7 +21,17 @@ import { createLeadSchema, updateLeadSchema } from "../utils/validators.js";
 
 const router = express.Router();
 
-const upload = multer({ dest: "uploads/" });
+const upload = multer({
+  dest: "uploads/",
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, callback) => {
+    const extension = file.originalname.toLowerCase().split(".").pop();
+    if (extension !== "csv" && extension !== "xlsx") {
+      return callback(new Error("Only .csv and .xlsx files are supported"));
+    }
+    callback(null, true);
+  },
+});
 
 router.use(authMiddleware);
 
