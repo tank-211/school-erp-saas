@@ -210,8 +210,8 @@ export const STATUS_GROUPS = {
   const existingLead = await prisma.lead.findFirst({ where: { id: BigInt(id), school_id: BigInt(schoolId) } });
   if (!existingLead) throw new AppError("Lead not found", 404);
   const detailFields = {
-    "Father": data.fatherName,
-    "Mother": data.motherName,
+    "Father": [data.fatherName, data.fatherOccupation, data.fatherCompany].some(v => v !== undefined) ? [data.fatherName, data.fatherOccupation, data.fatherCompany].filter(Boolean).join(", ") : undefined,
+    "Mother": [data.motherName, data.motherOccupation, data.motherCompany].some(v => v !== undefined) ? [data.motherName, data.motherOccupation, data.motherCompany].filter(Boolean).join(", ") : undefined,
     "Mother phone": data.motherPhone,
     "Mother email": data.motherEmail,
     "Current school": data.currentSchool,
