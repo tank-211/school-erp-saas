@@ -73,10 +73,14 @@ export const updateLeadSchema = z.object({
   fatherName: z.string().optional(),
   fatherPhone: z.string().optional(),
   fatherEmail: z.string().optional(),
+  fatherOccupation: z.string().optional(),
+  fatherCompany: z.string().optional(),
 
   motherName: z.string().optional(),
   motherPhone: z.string().optional(),
   motherEmail: z.string().optional(),
+  motherOccupation: z.string().optional(),
+  motherCompany: z.string().optional(),
 
   source: z.string().optional(),
   notes: z.string().optional(),

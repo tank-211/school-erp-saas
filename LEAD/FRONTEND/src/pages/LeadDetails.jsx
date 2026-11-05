@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./LeadDetails.css";
-import { communicationAPI } from "../services/api";
+import { communicationAPI, leadsAPI } from "../services/api";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // Stages a lead can be moved to; the values are statuses PUT /leads/:id accepts
@@ -35,6 +35,10 @@ export default function LeadDetails() {
   const [note, setNote] = useState("");
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState("");
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
 
   useEffect(() => {
     setLead(null);
@@ -137,6 +141,19 @@ export default function LeadDetails() {
     }
   };
 
+  const openEdit = () => {
+    const details = Object.fromEntries(String(lead.notes || "").split(/\r?\n/).map((line) => {
+      const index = line.indexOf(":");
+      return index < 0 ? null : [line.slice(0,index).trim(),line.slice(index+1).trim()];
+    }).filter(Boolean));
+    const parent = (value) => { const p=String(value||"").split(",").map(x=>x.trim()); return {name:p[0]||"",occupation:p[1]||"",company:p.slice(2).join(", ")}; };
+    const father=parent(details.Father), mother=parent(details.Mother);
+    const keys=new Set(["Father","Mother","Mother phone","Mother email","Current school","Date of birth","Gender"]);
+    setEditForm({studentFirstName:lead.first_name||"",studentLastName:lead.last_name||"",grade:lead.desired_class||"",dob:details["Date of birth"]||"",gender:details.Gender||"",currentSchool:details["Current school"]||"",fatherName:father.name,fatherOccupation:father.occupation,fatherCompany:father.company,fatherPhone:lead.phone||"",fatherEmail:lead.email||"",motherName:mother.name,motherOccupation:mother.occupation,motherCompany:mother.company,motherPhone:details["Mother phone"]||"",motherEmail:details["Mother email"]||"",source:lead.source||"",notes:String(lead.notes||"").split(/\r?\n/).filter(line=>!keys.has(line.includes(":")?line.slice(0,line.indexOf(":")).trim():"")).join("\n").trim()});
+    setEditError(""); setEditOpen(true);
+  };
+  const saveEdit = async (event) => { event.preventDefault(); setEditSaving(true); setEditError(""); try { const result=await leadsAPI.update(id,editForm); if(result?.success===false) throw new Error(result.message||"Could not save lead"); await fetchLead(); setEditOpen(false); } catch(error) { setEditError(error.message||"Could not save lead"); } finally { setEditSaving(false); } };
+
   const ACTIVITY_LABEL = {
     LEAD_CREATED: "Lead created",
     LEAD_UPDATED: "Lead updated",
@@ -217,6 +234,7 @@ if (!lead) {
 
  return (
   <div className="lead-details-page">
+  {editOpen && <div className="lead-edit-overlay"><form className="lead-edit-modal" onSubmit={saveEdit}><div className="lead-edit-heading"><h2>Edit Lead</h2><button type="button" onClick={()=>setEditOpen(false)} aria-label="Close">×</button></div><div className="lead-edit-grid">{[["Student first name","studentFirstName"],["Student last name","studentLastName"],["Grade / Course","grade"],["Date of birth","dob","date"],["Current school","currentSchool"],["Gender","gender","gender"],["Father name","fatherName"],["Father occupation","fatherOccupation"],["Father company","fatherCompany"],["Father phone","fatherPhone"],["Father email","fatherEmail","email"],["Mother name","motherName"],["Mother occupation","motherOccupation"],["Mother company","motherCompany"],["Mother phone","motherPhone"],["Mother email","motherEmail","email"],["Lead source","source"]].map(([label,key,type])=><label className="lead-edit-field" key={key}>{label}{type==="gender"?<select value={editForm[key]||""} onChange={e=>setEditForm(v=>({...v,[key]:e.target.value}))}><option value="">Select</option><option>Male</option><option>Female</option><option>Other</option></select>:<input type={type||"text"} value={editForm[key]||""} onChange={e=>setEditForm(v=>({...v,[key]:e.target.value}))}/>}</label>)}</div><label className="lead-edit-field">Notes<textarea rows={4} value={editForm.notes||""} onChange={e=>setEditForm(v=>({...v,notes:e.target.value}))}/></label>{editError&&<p role="alert" className="lead-edit-error">{editError}</p>}<div className="lead-edit-actions"><button type="button" className="btn-secondary" disabled={editSaving} onClick={()=>setEditOpen(false)}>Cancel</button><button type="submit" className="btn-primary" disabled={editSaving}>{editSaving?"Saving...":"Save changes"}</button></div></form></div>}
 
   <div className="lead-details-header">
     <div>
@@ -229,7 +247,7 @@ if (!lead) {
       </div>
     </div>
 
-    <div style={{ textAlign: "right" }}>
+    <div className="lead-header-actions"><button type="button" className="btn-primary" onClick={openEdit}>Edit Lead</button><div style={{ textAlign: "right" }}>
       <select
         className="lead-status"
         aria-label="Lead status"
@@ -247,7 +265,7 @@ if (!lead) {
       </select>
       {statusSaving && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Saving...</div>}
       {statusError && <div role="alert" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{statusError}</div>}
-    </div>
+    </div></div>
   </div>
 
   <div className="lead-details-grid">

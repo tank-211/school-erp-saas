@@ -149,3 +149,14 @@ gap: 12px;
 .timeline-whatsapp {
   color: #22c55e;
 }
+.lead-header-actions{display:flex;align-items:center;gap:14px}
+.lead-edit-overlay{position:fixed;inset:0;z-index:1000;background:rgba(15,23,42,.58);display:flex;align-items:center;justify-content:center;padding:20px}
+.lead-edit-modal{background:#fff;border-radius:16px;width:min(760px,100%);max-height:90vh;overflow:auto;padding:24px;box-shadow:0 24px 70px rgba(15,23,42,.25)}
+.lead-edit-heading,.lead-edit-actions{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lead-edit-heading{margin-bottom:20px}.lead-edit-heading h2{margin:0;font-size:20px;color:var(--text-primary)}
+.lead-edit-heading button{border:0;background:transparent;font-size:28px;cursor:pointer;color:#64748b}
+.lead-edit-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.lead-edit-field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px;font-weight:600;color:#475569}
+.lead-edit-field input,.lead-edit-field select,.lead-edit-field textarea{width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:inherit;font-weight:400;color:#0f172a;background:#fff}
+.lead-edit-actions{justify-content:flex-end;margin-top:18px}.lead-edit-error{color:#b91c1c;font-size:13px}
+@media(max-width:600px){.lead-edit-grid{grid-template-columns:1fr}.lead-edit-modal{padding:18px}.lead-header-actions{align-items:flex-start;flex-direction:column}}
