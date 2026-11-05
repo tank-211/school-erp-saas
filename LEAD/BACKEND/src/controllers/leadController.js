@@ -212,6 +212,12 @@ export const bulkCreateLeads = async (req, res) => {
         errors.push({ row: index + 2, reason: "Missing phone" });
         return;
       }
+      const normalizedPhone = lead.fatherPhone.replace(/[\s()+-]/g, "");
+      if (!/^\d{10,15}$/.test(normalizedPhone)) { errors.push({ row: index + 2, reason: "Phone must contain 10–15 digits" }); return; }
+      lead.fatherPhone = normalizedPhone;
+      if (lead.fatherEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lead.fatherEmail)) { errors.push({ row: index + 2, reason: "Invalid email address" }); return; }
+      const validStatuses = ["new", "pending", "contacted", "interested", "qualified", "converted", "admitted", "inactive", "lost"];
+      if (!validStatuses.includes(lead.status)) { errors.push({ row: index + 2, reason: `Invalid status "${lead.status}"` }); return; }
 
       validLeads.push(lead);
     });

@@ -206,60 +206,46 @@ export const STATUS_GROUPS = {
    UPDATE LEAD
 ========================= */
  const updateLeadService = async (id, data, schoolId, actorId) => {
-  const existingLead = await prisma.lead.findFirst({
-    where: {
-      id: BigInt(id),
-      school_id: BigInt(schoolId)
+  if (!/^\d+$/.test(String(id ?? ""))) throw new AppError("Invalid lead id", 400);
+  const existingLead = await prisma.lead.findFirst({ where: { id: BigInt(id), school_id: BigInt(schoolId) } });
+  if (!existingLead) throw new AppError("Lead not found", 404);
+  const detailFields = {
+    "Father": data.fatherName, "Mother": data.motherName, "Mother phone": data.motherPhone,
+    "Mother email": data.motherEmail, "Current school": data.currentSchool,
+    "Date of birth": data.dob ? String(data.dob).slice(0, 10) : undefined, "Gender": data.gender,
+  };
+  const oldNotes = String(existingLead.notes || "");
+  const baseNotes = oldNotes.split(/\n(?=(?:Father|Mother|Mother phone|Mother email|Current school|Date of birth|Gender): )/)[0].trim();
+  const retained = Object.entries(detailFields).filter(([,v]) => v !== undefined && v !== "").map(([k,v]) => `${k}: ${String(v).trim()}`);
+  const notes = data.notes !== undefined ? String(data.notes || "").trim() : baseNotes;
+  const combinedNotes = [notes, ...retained].filter(Boolean).join("\n\n") || null;
+  let assignedTo = undefined;
+  if (data.assignedTo !== undefined) {
+    if (data.assignedTo === null || data.assignedTo === "") assignedTo = null;
+    else {
+      if (!/^\\d+$/.test(String(data.assignedTo))) throw new AppError("Invalid counselor", 400);
+      const assignee = await prisma.user.findFirst({
+        where: { id: BigInt(data.assignedTo), school_id: BigInt(schoolId), status: "active" },
+        select: { id: true },
+      });
+      if (!assignee) throw new AppError("Counselor not found in this school", 400);
+      assignedTo = String(assignee.id);
     }
-  });
-
-  if (!existingLead) {
-    throw new AppError("Lead not found", 404);
   }
-
-  const updatedLead = await prisma.lead.update({
-    
-    where: { id: BigInt(id) },
-    data: {
-      ...(data.studentFirstName && {
-          first_name: data.studentFirstName.trim()
-      }),
-
-      ...(data.studentLastName && {
-          last_name: data.studentLastName.trim()
-      }),
-
-      ...(data.fatherPhone && {
-          phone: data.fatherPhone.trim()
-      }),
-
-      ...(data.fatherEmail && {
-          email: data.fatherEmail
-      }),
-
-      ...(data.grade && {
-          desired_class: data.grade
-      }),
-
-      ...(data.status && {
-          follow_up_status: data.status
-      }),
-    },
-  });
-  await prisma.activity.create({
-    data: {
-      lead_id: updatedLead.id,
-      activity_type: "LEAD_UPDATED",
-      // Who made the change; callers that pass no actor fall back to the lead's owner
-      created_by: /^\d+$/.test(String(actorId ?? existingLead.assigned_to ?? ""))
-        ? BigInt(actorId ?? existingLead.assigned_to)
-        : null
-    }
-  });
-
+  const updatedLead = await prisma.lead.update({ where: { id: existingLead.id }, data: {
+    ...(data.studentFirstName !== undefined && { first_name: data.studentFirstName.trim() }),
+    ...(data.studentLastName !== undefined && { last_name: data.studentLastName.trim() }),
+    ...(data.fatherPhone !== undefined && { phone: data.fatherPhone.trim() }),
+    ...(data.fatherEmail !== undefined && { email: data.fatherEmail.trim() || null }),
+    ...(data.grade !== undefined && { desired_class: data.grade.trim() || null }),
+    ...(data.source !== undefined && { source: data.source || null }),
+    ...(data.status !== undefined && { follow_up_status: data.status }),\n    ...(data.assignedTo !== undefined && { assigned_to: assignedTo }),
+    ...(data.notes !== undefined || Object.values(detailFields).some(v => v !== undefined) ? { notes: combinedNotes } : {}),
+    updated_at: new Date(),
+  }});
+  await prisma.activity.create({ data: { lead_id: updatedLead.id, activity_type: "LEAD_UPDATED", created_by: /^\d+$/.test(String(actorId ?? "")) ? BigInt(actorId) : null } });
   return updatedLead;
 };
-
 /* =========================
    DELETE LEAD
 ========================= */

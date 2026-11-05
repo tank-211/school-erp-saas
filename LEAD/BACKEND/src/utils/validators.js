@@ -82,6 +82,7 @@ export const updateLeadSchema = z.object({
   notes: z.string().optional(),
 
   status: z.enum(LEAD_STATUS_VALUES).optional(),
+  assignedTo: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 export const bulkCreateLeadsSchema = z.object({
