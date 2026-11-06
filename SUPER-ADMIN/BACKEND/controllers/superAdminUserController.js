@@ -210,6 +210,10 @@ const updateUser = async (req, res) => {
       school_id,
     } = req.body;
 
+    if (!/^\\d+$/.test(String(id ?? ""))) {
+      return res.status(400).json({ error: "Invalid user id." });
+    }
+
     const userId = BigInt(id);
 
     const existingUser = await prisma.app_user.findUnique({
@@ -245,9 +249,9 @@ const updateUser = async (req, res) => {
     if (email !== undefined) {
       const normalizedEmail = String(email).trim().toLowerCase();
 
-      if (!normalizedEmail) {
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(normalizedEmail)) {
         return res.status(400).json({
-          error: "Email cannot be empty.",
+          error: "Enter a valid email address.",
         });
       }
 
@@ -275,6 +279,10 @@ const updateUser = async (req, res) => {
     }
 
     if (school_id !== undefined) {
+      if (!/^\\d+$/.test(String(school_id ?? ""))) {
+        return res.status(400).json({ error: "Invalid school." });
+      }
+
       const schoolId = BigInt(school_id);
 
       const school = await prisma.school.findUnique({
@@ -290,6 +298,12 @@ const updateUser = async (req, res) => {
       if (!school) {
         return res.status(404).json({
           error: "School not found.",
+        });
+      }
+
+      if (!school.is_active) {
+        return res.status(400).json({
+          error: "Cannot assign a user to an inactive school.",
         });
       }
 
