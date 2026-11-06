@@ -63,10 +63,9 @@ export async function recordPaymentAtomically(prisma: any, input: RecordPaymentI
       return sum + Math.round(Number(payment.amount) * 100);
     }, 0);
     // Preserve migrated/imported paid balances that predate payment ledger rows.
-    const paidPaise = Math.max(
-      ledgerPaidPaise,
-      Math.round(Number(invoice.paid_amount ?? 0) * 100)
-    );
+    const paidPaise = invoice.payment.length > 0
+      ? ledgerPaidPaise
+      : Math.round(Number(invoice.paid_amount ?? 0) * 100);
     const pendingPaise = Math.max(0, totalPaise - paidPaise);
     if (pendingPaise <= 0) throw new ValidationError('This invoice is already fully paid');
     if (amountPaise > pendingPaise) {
