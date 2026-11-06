@@ -52,9 +52,17 @@ export async function recordPaymentAtomically(prisma: any, input: RecordPaymentI
     if (transactionId) {
       const duplicate = await tx.payment.findFirst({
         where: { school_id: schoolId, transaction_id: transactionId },
-        select: { id: true },
+        select: {
+          id: true, invoice_id: true, payment_number: true, amount: true,
+          payment_date: true, payment_method: true, transaction_id: true, status: true, remarks: true,
+        },
       });
-      if (duplicate) throw new ValidationError('This transaction has already been recorded');
+      if (duplicate) {
+        if (duplicate.invoice_id !== invoice.id) {
+          throw new ValidationError('This transaction ID is already linked to a different invoice');
+        }
+        return { payment: duplicate, invoice };
+      }
     }
 
     const totalPaise = Math.round(Number(invoice.total_amount) * 100);
