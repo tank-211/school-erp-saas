@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
+import './styles/design-system.css'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { ToastProvider } from './components/ToastContext.jsx'
 import { installSessionGuard } from './utils/sessionGuard.js'

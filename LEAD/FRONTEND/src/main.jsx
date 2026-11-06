@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import './styles/global.css'
+import './styles/design-system.css'
 import App from './App'
 import { SettingsProvider } from "./context/SettingsContext"
 import { installSessionGuard } from './services/api'

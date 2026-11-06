@@ -50,7 +50,7 @@ const reportsMenuItems = [
 
 const settingsMenuItem = []
 
-const Sidebar = () => {
+const Sidebar = ({ mobileOpen = false, onNavigate = () => {} }) => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, user } = useAuth()
@@ -128,7 +128,7 @@ const Sidebar = () => {
   }
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${mobileOpen ? "mobile-open" : ""}`} aria-label="Fees navigation">
       <div className="sidebar-logo">
         {/* The signed-in user's own school (name and city from the school record) */}
         <div className="school-badge" title={schoolName || 'School'}>{initialsOf(schoolName)}</div>
@@ -169,6 +169,7 @@ const Sidebar = () => {
                         <Link
                           key={subItem.label}
                           to={subItem.path}
+                          onClick={onNavigate}
                           className={`nav-item sub-item ${isItemActive(subItem) ? 'active' : ''}`}
                         >
                           <subItem.icon size={14} className="nav-icon" />
@@ -179,7 +180,7 @@ const Sidebar = () => {
                   )}
                 </>
               ) : (
-                <Link to={item.path} className={`nav-item ${isActive ? 'active' : ''}`}>
+                <Link to={item.path} onClick={onNavigate} className={`nav-item ${isActive ? 'active' : ''}`}>
                   <IconComponent size={18} className="nav-icon" />
                   <span className="nav-label">{item.label}</span>
                 </Link>

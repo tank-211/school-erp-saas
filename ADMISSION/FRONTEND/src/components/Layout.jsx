@@ -27,6 +27,7 @@ const navItems = [
 export function Layout() {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useAuth();
   const school = useSchool();
 
@@ -40,19 +41,41 @@ export function Layout() {
   );
 
   const toggleCollapse = () => {
-    setCollapsed(!collapsed);
+    setCollapsed((current) => !current);
   };
 
   return (
     <div className="app-wrapper">
-      {/* Sidebar - Always visible */}
-      <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+      <button
+        type="button"
+        className="mobile-menu-toggle"
+        aria-controls="admission-sidebar"
+        aria-expanded={mobileOpen}
+        aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+        onClick={() => setMobileOpen((open) => !open)}
+      >
+        <span aria-hidden="true">☰</span>
+      </button>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+      {/* Sidebar */}
+      <aside id="admission-sidebar" className={`sidebar ${collapsed ? "collapsed" : ""} ${mobileOpen ? "mobile-open" : ""}`} aria-label="Main navigation">
         {/* The signed-in user's own school (name and city from the school record) */}
         <div className="sidebar-logo">
           <div
             className="school-badge"
+            role="button"
+            tabIndex={0}
             onClick={toggleCollapse}
+            onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCollapse(); } }}
             title={school?.name || "School"}
+            aria-label="Toggle navigation width"
           >
             {initialsOf(school?.name)}
           </div>
@@ -66,7 +89,7 @@ export function Layout() {
           )}
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="School ERP sections">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -75,6 +98,8 @@ export function Layout() {
                 to={item.path} 
                 className={`nav-item ${isActive(item.path) ? "active" : ""}`} 
                 title={collapsed ? item.label : undefined}
+                aria-current={isActive(item.path) ? "page" : undefined}
+                onClick={() => setMobileOpen(false)}
               >
                 <Icon className="nav-icon" size={20} />
                 {!collapsed && <span className="nav-label">{item.label}</span>}
@@ -85,7 +110,7 @@ export function Layout() {
 
         <div className="sidebar-footer" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <LogoutButton collapsed={collapsed} />
-          <button className="collapse-btn" onClick={toggleCollapse}>
+          <button className="collapse-btn" type="button" onClick={toggleCollapse} aria-expanded={!collapsed} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
             {collapsed ? <ChevronRight size={18} /> : <><ChevronDown size={18} /><span>Collapse</span></>}
           </button>
         </div>

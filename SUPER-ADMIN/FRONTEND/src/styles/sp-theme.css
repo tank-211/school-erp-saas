@@ -662,3 +662,21 @@
 .sp-fieldset:disabled {
   opacity: 0.6;
 }
+
+@media(max-width:900px){
+ .sp-sidebar{width:100%;height:auto;max-height:none;padding:14px}
+ .sp-sidebar-nav{display:flex;flex-wrap:wrap;gap:6px}.sp-nav-link{flex:0 1 auto}
+ .sp-content{width:100%;min-width:0;padding:22px;overflow:visible}
+ .sp-toolbar,.sp-card-header{flex-wrap:wrap}
+}
+@media(max-width:580px){
+ .sp-auth-wrapper{padding:14px}.sp-auth-card{padding:20px;border-radius:16px}
+ .sp-title{font-size:24px}.sp-content{padding:14px}.sp-page{padding:18px 0}
+ .sp-page-header h1{font-size:29px}.sp-card{padding:18px}
+ .sp-card-header h2,.sp-card>h2{font-size:21px}
+ .sp-form-grid{grid-template-columns:1fr;gap:16px}.sp-form-full{grid-column:auto}
+ .sp-form-actions{flex-wrap:wrap}.sp-form-actions>button{flex:1 1 100%}
+ .sp-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .sp-table{min-width:680px}.sp-dashboard-list-item{align-items:flex-start;flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){.sp-btn{transition:none}}
