@@ -6,6 +6,7 @@ import {
   ValidationError,
 } from '../middleware/errorHandler';
 import logger from '../config/logger';
+import { recordPaymentAtomically } from './paymentLedger';
 
 // Online payments use each school's own Razorpay account (services/schoolRazorpay).
 // In-process guard: the browser confirmation and the webhook for the same
@@ -207,9 +208,12 @@ export class PaymentService {
     // The same payment verified twice (retry, double click) is recorded once
     const existing = await prisma.payment.findFirst({
       where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
-      select: { id: true, payment_number: true, amount: true },
+      select: { id: true, invoice_id: true, payment_number: true, amount: true },
     });
     if (existing) {
+      if (existing.invoice_id !== BigInt(orderInvoiceId)) {
+        throw new ValidationError('This Razorpay payment is already linked to a different invoice');
+      }
       return {
         verified: true,
         recorded: true,
@@ -238,8 +242,12 @@ export class PaymentService {
       if (error?.code === 'P2002') {
         const again = await prisma.payment.findFirst({
           where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
-          select: { payment_number: true, amount: true },
+          select: { invoice_id: true, payment_number: true, amount: true },
         });
+        if (!again) throw error;
+        if (again.invoice_id !== BigInt(orderInvoiceId)) {
+          throw new ValidationError('This Razorpay payment is already linked to a different invoice');
+        }
         return {
           verified: true,
           recorded: true,
@@ -333,168 +341,26 @@ export class PaymentService {
       receivedBy?: string;
     }
   ) {
-    const invoice = await prisma.invoice.findFirst({
-      where: { id: BigInt(invoiceId), school_id: BigInt(schoolId) },
-      include: {
-        student: {
-          select: {
-            id: true,
-            admission_number: true,
-            first_name: true,
-            last_name: true,
-          },
-        },
-        payment: {
-          select: {
-            id: true,
-            amount: true,
-            status: true,
-          },
-        },
-      },
+    const result = await recordPaymentAtomically(prisma, {
+      invoiceId,
+      schoolId,
+      amount: data.amount,
+      paymentMethod: data.paymentMethod,
+      transactionId: data.transactionId || data.razorpayPaymentId,
+      notes: data.notes,
+      receivedBy: data.receivedBy,
+      bankName: data.bankName,
+      chequeNumber: data.chequeNumber,
+      paymentNumber: generatePaymentNumber(),
     });
-
-    if (!invoice) {
-      throw new NotFoundError('Invoice not found');
-    }
-
-    if (data.amount <= 0) {
-      throw new ValidationError(
-        'Payment amount must be greater than 0'
-      );
-    }
-
-    const totalAmount = Number(invoice.total_amount);
-
-    const alreadyPaid = invoice.payment.reduce(
-      (sum, payment) => {
-        if (
-          payment.status &&
-          payment.status.toLowerCase() === 'cancelled'
-        ) {
-          return sum;
-        }
-
-        return sum + Number(payment.amount);
-      },
-      0
-    );
-
-    const remainingAmount = Math.max(
-      0,
-      totalAmount - alreadyPaid
-    );
-
-    if (remainingAmount <= 0) {
-      throw new ValidationError(
-        'This invoice is already fully paid'
-      );
-    }
-
-    if (data.amount > remainingAmount) {
-      throw new ValidationError(
-        `Payment amount cannot exceed pending amount of ${remainingAmount}`
-      );
-    }
-
-    const newAmountPaid =
-      alreadyPaid + data.amount;
-
-    const newAmountPending = Math.max(
-      0,
-      totalAmount - newAmountPaid
-    );
-
-    const newStatus = calculatePaymentStatus(
-      newAmountPaid,
-      totalAmount
-    );
-
-    /*
-     * IMPORTANT:
-     * The current schema requires school_id and payment_number.
-     * We therefore obtain school_id from the invoice.
-     */
-
-    const payment = await prisma.$transaction(
-      async (tx) => {
-        const createdPayment =
-          await tx.payment.create({
-            data: {
-              school_id: invoice.school_id,
-              student_id: invoice.student_id,
-              invoice_id: invoice.id,
-              payment_number:
-                generatePaymentNumber(),
-              amount: data.amount,
-              payment_date: new Date(),
-              payment_method:
-                normalizePaymentMethod(
-                  data.paymentMethod
-                ),
-              transaction_id:
-                data.transactionId ||
-                data.razorpayPaymentId ||
-                undefined,
-              bank_name: data.bankName,
-              cheque_number: data.chequeNumber,
-              status: newStatus,
-              remarks: data.notes,
-              received_by: data.receivedBy,
-            },
-          });
-
-        const updatedInvoice =
-          await tx.invoice.update({
-            where: {
-              id: invoice.id,
-            },
-            data: {
-              paid_amount: newAmountPaid,
-              pending_amount: newAmountPending,
-              status: newStatus,
-            },
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  admission_number: true,
-                  first_name: true,
-                  last_name: true,
-                },
-              },
-              payment: {
-                select: {
-                  id: true,
-                  amount: true,
-                  payment_method: true,
-                  transaction_id: true,
-                  payment_date: true,
-                  status: true,
-                  remarks: true,
-                },
-                orderBy: {
-                  payment_date: 'desc',
-                },
-              },
-            },
-          });
-
-        return {
-          payment: createdPayment,
-          invoice: updatedInvoice,
-        };
-      }
-    );
 
     logger.info('Payment recorded', {
       invoiceId,
-      paymentId: payment.payment.id.toString(),
+      paymentId: result.payment.id.toString(),
       amount: data.amount,
-      newStatus,
+      status: result.invoice.status,
     });
-
-    return payment;
+    return result;
   }
 
   async getPaymentHistory(invoiceId: string, schoolId: string) {
