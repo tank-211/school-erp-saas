@@ -13,25 +13,6 @@ import { recordPaymentAtomically } from './paymentLedger';
 // payment must not both record it (a unique index in the database backs this up).
 const recording = new Map<string, Promise<any>>();
 
-function normalizePaymentMethod(method: string): string {
-  return method.trim().toLowerCase();
-}
-
-function calculatePaymentStatus(
-  paidAmount: number,
-  totalAmount: number
-): string {
-  if (paidAmount >= totalAmount) {
-    return 'paid';
-  }
-
-  if (paidAmount > 0) {
-    return 'partial';
-  }
-
-  return 'unpaid';
-}
-
 function generatePaymentNumber(): string {
   return `PAY-${Date.now()}-${Math.floor(
     Math.random() * 10000
