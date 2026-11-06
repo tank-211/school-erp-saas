@@ -1,5 +1,6 @@
 import prisma from '../config/database';
 import { serializeBigInt } from '../utils/responseHelper';
+import { resolveStudentFeeAmount } from './feeAmountResolver';
 import {
   NotFoundError,
   ValidationError,
@@ -430,115 +431,49 @@ export class InvoiceService {
     schoolId: string;
     studentId: string;
     feeStructureId?: string;
-    totalAmount: number;
+    totalAmount: number; // retained for API compatibility; never trusted
     dueDate: Date;
     approvedBy?: string;
     notes?: string;
   }) {
-    if (
-      !data.studentId
-    ) {
-      throw new ValidationError(
-        'Student ID is required'
-      );
+    if (!data.studentId) throw new ValidationError('Student ID is required');
+    if (!data.feeStructureId) {
+      throw new ValidationError('Fee structure is required; invoice totals are calculated from the school fee configuration');
     }
 
-    if (
-      !data.totalAmount ||
-      data.totalAmount <= 0
-    ) {
-      throw new ValidationError(
-        'Total amount must be greater than zero'
-      );
-    }
+    const student = await prisma.student.findFirst({
+      where: { id: BigInt(data.studentId), school_id: BigInt(data.schoolId) },
+    });
+    if (!student) throw new NotFoundError('Student not found');
 
-    const student =
-      await prisma.student.findFirst({
-        where: { id: BigInt(data.studentId), school_id: BigInt(data.schoolId) },
-      });
-
-    if (!student) {
-      throw new NotFoundError(
-        'Student not found'
-      );
-    }
-
-    /**
-     * feeStructureId is kept in the service
-     * interface for compatibility with the
-     * existing controller.
-     *
-     * The current invoice table does not have
-     * a fee_structure_id column, so it is not
-     * written directly to invoice.
-     *
-     * If the application needs to associate
-     * invoices with fee structures, that
-     * relationship should be implemented through
-     * student_fee_assignment.
-     */
-
-    const invoiceNumber =
-      await this.generateInvoiceNumber();
-
-    const invoice =
-      await prisma.invoice.create({
-        data: {
-          school_id:
-            student.school_id,
-
-          student_id:
-            student.id,
-
-          invoice_number:
-            invoiceNumber,
-
-          invoice_date:
-            new Date(),
-
-          due_date:
-            data.dueDate,
-
-          total_amount:
-            data.totalAmount,
-
-          paid_amount:
-            0,
-
-          pending_amount:
-            data.totalAmount,
-
-          status:
-            'unpaid',
-
-          notes:
-            data.notes ||
-            undefined,
-
-          created_by:
-            data.approvedBy ||
-            undefined,
-        },
-
-        include: {
-          student: {
-            select: {
-              id: true,
-              admission_number:
-                true,
-              first_name: true,
-              middle_name: true,
-              last_name: true,
-              email: true,
-              phone: true,
-            },
+    const configuredFee = await resolveStudentFeeAmount(
+      prisma, data.schoolId, data.studentId, data.feeStructureId
+    );
+    const invoiceNumber = await this.generateInvoiceNumber();
+    const invoice = await prisma.invoice.create({
+      data: {
+        school_id: student.school_id,
+        student_id: student.id,
+        invoice_number: invoiceNumber,
+        invoice_date: new Date(),
+        due_date: data.dueDate || configuredFee.dueDate || new Date(),
+        total_amount: configuredFee.amount,
+        paid_amount: 0,
+        pending_amount: configuredFee.amount,
+        status: 'unpaid',
+        notes: data.notes || `Fee: ${configuredFee.feeType}`,
+        created_by: data.approvedBy || undefined,
+      },
+      include: {
+        student: {
+          select: {
+            id: true, admission_number: true, first_name: true,
+            middle_name: true, last_name: true, email: true, phone: true,
           },
         },
-      });
-
-    return this.serializeBigInt(
-      invoice
-    );
+      },
+    });
+    return this.serializeBigInt(invoice);
   }
 
   /**
