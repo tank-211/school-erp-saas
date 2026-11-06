@@ -1,4 +1,5 @@
 import React from 'react';
+import { useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import './MainLayout.css';
@@ -15,6 +16,8 @@ const MainLayout = ({
   onAddLead
 }) => {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
+  const location = useLocation();
+  React.useEffect(() => setMobileNavOpen(false), [location.pathname]);
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''} ${mobileNavOpen ? 'mobile-nav-open' : ''}`}>
       <button type="button" className="mobile-nav-toggle" aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"} aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? "×" : "☰"}</button>
