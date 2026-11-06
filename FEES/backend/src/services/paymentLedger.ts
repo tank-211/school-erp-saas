@@ -8,6 +8,8 @@ type RecordPaymentInput = {
   transactionId?: string;
   notes?: string;
   receivedBy?: string;
+  bankName?: string;
+  chequeNumber?: string;
   paymentNumber: string;
 };
 
@@ -97,6 +99,8 @@ export async function recordPaymentAtomically(prisma: any, input: RecordPaymentI
         status,
         remarks: input.notes,
         received_by: input.receivedBy,
+        bank_name: input.bankName,
+        cheque_number: input.chequeNumber,
       },
     });
 
