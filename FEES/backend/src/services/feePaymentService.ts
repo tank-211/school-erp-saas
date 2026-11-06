@@ -3,6 +3,8 @@ import {
   NotFoundError,
   ValidationError,
 } from '../middleware/errorHandler';
+import { resolveStudentFeeAmount } from './feeAmountResolver';
+import { recordPaymentAtomically } from './paymentLedger';
 
 type PaymentMethod =
   | 'cash'
@@ -33,71 +35,43 @@ export class FeePaymentService {
     schoolId: string;
     studentId: string;
     feeStructureId: string;
-    totalAmount: number;
+    totalAmount: number; // retained for API compatibility; never trusted
     dueDate: Date;
     approvedBy?: string;
     notes?: string;
   }) {
     const studentId = BigInt(data.studentId);
-    const feeStructureId = BigInt(data.feeStructureId);
+    const student = await prisma.student.findFirst({
+      where: { id: studentId, school_id: BigInt(data.schoolId) },
+    });
+    if (!student) throw new NotFoundError('Student not found');
 
-    if (data.totalAmount <= 0) {
-      throw new ValidationError(
-        'Total amount must be greater than 0'
-      );
-    }
-
-    const [student, feeStructure] = await Promise.all([
-      prisma.student.findFirst({
-        where: { id: studentId, school_id: BigInt(data.schoolId) },
-      }),
-
-      prisma.fee_structure.findFirst({
-        where: { id: feeStructureId, school_id: BigInt(data.schoolId) },
-      }),
-    ]);
-
-    if (!student) {
-      throw new NotFoundError('Student not found');
-    }
-
-    if (!feeStructure) {
-      throw new NotFoundError(
-        'Fee structure not found'
-      );
-    }
-
-    const invoiceNumber =
-      await this.generateInvoiceNumber();
-
+    const configuredFee = await resolveStudentFeeAmount(
+      prisma, data.schoolId, data.studentId, data.feeStructureId
+    );
     const invoice = await prisma.invoice.create({
       data: {
         school_id: student.school_id,
         student_id: student.id,
-        invoice_number: invoiceNumber,
+        invoice_number: await this.generateInvoiceNumber(),
         invoice_date: new Date(),
-        due_date: data.dueDate,
-        total_amount: data.totalAmount,
+        due_date: data.dueDate || configuredFee.dueDate || new Date(),
+        total_amount: configuredFee.amount,
         paid_amount: 0,
-        pending_amount: data.totalAmount,
+        pending_amount: configuredFee.amount,
         status: 'unpaid',
-        notes: data.notes,
+        notes: data.notes || `Fee: ${configuredFee.feeType}`,
         created_by: data.approvedBy,
       },
-
       include: {
         student: {
           select: {
-            id: true,
-            first_name: true,
-            middle_name: true,
-            last_name: true,
-            admission_number: true,
+            id: true, first_name: true, middle_name: true,
+            last_name: true, admission_number: true,
           },
         },
       },
     });
-
     return this.serializeInvoice(invoice);
   }
 
@@ -112,121 +86,18 @@ export class FeePaymentService {
     transactionId?: string,
     notes?: string
   ) {
-    if (amount <= 0) {
-      throw new ValidationError(
-        'Payment amount must be greater than 0'
-      );
-    }
-
-    const invoiceIdBigInt = BigInt(invoiceId);
-
-    const invoice = await prisma.invoice.findFirst({
-      where: { id: invoiceIdBigInt, school_id: BigInt(schoolId) },
+    const result = await recordPaymentAtomically(prisma, {
+      invoiceId,
+      schoolId,
+      amount,
+      paymentMethod,
+      transactionId,
+      notes,
+      paymentNumber: await this.generatePaymentNumber(),
     });
-
-    if (!invoice) {
-      throw new NotFoundError(
-        'Invoice not found'
-      );
-    }
-
-    const currentPaid = Number(
-      invoice.paid_amount ?? 0
-    );
-
-    const currentPending = Number(
-      invoice.pending_amount
-    );
-
-    if (currentPending <= 0) {
-      throw new ValidationError(
-        'This invoice is already fully paid'
-      );
-    }
-
-    if (amount > currentPending) {
-      throw new ValidationError(
-        `Payment amount (₹${amount}) cannot exceed pending amount (₹${currentPending})`
-      );
-    }
-
-    const newPaid = currentPaid + amount;
-    const newPending = Math.max(
-      0,
-      Number(invoice.total_amount) - newPaid
-    );
-
-    const newStatus: PaymentStatus =
-      newPending === 0
-        ? 'paid'
-        : newPaid > 0
-          ? 'partial'
-          : 'pending';
-
-    const paymentNumber =
-      await this.generatePaymentNumber();
-
-    const result = await prisma.$transaction(
-      async (tx) => {
-        const payment =
-          await tx.payment.create({
-            data: {
-              school_id: invoice.school_id,
-              student_id: invoice.student_id,
-              invoice_id: invoice.id,
-              payment_number: paymentNumber,
-              amount,
-              payment_date: new Date(),
-              payment_method: paymentMethod,
-              transaction_id: transactionId,
-              status: newStatus,
-              remarks: notes,
-            },
-          });
-
-        const updatedInvoice =
-          await tx.invoice.update({
-            where: {
-              id: invoice.id,
-            },
-            data: {
-              paid_amount: newPaid,
-              pending_amount: newPending,
-              status: newStatus,
-              updated_at: new Date(),
-            },
-            include: {
-              student: {
-                select: {
-                  id: true,
-                  first_name: true,
-                  middle_name: true,
-                  last_name: true,
-                  admission_number: true,
-                },
-              },
-              payment: {
-                orderBy: {
-                  payment_date: 'desc',
-                },
-              },
-            },
-          });
-
-        return {
-          payment,
-          invoice: updatedInvoice,
-        };
-      }
-    );
-
     return {
-      payment: this.serializePayment(
-        result.payment
-      ),
-      invoice: this.serializeInvoice(
-        result.invoice
-      ),
+      payment: this.serializePayment(result.payment),
+      invoice: this.serializeInvoice(result.invoice),
     };
   }
 
@@ -623,7 +494,7 @@ export class FeePaymentService {
    */
   async submitFeePayment(data: {
     schoolId: string;
-    totalAmount: number;
+    totalAmount: number; // retained for API compatibility; never trusted
     amountPaid: number;
     paymentMethod: PaymentMethod;
     paymentStatus?: PaymentStatus;
@@ -632,131 +503,71 @@ export class FeePaymentService {
     dueDate?: Date;
     notes?: string;
   }) {
-    if (data.totalAmount <= 0) {
-      throw new ValidationError(
-        'Total amount must be greater than 0'
-      );
+    if (!data.studentId) throw new ValidationError('Student ID is required');
+    if (!data.feeStructureId) {
+      throw new ValidationError('Fee structure is required; invoice totals are calculated from the school fee configuration');
+    }
+    const amountPaidPaise = Math.round(Number(data.amountPaid) * 100);
+    if (!Number.isFinite(Number(data.amountPaid)) || amountPaidPaise < 0) {
+      throw new ValidationError('Amount paid must be a valid non-negative amount');
     }
 
-    if (data.amountPaid < 0) {
-      throw new ValidationError(
-        'Amount paid cannot be negative'
-      );
-    }
+    const student = await prisma.student.findFirst({
+      where: { id: BigInt(data.studentId), school_id: BigInt(data.schoolId) },
+    });
+    if (!student) throw new NotFoundError('Student not found');
 
-    if (
-      data.amountPaid >
-      data.totalAmount
-    ) {
-      throw new ValidationError(
-        `Amount paid (₹${data.amountPaid}) cannot exceed total amount (₹${data.totalAmount})`
-      );
-    }
-
-    if (!data.studentId) {
-      throw new ValidationError(
-        'Student ID is required'
-      );
-    }
-
-    const studentId = BigInt(
-      data.studentId
+    const configuredFee = await resolveStudentFeeAmount(
+      prisma, data.schoolId, data.studentId, data.feeStructureId
     );
+    const totalPaise = Math.round(configuredFee.amount * 100);
+    if (amountPaidPaise > totalPaise) {
+      throw new ValidationError(`Amount paid cannot exceed the configured fee of ₹${configuredFee.amount.toFixed(2)}`);
+    }
 
-    const student =
-      await prisma.student.findFirst({
-        where: { id: studentId, school_id: BigInt(data.schoolId) },
+    const pendingAmount = (totalPaise - amountPaidPaise) / 100;
+    const status: PaymentStatus = amountPaidPaise === 0
+      ? 'unpaid'
+      : amountPaidPaise === totalPaise ? 'paid' : 'partial';
+
+    const result = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.create({
+        data: {
+          school_id: student.school_id,
+          student_id: student.id,
+          invoice_number: await this.generateInvoiceNumber(),
+          invoice_date: new Date(),
+          due_date: data.dueDate || configuredFee.dueDate || new Date(),
+          total_amount: configuredFee.amount,
+          paid_amount: amountPaidPaise / 100,
+          pending_amount: pendingAmount,
+          status,
+          notes: data.notes || `Fee: ${configuredFee.feeType}`,
+        },
       });
 
-    if (!student) {
-      throw new NotFoundError(
-        'Student not found'
-      );
-    }
-
-    const invoiceNumber =
-      await this.generateInvoiceNumber();
-
-    const pendingAmount =
-      data.totalAmount - data.amountPaid;
-
-    const status: PaymentStatus =
-      data.amountPaid === 0
-        ? 'unpaid'
-        : data.amountPaid ===
-            data.totalAmount
-          ? 'paid'
-          : 'partial';
-
-    const result =
-      await prisma.$transaction(
-        async (tx) => {
-          const invoice =
-            await tx.invoice.create({
-              data: {
-                school_id: student.school_id,
-                student_id: student.id,
-                invoice_number:
-                  invoiceNumber,
-                invoice_date: new Date(),
-                due_date:
-                  data.dueDate ?? new Date(),
-                total_amount:
-                  data.totalAmount,
-                paid_amount:
-                  data.amountPaid,
-                pending_amount:
-                  pendingAmount,
-                status,
-                notes: data.notes,
-              },
-            });
-
-          let payment = null;
-
-          if (data.amountPaid > 0) {
-            const paymentNumber =
-              await this.generatePaymentNumber();
-
-            payment =
-              await tx.payment.create({
-                data: {
-                  school_id:
-                    student.school_id,
-                  student_id: student.id,
-                  invoice_id:
-                    invoice.id,
-                  payment_number:
-                    paymentNumber,
-                  amount:
-                    data.amountPaid,
-                  payment_date:
-                    new Date(),
-                  payment_method:
-                    data.paymentMethod,
-                  status,
-                  remarks:
-                    data.notes,
-                },
-              });
-          }
-
-          return {
-            invoice,
-            payment,
-          };
-        }
-      );
+      let payment = null;
+      if (amountPaidPaise > 0) {
+        payment = await tx.payment.create({
+          data: {
+            school_id: student.school_id,
+            student_id: student.id,
+            invoice_id: invoice.id,
+            payment_number: await this.generatePaymentNumber(),
+            amount: amountPaidPaise / 100,
+            payment_date: new Date(),
+            payment_method: data.paymentMethod,
+            status,
+            remarks: data.notes,
+          },
+        });
+      }
+      return { invoice, payment };
+    });
 
     return {
-      invoice: this.serializeInvoice(
-        result.invoice
-      ),
-      payment: result.payment
-        ? this.serializePayment(
-            result.payment
-          )
-        : null,
+      invoice: this.serializeInvoice(result.invoice),
+      payment: result.payment ? this.serializePayment(result.payment) : null,
     };
   }
 
