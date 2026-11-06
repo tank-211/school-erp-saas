@@ -81,6 +81,11 @@ export const createApplication = async (leadId, academicYearId, schoolId) => {
     );
 
     const result = await prisma.$transaction(async (tx) => {
+      // Serialize application creation/submission for this school + lead.
+      // The partial unique index below remains the final cross-process guard.
+      const lockKey = `application:${schoolId}:${leadId}`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
       // Verify lead exists for this school
       const lead = await tx.lead.findFirst({
         where: {
@@ -1080,12 +1085,33 @@ export const submitApplication = async (applicationId) => {
         },
         select: {
           id: true,
+          school_id: true,
+          lead_id: true,
           status: true,
         },
       });
 
       if (!application) {
         throw new Error('Application not found');
+      }
+
+      // A lead may have drafts, but only one application per school/lead may
+      // be submitted. Serialize this transition to avoid concurrent submits.
+      if (application.lead_id !== null) {
+        const lockKey = `application:${application.school_id}:${application.lead_id}`;
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+        const alreadySubmitted = await tx.application.findFirst({
+          where: {
+            school_id: application.school_id,
+            lead_id: application.lead_id,
+            status: 'submitted',
+            id: { not: id },
+          },
+          select: { id: true },
+        });
+        if (alreadySubmitted) {
+          throw userError('A submitted application already exists for this lead.');
+        }
       }
 
       if (application.status !== 'in_progress' && application.status !== 'draft') {
