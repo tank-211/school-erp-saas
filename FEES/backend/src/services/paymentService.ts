@@ -189,9 +189,12 @@ export class PaymentService {
     // The same payment verified twice (retry, double click) is recorded once
     const existing = await prisma.payment.findFirst({
       where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
-      select: { id: true, payment_number: true, amount: true },
+      select: { id: true, invoice_id: true, payment_number: true, amount: true },
     });
     if (existing) {
+      if (existing.invoice_id !== BigInt(orderInvoiceId)) {
+        throw new ValidationError('This Razorpay payment is already linked to a different invoice');
+      }
       return {
         verified: true,
         recorded: true,
@@ -220,8 +223,11 @@ export class PaymentService {
       if (error?.code === 'P2002') {
         const again = await prisma.payment.findFirst({
           where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
-          select: { payment_number: true, amount: true },
+          select: { invoice_id: true, payment_number: true, amount: true },
         });
+        if (again && again.invoice_id !== BigInt(orderInvoiceId)) {
+          throw new ValidationError('This Razorpay payment is already linked to a different invoice');
+        }
         return {
           verified: true,
           recorded: true,
