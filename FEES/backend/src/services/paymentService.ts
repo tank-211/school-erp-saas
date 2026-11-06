@@ -244,7 +244,8 @@ export class PaymentService {
           where: { school_id: BigInt(schoolId), transaction_id: razorpay_payment_id },
           select: { invoice_id: true, payment_number: true, amount: true },
         });
-        if (again && again.invoice_id !== BigInt(orderInvoiceId)) {
+        if (!again) throw error;
+        if (again.invoice_id !== BigInt(orderInvoiceId)) {
           throw new ValidationError('This Razorpay payment is already linked to a different invoice');
         }
         return {
