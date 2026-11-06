@@ -1,0 +1,104 @@
+name: School ERP Quality Gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "ADMISSION/**"
+      - "FEES/**"
+      - "LEAD/**"
+      - "SUPER-ADMIN/**"
+      - ".github/workflows/school-erp-quality-gates.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "ADMISSION/**"
+      - "FEES/**"
+      - "LEAD/**"
+      - "SUPER-ADMIN/**"
+      - ".github/workflows/school-erp-quality-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: school-erp-quality-gates-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-build:
+    name: Build ${{ matrix.module }} frontend
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: Lead
+            directory: LEAD/FRONTEND
+          - module: Admission
+            directory: ADMISSION/FRONTEND
+          - module: Fees
+            directory: FEES/frontend
+          - module: Super Admin
+            directory: SUPER-ADMIN/FRONTEND
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build production bundle
+        run: npm run build
+
+  fees-backend-build:
+    name: Build Fees backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: FEES/backend
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: FEES/backend/package-lock.json
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Generate Prisma client and compile TypeScript
+        run: npm run build
+
+  backend-entrypoint-syntax:
+    name: Check ${{ matrix.module }} backend entrypoint syntax
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: Lead
+            entrypoint: LEAD/BACKEND/src/index.js
+          - module: Admission
+            entrypoint: ADMISSION/BACKEND/server.js
+          - module: Super Admin
+            entrypoint: SUPER-ADMIN/BACKEND/server.js
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Parse backend entrypoint
+        run: node --check "${{ matrix.entrypoint }}"
