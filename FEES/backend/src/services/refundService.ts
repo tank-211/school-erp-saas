@@ -297,6 +297,21 @@ export class RefundService {
     const processed = await prisma.$transaction(async (tx) => {
       const refunds = (tx as any).refund_request;
 
+      // Serialize every refund settlement for this original payment. Locking
+      // the payment row makes different refund requests share the same guard,
+      // not merely competing requests for the same refund id.
+      await tx.$queryRaw`SELECT id FROM payment WHERE id = ${refund.payment_id} AND school_id = ${sid} FOR UPDATE`;
+
+      // Re-read after acquiring the lock; the status may have changed while
+      // this request was waiting for another settlement to finish.
+      const currentRefund = await refunds.findFirst({
+        where: { id, school_id: sid },
+        select: { id: true, amount: true, status: true },
+      });
+      if (!currentRefund || currentRefund.status !== 'APPROVED') {
+        throw new ValidationError('This refund is no longer approved for processing.');
+      }
+
       const payment = await tx.payment.findFirst({
         where: { id: refund.payment_id, school_id: sid },
         select: { id: true, amount: true, payment_number: true, invoice_id: true, student_id: true },
@@ -306,7 +321,7 @@ export class RefundService {
       }
 
       // Never refund more than was paid, across all refunds of this payment
-      const refundPaise = toPaise(refund.amount);
+      const refundPaise = toPaise(currentRefund.amount);
       const earlier: Array<{ amount: unknown }> = await refunds.findMany({
         where: { payment_id: payment.id, school_id: sid, status: 'PROCESSED' },
         select: { amount: true },
