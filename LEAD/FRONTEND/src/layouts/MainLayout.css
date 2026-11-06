@@ -23,3 +23,16 @@
   overflow-y: auto;
   background: #f0f9f4;
 }
+.mobile-nav-toggle,.mobile-nav-backdrop{display:none}
+@media(max-width:760px){
+ .app-shell{position:relative;height:auto;min-height:100dvh;overflow:visible}
+ .mobile-nav-toggle{display:inline-flex;position:fixed;top:11px;left:12px;z-index:40;width:42px;height:42px;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--text-primary);box-shadow:var(--shadow-md);font-size:20px}
+ .app-shell .sidebar{position:fixed;inset:0 auto 0 0;height:100dvh;width:min(280px,calc(100vw - 48px));min-width:0;transform:translateX(-105%);transition:transform 220ms ease;z-index:60;box-shadow:12px 0 32px rgba(15,23,42,.16)}
+ .app-shell.mobile-nav-open .sidebar{transform:translateX(0)}
+ .app-shell.mobile-nav-open .mobile-nav-backdrop{display:block;position:fixed;inset:0;z-index:50;border:0;background:rgba(15,23,42,.42)}
+ .app-content{width:100%;min-width:0;overflow:visible}
+ .app-main{min-width:0;overflow-x:hidden;padding:12px}
+ .header{padding-left:64px;height:64px;gap:8px}
+}
+@media(max-width:520px){.header-search{min-width:0}.header-right{gap:6px}.btn-add-lead{padding:8px 10px;font-size:12px}.notif-dropdown{position:fixed;top:70px;right:10px;left:10px;width:auto}}
+@media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}
