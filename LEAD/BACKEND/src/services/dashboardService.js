@@ -2,32 +2,22 @@ import { PrismaClient } from "@prisma/client";
 import { STATUS_GROUPS } from "./leadService.js";
 
 const prisma = new PrismaClient();
-console.log(Object.keys(prisma));
 export const getDashboard = async (req, res) => {
-  console.log("USING UPDATED DASHBOARD CONTROLLER");
-  console.log("🔥 DASHBOARD API HIT");
   try {
     const schoolId = BigInt(req.user.schoolId);
 
     const stats = await getStatsService(BigInt(req.user.schoolId));
-    console.log("✅ Stats OK");
 
     const enrollmentTrend = await getEnrollmentTrendService(BigInt(req.user.schoolId));
-    console.log("✅ Enrollment Trend OK");
 
     const statusDistribution = await getStatusDistributionService(BigInt(req.user.schoolId));
-    console.log("✅ Status Distribution OK");
 
     const gradeDistribution = await getGradeDistributionService(BigInt(req.user.schoolId));
-    console.log("✅ Grade Distribution OK");
 
     const todayOverview = await getTodayOverviewService(BigInt(req.user.schoolId));
-    console.log("✅ Today Overview OK");
 
     const recentActivities = await getRecentActivitiesService(BigInt(req.user.schoolId));
-    console.log("✅ Recent Activities OK");
 
-    console.log("🔥 RECENT ACTIVITIES RESULT:", recentActivities);
     
     res.json(
         JSON.parse(
@@ -151,43 +141,49 @@ export const getStatsService = async (schoolId) => {
 };
 
 export const getEnrollmentTrendService = async (schoolId) => {
+  // Keep this query bounded to the latest 12 months and distinguish years.
+  // UTC month boundaries avoid buckets changing with the server's timezone.
+  const now = new Date();
+  const firstMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1));
+  const nextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+
+  const monthBuckets = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date(Date.UTC(firstMonth.getUTCFullYear(), firstMonth.getUTCMonth() + index, 1));
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    return {
+      key,
+      month: date.toLocaleString("en-IN", { month: "short", timeZone: "UTC" }) + ` '${String(date.getUTCFullYear()).slice(-2)}`,
+      inquiries: 0,
+      enrollments: 0,
+    };
+  });
+  const bucketsByKey = new Map(monthBuckets.map((bucket) => [bucket.key, bucket]));
+
   const leads = await prisma.lead.findMany({
-    where: { school_id: schoolId },
+    where: {
+      school_id: schoolId,
+      created_at: { gte: firstMonth, lt: nextMonth },
+    },
     select: { created_at: true, follow_up_status: true },
   });
 
-  console.log("LEADS FROM DB:", leads);
-
-  const trend = {};
-
   leads.forEach((lead) => {
-    const month = new Date(lead.created_at).toLocaleString("default", {
-      month: "short",
-    });
+    const createdAt = new Date(lead.created_at);
+    const key = `${createdAt.getUTCFullYear()}-${String(createdAt.getUTCMonth() + 1).padStart(2, "0")}`;
+    const bucket = bucketsByKey.get(key);
+    if (!bucket) return;
 
-    if (!trend[month]) {
-      trend[month] = { inquiries: 0, enrollments: 0 };
-    }
-
-    trend[month].inquiries++;
-
-    if (STATUS_GROUPS.admitted.includes(lead.follow_up_status)) {
-      trend[month].enrollments++;
+    bucket.inquiries += 1;
+    if (STATUS_GROUPS.admitted.includes(String(lead.follow_up_status || "").toLowerCase())) {
+      bucket.enrollments += 1;
     }
   });
-  
-  const monthOrder = [
-    "Jan","Feb","Mar","Apr","May","Jun",
-    "Jul","Aug","Sep","Oct","Nov","Dec"
-  ];
 
-  return Object.entries(trend)
-    .map(([month, data]) => ({
-      month,
-      inquiries: data.inquiries,
-      enrollments: data.enrollments,
-    }))
-    .sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
+  return monthBuckets.map(({ month, inquiries, enrollments }) => ({
+    month,
+    inquiries,
+    enrollments,
+  }));
 };
 
 export const getStatusDistributionService = async (schoolId) => {
@@ -303,7 +299,6 @@ export const getGradeDistributionService = async (schoolId) => {
 };
 
 export const getRecentActivitiesService = async (schoolId) => {
-  console.log("🔥 RECENT ACTIVITY SERVICE CALLED");
 
   const activities = await prisma.activity.findMany({
   where: {
