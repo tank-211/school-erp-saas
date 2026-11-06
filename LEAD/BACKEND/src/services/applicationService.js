@@ -168,36 +168,51 @@ export const createApplicationFromLeadService = async (
   school_id,
   userId
 ) => {
-  const lead = await prisma.lead.findFirst({
-    where: {
-      id: BigInt(lead_id),
-      school_id
-    }
-  });
-
-  if (!lead) {
-    throw new Error("Lead not found");
+  if (!/^\\d+$/.test(String(lead_id ?? "")) || !/^\\d+$/.test(String(school_id ?? "")) || !/^\\d+$/.test(String(userId ?? ""))) {
+    throw new Error("Valid lead, school and user ids are required");
   }
 
-  const existing = await prisma.application.findFirst({
-    where: {
-      lead_id: lead.id
-    }
-  });
+  const sid = BigInt(school_id);
+  const lid = BigInt(lead_id);
+  const uid = BigInt(userId);
 
-  if (existing) {
-    throw new Error("Application already exists for this lead.");
-  }
+  const application = await prisma.$transaction(async (tx) => {
+    // Serialize creation for this school + lead across all application server
+    // instances. The lookup must happen after the lock is acquired.
+    const lockKey = `lead-application:${sid}:${lid}`;
+    await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 
-  const application = await prisma.application.create({
-    data: {
-      application_number: `APP-${Date.now()}`,
-      lead_id: lead.id,
-      school_id,
-      academic_year_id: lead.academic_year_id,
-      assigned_to: BigInt(userId),
-      status: "draft",
+    const lead = await tx.lead.findFirst({
+      where: { id: lid, school_id: sid },
+      select: { id: true, academic_year_id: true },
+    });
+    if (!lead) throw new Error("Lead not found in this school");
+    if (!lead.academic_year_id) {
+      throw new Error("This lead has no academic year. Assign an academic year before creating an application.");
     }
+
+    const existing = await tx.application.findFirst({
+      where: { lead_id: lead.id, school_id: sid },
+      select: { id: true },
+    });
+    if (existing) throw new Error("Application already exists for this lead.");
+
+    const user = await tx.app_user.findFirst({
+      where: { id: uid, school_id: sid },
+      select: { id: true },
+    });
+    if (!user) throw new Error("Assigned user not found in this school");
+
+    return tx.application.create({
+      data: {
+        application_number: `APP-${Date.now()}-${Math.floor(Math.random() * 1000000)}`,
+        lead_id: lead.id,
+        school_id: sid,
+        academic_year_id: lead.academic_year_id,
+        assigned_to: uid,
+        status: "draft",
+      }
+    });
   });
 
   return JSON.parse(
