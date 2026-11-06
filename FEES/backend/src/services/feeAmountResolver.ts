@@ -19,7 +19,7 @@ export async function resolveStudentFeeAmount(
   const student = BigInt(studentId);
   const structureId = BigInt(feeStructureId);
   const structure = await db.fee_structure.findFirst({
-    where: { id: structureId, school_id: school, is_active: true },
+    where: { id: structureId, school_id: school },
     select: { id: true, amount: true, due_date: true, fee_type: true },
   });
   if (!structure) throw new NotFoundError('Active fee structure not found for this school');
@@ -29,6 +29,10 @@ export async function resolveStudentFeeAmount(
     orderBy: { id: 'desc' },
     select: { final_amount: true, due_date: true },
   });
+
+  if (!assignment && structure.is_active !== true) {
+    throw new NotFoundError('Fee structure is inactive and has no existing student assignment');
+  }
 
   const rawAmount = Number(assignment?.final_amount ?? structure.amount);
   const amountPaise = Math.round(rawAmount * 100);
