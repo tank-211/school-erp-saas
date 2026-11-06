@@ -9,11 +9,14 @@ function SPDashboard() {
     school_user_counts: [],
   });
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadStats = async () => {
+      setLoading(true);
+      setError("");
       try {
         const data = await superAdminService.getStats();
         if (!cancelled) {
@@ -25,8 +28,10 @@ function SPDashboard() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(err.message);
+          setError(err.message || "Unable to load the platform overview.");
         }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
@@ -36,6 +41,23 @@ function SPDashboard() {
       cancelled = true;
     };
   }, []);
+
+  const retryLoad = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await superAdminService.getStats();
+      setDashboardData({
+        stats: data.stats || {},
+        expiring_schools: data.expiring_schools || [],
+        school_user_counts: data.school_user_counts || [],
+      });
+    } catch (err) {
+      setError(err.message || "Unable to load the platform overview.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const {
     stats,
@@ -50,34 +72,47 @@ function SPDashboard() {
         Platform overview. Dates follow the India calendar, as the school apps do.
       </p>
 
-      {error && <div className="sp-error">{error}</div>}
+      {error && (
+        <div className="sp-error" role="alert" style={{ marginTop: "12px" }}>
+          <p style={{ margin: "0 0 10px" }}>{error}</p>
+          <button className="sp-btn sp-btn-ghost" type="button" onClick={retryLoad} disabled={loading}>
+            {loading ? "Retrying..." : "Retry"}
+          </button>
+        </div>
+      )}
 
-      <div className="sp-grid sp-grid-3" style={{ marginTop: "16px" }}>
+      {loading && (
+        <p className="sp-subtle-copy" role="status" aria-live="polite">
+          Loading platform overview…
+        </p>
+      )}
+
+      <div className="sp-grid sp-grid-3" style={{ marginTop: "16px" }} aria-busy={loading}>
         <article className="sp-card">
           <p className="sp-kpi-label">Total Schools</p>
-          <p className="sp-kpi-value">{stats.total_schools || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.total_schools ?? 0}</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Active Schools</p>
-          <p className="sp-kpi-value">{stats.active_schools || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.active_schools ?? 0}</p>
           <p className="sp-subtle-copy">Can sign in today</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Expired</p>
-          <p className="sp-kpi-value">{stats.expired_schools || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.expired_schools ?? 0}</p>
           <p className="sp-subtle-copy">Blocked until renewed</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Suspended</p>
-          <p className="sp-kpi-value">{stats.suspended_schools || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.suspended_schools ?? 0}</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Active Students</p>
-          <p className="sp-kpi-value">{stats.total_active_students || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.total_active_students ?? 0}</p>
         </article>
         <article className="sp-card">
           <p className="sp-kpi-label">Expiring Soon</p>
-          <p className="sp-kpi-value">{stats.expiring_soon_schools || 0}</p>
+          <p className="sp-kpi-value">{loading ? "—" : stats.expiring_soon_schools ?? 0}</p>
         </article>
       </div>
 
@@ -85,7 +120,7 @@ function SPDashboard() {
         <article className="sp-card">
           <h2 style={{ marginTop: 0 }}>Expiring Subscriptions</h2>
           <div className="sp-dashboard-list">
-            {expiringSchools.map((school) => (
+            {!loading && expiringSchools.map((school) => (
               <div key={school.id} className="sp-dashboard-list-item">
                 <div>
                   <strong>{school.name}</strong>
@@ -104,7 +139,7 @@ function SPDashboard() {
                 </Link>
               </div>
             ))}
-            {!expiringSchools.length && (
+            {!loading && !error && !expiringSchools.length && (
               <p className="sp-empty">No schools are expiring soon.</p>
             )}
           </div>
@@ -113,18 +148,18 @@ function SPDashboard() {
         <article className="sp-card">
           <h2 style={{ marginTop: 0 }}>User Counts by School</h2>
           <div className="sp-dashboard-list">
-            {schoolUserCounts.slice(0, 6).map((item) => (
+            {!loading && schoolUserCounts.slice(0, 6).map((item) => (
               <div key={item.school_id} className="sp-dashboard-list-item">
                 <span>{item.school_name || `School #${item.school_id}`}</span>
                 <strong>{item.total_users}</strong>
               </div>
             ))}
-            {schoolUserCounts.length > 6 && (
+            {!loading && schoolUserCounts.length > 6 && (
               <Link className="sp-subtle-copy" to="/sp-control-portal/users">
                 {schoolUserCounts.length - 6} more schools in User Management
               </Link>
             )}
-            {!schoolUserCounts.length && (
+            {!loading && !error && !schoolUserCounts.length && (
               <p className="sp-empty">No user counts available yet.</p>
             )}
           </div>
