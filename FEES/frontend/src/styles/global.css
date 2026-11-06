@@ -2683,7 +2683,7 @@ ul, ol { list-style: none; }
  .main-content>main{min-width:0;padding:14px}
 }
 @media(max-width:560px){
- .navbar{height:auto;min-height:58px;flex-wrap:wrap;padding:8px 10px}
+ .navbar{height:auto;min-height:58px;flex-wrap:wrap;padding:8px 10px 8px 60px}
  .navbar-left{flex:1 1 100%;order:2}.navbar-right{flex:1 1 100%;order:1;justify-content:flex-end}
  .navbar-right>a{display:inline-flex}.navbar-right>a .btn{padding:7px 9px;font-size:11px}
  .main-content>main{padding:10px}
