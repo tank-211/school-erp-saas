@@ -84,7 +84,7 @@ export const createApplication = async (leadId, academicYearId, schoolId) => {
       // Serialize application creation/submission for this school + lead.
       // The partial unique index below remains the final cross-process guard.
       const lockKey = `application:${schoolId}:${leadId}`;
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 
       // Verify lead exists for this school
       const lead = await tx.lead.findFirst({
@@ -1099,7 +1099,7 @@ export const submitApplication = async (applicationId) => {
       // be submitted. Serialize this transition to avoid concurrent submits.
       if (application.lead_id !== null) {
         const lockKey = `application:${application.school_id}:${application.lead_id}`;
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
         const alreadySubmitted = await tx.application.findFirst({
           where: {
             school_id: application.school_id,
