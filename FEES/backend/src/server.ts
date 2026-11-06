@@ -26,11 +26,29 @@ app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || 'localhost';
 
-// Middleware
+// Credentialed browser requests cannot use Access-Control-Allow-Origin: *.
+// Keep the allowlist explicit; set CORS_ORIGIN to a comma-separated list of
+// deployed frontend origins in each environment. Requests without an Origin
+// header (for example, server-to-server/webhook calls) are not browser CORS.
+const allowedCorsOrigins = (
+  process.env.CORS_ORIGIN ||
+  'http://localhost:5173,http://127.0.0.1:5173'
+)
+  .split(',')
+  .map((origin: string) => origin.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
+    origin(origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) {
+      if (!origin || allowedCorsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type'],
   })
 );
 
