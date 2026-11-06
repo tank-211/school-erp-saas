@@ -20,9 +20,9 @@ export async function resolveStudentFeeAmount(
   const structureId = BigInt(feeStructureId);
   const structure = await db.fee_structure.findFirst({
     where: { id: structureId, school_id: school },
-    select: { id: true, amount: true, due_date: true, fee_type: true },
+    select: { id: true, amount: true, due_date: true, fee_type: true, is_active: true },
   });
-  if (!structure) throw new NotFoundError('Active fee structure not found for this school');
+  if (!structure) throw new NotFoundError('Fee structure not found for this school');
 
   const assignment = await db.student_fee_assignment.findFirst({
     where: { school_id: school, student_id: student, fee_structure_id: structureId },
