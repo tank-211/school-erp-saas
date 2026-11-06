@@ -228,14 +228,24 @@ export const createFromLead = async (req, res) => {
       });
     }
 
+    if (!/^\\d+$/.test(String(lead_id)) || !/^\\d+$/.test(String(academic_year_id))) {
+      return res.status(400).json({ success: false, message: 'lead_id and academic_year_id must be valid numeric ids' });
+    }
+
     const leadId = BigInt(lead_id);
     const academicYearId = BigInt(academic_year_id);
+    const schoolId = BigInt(req.schoolId);
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Get lead
-      const lead = await tx.lead.findUnique({
+      // Serialize concurrent admission creation for the same school + lead.
+      const lockKey = `lead-admission:${schoolId}:${leadId}`;
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
+      // 1. Get the lead only inside the authenticated school.
+      const lead = await tx.lead.findFirst({
         where: {
           id: leadId,
+          school_id: schoolId,
         },
         select: {
           id: true,
@@ -257,12 +267,11 @@ export const createFromLead = async (req, res) => {
         );
       }
 
-      const schoolId = lead.school_id;
-
-      // 2. Check existing admission
+      // 2. Check existing admission after acquiring the lock
       const existingAdmission = await tx.admission.findFirst({
         where: {
           lead_id: leadId,
+          school_id: schoolId,
         },
         orderBy: {
           id: 'desc',
@@ -398,6 +407,7 @@ export const createFromLead = async (req, res) => {
       const section = await tx.section.findFirst({
         where: {
           class_id: schoolClass.id,
+          school_id: schoolId,
         },
         orderBy: {
           section_name: 'asc',
