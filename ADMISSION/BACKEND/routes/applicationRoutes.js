@@ -7,28 +7,17 @@ import { validateApplicationDocumentTypes } from '../middleware/validateApplicat
 
 const router = express.Router();
 
-// Apply auth middleware to all application routes. Every route is school-scoped:
-// requireSchool sets req.schoolId from the token.
+// Apply authentication and tenant context to every application endpoint.
 router.use(authMiddleware, requireSchool);
 
 /**
  * New admission workflow routes
  */
 router.post('/start', applicationController.startAdmission);
-
-// Start admission from an approved application
-router.post(
-  '/start-from-approved',
-  applicationController.startAdmissionFromApprovedApplication
-);
-
-router.post( '/save-step', upload.any(), applicationController.saveAdmissionStep );
-router.get('/resume/:id', applicationController.getAdmissionApplication);
+router.post('/start-from-approved', applicationController.startAdmissionFromApprovedApplication);
+router.post('/save-step', upload.any(), applicationController.saveAdmissionStep);
+router.get('/resume/:id', requireOwnedApplication, applicationController.getAdmissionApplication);
 router.post('/complete', applicationController.completeAdmission);
-/**
- * POST /api/applications/admission-document
- * Upload or replace a document during admission
- */
 
 router.get('/eligible-leads', applicationController.getEligibleLeads);
 router.get('/counts', applicationController.getApplicationCounts);
@@ -37,90 +26,34 @@ router.get('/draft', applicationController.getDraftApplications);
 router.get('/by-lead/:leadId', applicationController.getApplicationByLeadId);
 
 router.post('/new', applicationController.createApplicationWithoutLead);
+router.get('/:id/resume', requireOwnedApplication, applicationController.resumeApplication);
 
-router.get('/:id/resume', applicationController.resumeApplication);
-
-/**
- * GET /api/applications
- * Get all applications for the logged-in school
- */
+/** List and create applications for the authenticated school. */
 router.get('/', applicationController.getApplications);
-
-/**
- * POST /api/applications
- * Create a new application from lead
- */
 router.post('/', applicationController.createApplication);
 
-/**
- * GET /api/applications/:id/progress
- * Get application progress status
- */
-router.get('/:id/progress', applicationController.getApplicationProgress);
-
-/**
- * GET /api/applications/:id/details
- * Get full application details (for prefill)
- */
-router.get('/:id/details', applicationController.getApplicationDetails);
-
-/**
- * POST /api/applications/:id/student-info
- * Save student information (Step 1)
- */
+/** Every endpoint addressing an existing application must verify ownership. */
+router.get('/:id/progress', requireOwnedApplication, applicationController.getApplicationProgress);
+router.get('/:id/details', requireOwnedApplication, applicationController.getApplicationDetails);
 router.post('/:id/student-info', requireOwnedApplication, applicationController.saveStudentInfo);
-
-/**
- * POST /api/applications/:id/parent-info
- * Save parent information (Step 2)
- */
 router.post('/:id/parent-info', requireOwnedApplication, applicationController.saveParentInfo);
+router.post('/:id/academic-info', requireOwnedApplication, applicationController.saveAcademicInfo);
 
-/**
- * POST /api/applications/:id/academic-info
- * Save academic information (Step 3)
- */
-router.post('/:id/academic-info', applicationController.saveAcademicInfo);
-
-/**
- * POST /api/applications/:id/documents
- * Save documents (Step 5)
- */
+// Check ownership before multer writes any uploaded files to disk.
 router.post(
-	'/:id/documents',
-	requireOwnedApplication, // before multer so no file is stored for another school's application
-	upload.any(),
-	validateApplicationDocumentTypes,
-	applicationController.saveDocuments,
+  '/:id/documents',
+  requireOwnedApplication,
+  upload.any(),
+  validateApplicationDocumentTypes,
+  applicationController.saveDocuments,
 );
-
-/**
- * POST /api/applications/:id/submit
- * Submit final application (Step 6)
- */
 router.post('/:id/submit', requireOwnedApplication, applicationController.submitApplication);
+router.patch('/:id/review', requireOwnedApplication, applicationController.moveApplicationToReview);
+router.patch('/:id/approve', requireOwnedApplication, applicationController.approveApplication);
+router.patch('/:id/reject', requireOwnedApplication, applicationController.rejectApplication);
+router.delete('/:id', requireOwnedApplication, applicationController.deleteApplication);
 
-/**
- * PATCH /api/applications/:id/review
- * Move submitted application to under review
- */
-router.patch(
-  '/:id/review',
-  applicationController.moveApplicationToReview
-);
-
-router.patch('/:id/approve', applicationController.approveApplication);
-router.patch('/:id/reject', applicationController.rejectApplication);
-
-/**
- * DELETE /api/applications/:id
- * Delete draft application (only allows deletion if status is 'draft')
- */
-router.delete('/:id', applicationController.deleteApplication);
-
-/**
- * Alias endpoint for compatibility with /api/admission/:id
- */
-router.get('/:id', applicationController.getApplicationDetails);
+// Compatibility alias.
+router.get('/:id', requireOwnedApplication, applicationController.getApplicationDetails);
 
 export default router;
