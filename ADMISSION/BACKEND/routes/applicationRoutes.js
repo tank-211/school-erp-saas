@@ -1,7 +1,7 @@
 import express from 'express';
 import * as applicationController from '../controllers/applicationController.js';
 import { authMiddleware, requireSchool } from '../middleware/auth.js';
-import { requireOwnedApplication } from '../middleware/tenantGuards.js';
+import { requireOwnedApplication, requireOwnedAdmission } from '../middleware/tenantGuards.js';
 import upload from '../middleware/upload.js';
 import { validateApplicationDocumentTypes } from '../middleware/validateApplicationDocumentTypes.js';
 
@@ -14,10 +14,10 @@ router.use(authMiddleware, requireSchool);
  * New admission workflow routes
  */
 router.post('/start', applicationController.startAdmission);
-router.post('/start-from-approved', applicationController.startAdmissionFromApprovedApplication);
-router.post('/save-step', upload.any(), applicationController.saveAdmissionStep);
-router.get('/resume/:id', requireOwnedApplication, applicationController.getAdmissionApplication);
-router.post('/complete', applicationController.completeAdmission);
+router.post('/start-from-approved', requireOwnedApplication, applicationController.startAdmissionFromApprovedApplication);
+router.post('/save-step', requireOwnedAdmission, upload.any(), applicationController.saveAdmissionStep);
+router.get('/resume/:id', requireOwnedAdmission, applicationController.getAdmissionApplication);
+router.post('/complete', requireOwnedAdmission, applicationController.completeAdmission);
 
 router.get('/eligible-leads', applicationController.getEligibleLeads);
 router.get('/counts', applicationController.getApplicationCounts);
