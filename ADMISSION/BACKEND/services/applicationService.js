@@ -1507,6 +1507,12 @@ export const startAdmissionFromApprovedApplication = async (
     const schoolIdBigInt = BigInt(schoolId);
 
     return await prisma.$transaction(async (tx) => {
+      // Serialize the application-to-admission handoff. Without this lock, two
+      // concurrent requests can both observe no admission and create duplicate
+      // students/admissions for the same approved application.
+      const lockKey = `admission:${schoolIdBigInt}:${applicationIdBigInt}`;
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
+
       // 1. Find the approved application
       const application = await tx.application.findFirst({
         where: {
