@@ -13,6 +13,25 @@ import { recordPaymentAtomically } from './paymentLedger';
 // payment must not both record it (a unique index in the database backs this up).
 const recording = new Map<string, Promise<any>>();
 
+function normalizePaymentMethod(method: string): string {
+  return method.trim().toLowerCase();
+}
+
+function calculatePaymentStatus(
+  paidAmount: number,
+  totalAmount: number
+): string {
+  if (paidAmount >= totalAmount) {
+    return 'paid';
+  }
+
+  if (paidAmount > 0) {
+    return 'partial';
+  }
+
+  return 'unpaid';
+}
+
 function generatePaymentNumber(): string {
   return `PAY-${Date.now()}-${Math.floor(
     Math.random() * 10000
@@ -303,7 +322,10 @@ export class PaymentService {
       return { ignored: true, reason: 'not an invoice payment of this school' };
     }
 
-    return this.recordFromOrder(ord  async recordPayment(
+    return this.recordFromOrder(order, paymentId, String(schoolId), 'Razorpay webhook');
+  }
+
+  async recordPayment(
     invoiceId: string,
     schoolId: string,
     data: {
@@ -326,6 +348,8 @@ export class PaymentService {
       transactionId: data.transactionId || data.razorpayPaymentId,
       notes: data.notes,
       receivedBy: data.receivedBy,
+      bankName: data.bankName,
+      chequeNumber: data.chequeNumber,
       paymentNumber: generatePaymentNumber(),
     });
 
@@ -336,12 +360,6 @@ export class PaymentService {
       status: result.invoice.status,
     });
     return result;
-  }
-.amount,
-      newStatus,
-    });
-
-    return payment;
   }
 
   async getPaymentHistory(invoiceId: string, schoolId: string) {
