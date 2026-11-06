@@ -55,7 +55,7 @@ export async function recordPaymentAtomically(prisma: any, input: RecordPaymentI
       const duplicate = await tx.payment.findFirst({
         where: { school_id: schoolId, transaction_id: transactionId },
         select: {
-          id: true, invoice_id: true, payment_number: true, amount: true,
+          id: true, school_id: true, student_id: true, invoice_id: true, payment_number: true, amount: true,
           payment_date: true, payment_method: true, transaction_id: true, status: true, remarks: true,
         },
       });
