@@ -30,7 +30,7 @@ export async function resolveStudentFeeAmount(
     select: { final_amount: true, due_date: true },
   });
 
-  if (!assignment && structure.is_active !== true) {
+  if (!assignment && structure.is_active === false) {
     throw new NotFoundError('Fee structure is inactive and has no existing student assignment');
   }
 
