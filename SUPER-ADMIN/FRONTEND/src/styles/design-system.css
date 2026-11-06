@@ -1,0 +1,61 @@
+/* Shared School ERP SaaS UI foundation.
+ * Kept additive and namespaced so existing module workflows/styles remain intact.
+ */
+:root {
+  --saas-brand: #0f766e;
+  --saas-brand-hover: #115e59;
+  --saas-brand-soft: #ccfbf1;
+  --saas-canvas: #f8fafc;
+  --saas-surface: #ffffff;
+  --saas-border: #e2e8f0;
+  --saas-text: #0f172a;
+  --saas-text-muted: #64748b;
+  --saas-success: #15803d;
+  --saas-warning: #b45309;
+  --saas-danger: #b91c1c;
+  --saas-info: #1d4ed8;
+  --saas-radius-sm: 8px;
+  --saas-radius-md: 12px;
+  --saas-radius-lg: 16px;
+  --saas-shadow-sm: 0 1px 2px rgb(15 23 42 / 5%);
+  --saas-shadow-md: 0 8px 24px rgb(15 23 42 / 8%);
+  --saas-focus-ring: 0 0 0 3px rgb(15 118 110 / 22%);
+  --saas-motion-fast: 140ms ease;
+  --saas-motion-standard: 200ms ease;
+}
+
+/* Keyboard users receive a clear, consistent focus indicator. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--saas-brand);
+  outline-offset: 2px;
+  box-shadow: var(--saas-focus-ring);
+}
+
+/* Prevent long labels and data from forcing page-level horizontal scrolling. */
+:where(#root, main, [role="main"]) {
+  min-width: 0;
+}
+
+/* Keep native form controls legible and consistent without changing their dimensions. */
+:where(input, select, textarea) {
+  accent-color: var(--saas-brand);
+}
+
+/* Respect operating-system reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Small screens: prevent oversized fixed-width content from widening the viewport. */
+@media (max-width: 640px) {
+  :where(img, video, canvas, svg) {
+    max-width: 100%;
+  }
+}
