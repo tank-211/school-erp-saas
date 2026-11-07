@@ -37,7 +37,7 @@ export default function Tasks() {
   const [filter, setFilter] = useState("All");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(() => Boolean(searchParams.get("leadId")));
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
   const assigneeName = (task) => users.find((u) => String(u.id) === String(task.assignedTo))?.name || 'Unassigned';
