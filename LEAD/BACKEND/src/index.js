@@ -25,31 +25,18 @@ const app = express();
 // Behind Render's proxy: use the visitor's IP (for login rate limits), not the proxy's
 app.set("trust proxy", 1);
 
-// 🔥 VERY IMPORTANT — FIRST
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) return callback(null, true);
-
-      const allowed = [
-        "http://localhost:5173",
-        "https://school-erp-saas-odbv.onrender.com",
-        "https://school-erp-saas-new.onrender.com",
-        "https://school-erp-saas-iota.vercel.app",
-      ];
-
-      if (
-        allowed.includes(origin) ||
-        origin.endsWith(".vercel.app")
-      ) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS"));
-    },
-    credentials: true,
-  })
-);
+// Explicit CORS allowlist shared by Express and Socket.IO.
+// Configure LEAD_CORS_ORIGINS as a comma-separated list of exact production frontend origins.
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "https://school-erp-saas-iota.vercel.app",
+  ...(process.env.LEAD_CORS_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean),
+]);
+const corsOrigin = (origin, callback) => {
+  if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+  return callback(new Error("Not allowed by CORS"));
+};
+app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(helmet());
 
 app.use(express.json());
@@ -92,9 +79,7 @@ app.use(errorHandler);
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: corsOrigin, credentials: true },
 });
 
 global.io = io;
