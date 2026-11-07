@@ -25,26 +25,22 @@ const app = express();
 // Behind Render's proxy: use the visitor's IP (for login rate limits), not the proxy's
 app.set("trust proxy", 1);
 
-// 🔥 VERY IMPORTANT — FIRST
+// Allow only known frontend origins. Add any new production frontend origin here
+// after verifying the exact Vercel domain.
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "https://school-erp-saas-odbv.onrender.com",
+  "https://school-erp-saas-new.onrender.com",
+  "https://school-erp-saas-iota.vercel.app",
+]);
+
+const isAllowedOrigin = (origin) => !origin || allowedOrigins.has(origin);
+
+// CORS must run before routes so browser preflight requests are handled.
 app.use(
   cors({
     origin(origin, callback) {
-      if (!origin) return callback(null, true);
-
-      const allowed = [
-        "http://localhost:5173",
-        "https://school-erp-saas-odbv.onrender.com",
-        "https://school-erp-saas-new.onrender.com",
-        "https://school-erp-saas-iota.vercel.app",
-      ];
-
-      if (
-        allowed.includes(origin) ||
-        origin.endsWith(".vercel.app")
-      ) {
-        return callback(null, true);
-      }
-
+      if (isAllowedOrigin(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
     credentials: true,
@@ -93,7 +89,11 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
   },
 });
 
