@@ -1,4 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
+import { MessageSquare, CheckSquare } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getToken } from "../utils/authToken.js";
 
@@ -128,9 +129,12 @@ export default function LeadDetails() {
           </p>
         </div>
 
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button className="btn-secondary" onClick={() => navigate(`/communication?leadId=${lead.id}`)}><MessageSquare size={16} /> Communication</button>
+          <button className="btn-secondary" onClick={() => navigate(`/tasks?entityType=lead&entityId=${lead.id}`)}><CheckSquare size={16} /> Create Task</button>
         <span className="badge badge-gray">
           {lead.follow_up_status === "new" ? "pending" : lead.follow_up_status || "Pending"}
-        </span>
+        </span></div>
       </div>
 
       <div className="grid-2">

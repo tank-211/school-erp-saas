@@ -27,6 +27,7 @@ import setupRoutes from './routes/setupRoutes.js';
 import studentImportRoutes from './routes/studentImport.routes.js';
 import pipelineRoutes from './routes/pipelineRoutes.js';
 import securityRoutes from './routes/securityRoutes.js';
+import taskRoutes from './routes/taskRoutes.js';
 import { signUploadUrlsInResponse, verifySignedUpload } from './utils/signedUploads.js';
 
 dotenv.config();
@@ -170,6 +171,9 @@ app.use('/api/pipeline', pipelineRoutes);
 
 // Security & Compliance (admins): staff by role, audit log
 app.use('/api/security', securityRoutes);
+
+// Admission-owned tasks are intentionally separate from Lead CRM tasks.
+app.use('/api/admission-tasks', taskRoutes);
 
 
 

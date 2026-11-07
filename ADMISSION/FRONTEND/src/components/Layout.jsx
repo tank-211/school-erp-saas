@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2, Upload } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, MessageSquare, UserCheck, FileText, ClipboardCheck, Award, CreditCard, GraduationCap, BarChart3, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Building2, Upload, CheckSquare, Bell } from "lucide-react";
 import { LogoutButton } from "./LogoutButton";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useSchool, initialsOf } from "../hooks/useSchool.js";
@@ -11,6 +11,7 @@ const navItems = [
   { path: "/leads",         label: "Leads",               icon: Users },
   { path: "/pipeline",      label: "Pipeline",            icon: TrendingUp },
   { path: "/communication", label: "Communication",       icon: MessageSquare },
+  { path: "/tasks",         label: "Admission Tasks",      icon: CheckSquare },
   { path: "/counseling",    label: "Counseling",          icon: UserCheck },
   { path: "/applications",  label: "Applications",        icon: FileText },
   { path: "/offers-seats",  label: "Offers & Seats",      icon: Award },
@@ -118,6 +119,10 @@ export function Layout() {
 
       {/* Main Content */}
       <main className={`main-content ${collapsed ? "collapsed" : ""}`}>
+        <header className="admission-topbar">
+          <div className="admission-topbar-title">{school?.name || "School ERP"}<span>Admissions</span></div>
+          <div className="admission-topbar-user"><Bell size={18} /><span>{user?.name || user?.email || "Staff"}</span><small>{user?.role || "Admission Team"}</small></div>
+        </header>
         <Outlet />
       </main>
     </div>

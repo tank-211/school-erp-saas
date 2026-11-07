@@ -7,6 +7,7 @@ import { AddLead } from "./pages/AddLead";
 import { EditLead } from "./pages/EditLead";
 import { Pipeline } from "./pages/Pipeline";
 import { Communication } from "./pages/Communication";
+import { AdmissionTasks } from "./pages/AdmissionTasks";
 import { Counseling } from "./pages/Counseling";
 import { ScheduleVisit } from "./pages/ScheduleVisit";
 import { Applications } from "./pages/Applications";
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="leads/:id/edit" element={<EditLead />} />
           <Route path="pipeline" element={<Pipeline />} />
           <Route path="communication" element={<Communication />} />
+          <Route path="tasks" element={<AdmissionTasks />} />
           <Route path="counseling" element={<Counseling />} />
           <Route path="counseling/schedule-visit" element={<ScheduleVisit />} />
           <Route path="applications" element={<Applications />} />

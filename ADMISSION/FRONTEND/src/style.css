@@ -842,3 +842,12 @@ input, select, textarea { font-family: var(--font); }
     transition: none;
   }
 }
+
+
+/* Admission ERP top header */
+.admission-topbar{min-height:64px;background:var(--white);border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between;padding:10px 24px;gap:16px;position:sticky;top:0;z-index:50}
+.admission-topbar-title{font-weight:700;color:var(--gray-900);display:flex;align-items:center;gap:12px}
+.admission-topbar-title span{font-size:13px;font-weight:500;color:var(--gray-500);padding-left:12px;border-left:1px solid var(--gray-200)}
+.admission-topbar-user{display:flex;align-items:center;gap:10px;color:var(--gray-700);font-size:14px}
+.admission-topbar-user small{color:var(--gray-500);padding-left:8px}
+@media(max-width:640px){.admission-topbar{padding:10px 14px;margin-top:52px}.admission-topbar-user small{display:none}.admission-topbar-title{font-size:14px}}
