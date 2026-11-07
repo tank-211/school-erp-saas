@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import './Tasks.css'
 import { taskAPI, leadsAPI, userAPI } from '../services/api'
 
@@ -36,6 +36,7 @@ export default function Tasks() {
   const [tasks, setTasks] = useState([])
   const [filter, setFilter] = useState("All");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [showModal, setShowModal] = useState(false);
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
@@ -46,7 +47,7 @@ export default function Tasks() {
     description: "",
     dueDate: "",
     followUpDate:" ",
-    leadId: "",
+    leadId: searchParams.get("leadId") || "",
     assignedTo: "",
     priority: "Medium",
     status: "pending"
