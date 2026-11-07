@@ -47,7 +47,7 @@ export const requireOwnedApplication = makeGuard({
 export const requireOwnedAdmission = makeGuard({
   model: 'admission',
   label: 'admission',
-  pick: (req) => req.params.applicationId ?? req.body?.admission_id,
+  pick: (req) => req.params.applicationId ?? req.params.id ?? req.body?.admission_id,
 });
 
 /** Lead identified by body.lead_id. */
