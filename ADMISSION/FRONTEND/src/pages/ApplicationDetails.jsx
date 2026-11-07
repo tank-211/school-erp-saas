@@ -1,5 +1,6 @@
  import { useNavigate, useParams } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { MessageSquare, CheckSquare } from "lucide-react";
 import { getToken } from "../utils/authToken.js";
 
 import "./ApplicationDetails.css";
@@ -294,6 +295,11 @@ const navigate = useNavigate();
       >
         ← Back to Applications
       </button>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        <button className="btn-secondary" onClick={() => navigate(`/communication?applicationId=${id}`)}><MessageSquare size={16}/> Communication</button>
+        <button className="btn-secondary" onClick={() => navigate(`/tasks?entityType=application&entityId=${id}`)}><CheckSquare size={16}/> Create Task</button>
+      </div>
 
       {/* Header */}
       <div className="application-header">
