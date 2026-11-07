@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import "./LeadDetails.css";
 import { communicationAPI, leadsAPI } from "../services/api";
+import { MessageSquare, CheckSquare } from "lucide-react";
 const API_URL = import.meta.env.VITE_API_URL;
 
 // Stages a lead can be moved to; the values are statuses PUT /leads/:id accepts
@@ -266,6 +267,11 @@ if (!lead) {
       {statusSaving && <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>Saving...</div>}
       {statusError && <div role="alert" style={{ fontSize: 12, color: "#b91c1c", marginTop: 4 }}>{statusError}</div>}
     </div></div>
+  </div>
+
+  <div className="lead-context-actions" aria-label="Lead actions">
+    <button type="button" className="lead-context-btn" onClick={() => navigate(`/communication?leadId=${encodeURIComponent(id)}`)}><MessageSquare size={16} /> Communication</button>
+    <button type="button" className="lead-context-btn" onClick={() => navigate(`/tasks?leadId=${encodeURIComponent(id)}`)}><CheckSquare size={16} /> Create Task</button>
   </div>
 
   <div className="lead-details-grid">
