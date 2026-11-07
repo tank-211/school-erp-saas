@@ -296,11 +296,6 @@ const navigate = useNavigate();
         ← Back to Applications
       </button>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        <button className="btn-secondary" onClick={() => navigate(`/communication?applicationId=${id}`)}><MessageSquare size={16}/> Communication</button>
-        <button className="btn-secondary" onClick={() => navigate(`/tasks?entityType=application&entityId=${id}`)}><CheckSquare size={16}/> Create Task</button>
-      </div>
-
       {/* Header */}
       <div className="application-header">
 
@@ -682,6 +677,11 @@ const navigate = useNavigate();
           <span>
             {application.application_number}
           </span>
+        </div>
+
+        <div className="application-context-actions" aria-label="Application actions">
+          <button type="button" className="application-context-btn" onClick={() => navigate(`/communication?applicationId=${id}`)}><MessageSquare size={16} /> Communication</button>
+          <button type="button" className="application-context-btn" onClick={() => navigate(`/tasks?entityType=application&entityId=${id}`)}><CheckSquare size={16} /> Create Task</button>
         </div>
 
         <div className="detail-row">

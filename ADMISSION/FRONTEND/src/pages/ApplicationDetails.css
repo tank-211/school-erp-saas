@@ -393,3 +393,9 @@
     text-align: left;
   }
 }
+
+.application-context-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid #edf0f3}
+.application-context-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:38px;padding:8px 13px;border:1px solid #d7e2e8;border-radius:9px;background:#fff;color:#0f766e;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s ease,border-color .15s ease,transform .15s ease}
+.application-context-btn:hover{background:#f0fdfa;border-color:#99d8cc;transform:translateY(-1px)}
+.application-context-btn:focus-visible{outline:3px solid rgba(13,148,136,.22);outline-offset:2px}
+@media(max-width:480px){.application-context-actions{align-items:stretch}.application-context-btn{flex:1;min-width:130px}}
