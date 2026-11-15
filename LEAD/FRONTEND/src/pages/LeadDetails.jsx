@@ -270,7 +270,7 @@ if (!lead) {
   </div>
 
   <div className="lead-context-actions" aria-label="Lead actions">
-    <button type="button" className="lead-context-btn" onClick={() => navigate(`/communication?leadId=${encodeURIComponent(id)}`)}><MessageSquare size={16} /> Communication</button>
+    <button type="button" className="lead-context-btn" onClick={() => navigate(`/communication?leadId=${encodeURIComponent(id)}&leadName=${encodeURIComponent(`${lead.first_name || ""} ${lead.last_name || ""}`.trim())}&channel=email`)}><MessageSquare size={16} /> Communication</button>
     <button type="button" className="lead-context-btn" onClick={() => navigate(`/tasks?leadId=${encodeURIComponent(id)}`)}><CheckSquare size={16} /> Create Task</button>
   </div>
 
