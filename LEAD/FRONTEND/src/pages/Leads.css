@@ -95,3 +95,31 @@
   .filter-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .filt-group, .filt-select, .filt-search { width: 100%; min-width: 0; box-sizing: border-box; }
 }
+
+
+/* Lead list actions and view switcher */
+.view-toggle { align-items: center; gap: 5px; padding: 4px; }
+.view-btn { width: 36px; height: 36px; }
+.view-btn.grid-view-btn.active { background: #2563eb; color: #fff; }
+.view-btn.list-view-btn.active { background: #10b981; color: #fff; }
+.view-btn:not(.active):hover { background: #f1f5f9; color: #334155; }
+.view-btn:focus-visible, .lead-row-actions button:focus-visible { outline: 3px solid rgba(59,130,246,.3); outline-offset: 2px; }
+.lead-row-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.lead-communication-menu-wrap { position: relative; display: inline-flex; }
+.lead-communication-btn, .lead-task-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 7px 10px; border: 1px solid; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background .15s ease, box-shadow .15s ease; }
+.lead-communication-btn { color: #2563eb; border-color: #93c5fd; }
+.lead-communication-btn:hover, .lead-communication-btn[aria-expanded="true"] { background: #eff6ff; }
+.lead-task-btn { color: #7c3aed; border-color: #c4b5fd; }
+.lead-task-btn:hover { background: #f5f3ff; }
+.lead-communication-menu { position: absolute; z-index: 30; top: calc(100% + 7px); right: 0; width: 178px; padding: 6px; border: 1px solid #e2e8f0; border-radius: 11px; background: #fff; box-shadow: 0 12px 28px rgba(15,23,42,.16); }
+.lead-communication-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 7px; background: transparent; color: #1e293b; text-align: left; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lead-communication-menu button:hover, .lead-communication-menu button:focus-visible { background: #f1f5f9; outline: none; }
+@media (max-width: 1100px) {
+  .lead-row-actions { gap: 6px; }
+  .lead-communication-btn, .lead-task-btn, .lead-open-btn { padding: 7px 8px; font-size: 11px; }
+}
+@media (max-width: 768px) {
+  .leads-page-header { gap: 12px; align-items: flex-start; }
+  .view-toggle { flex-shrink: 0; }
+  .lead-row-actions { flex-wrap: wrap; }
+}

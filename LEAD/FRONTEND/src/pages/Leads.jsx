@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { leadsAPI, reportsAPI, communicationAPI, usersAPI } from '../services/api'
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -60,6 +60,8 @@ export default function Leads() {
   const [lookupsError, setLookupsError] = useState('');
   const [usersError, setUsersError] = useState('');
   const [assigningLeadId, setAssigningLeadId] = useState(null);
+  const [openCommunicationLeadId, setOpenCommunicationLeadId] = useState(null);
+  const communicationMenuRef = useRef(null);
   const [users, setUsers] = useState([]);
   const [communicationHistory, setCommunicationHistory] = useState({});
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '')
@@ -98,6 +100,20 @@ export default function Leads() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const selectedLeadId = searchParams.get("leadId");
+  useEffect(() => {
+    const closeMenu = (event) => {
+      if (communicationMenuRef.current && !communicationMenuRef.current.contains(event.target)) setOpenCommunicationLeadId(null);
+    };
+    const closeOnEscape = (event) => { if (event.key === "Escape") setOpenCommunicationLeadId(null); };
+    document.addEventListener("mousedown", closeMenu);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => { document.removeEventListener("mousedown", closeMenu); document.removeEventListener("keydown", closeOnEscape); };
+  }, []);
+  const openLeadCommunication = (lead, channel) => {
+    const params = new URLSearchParams({ leadId: String(lead.id), leadName: lead.name || "", channel });
+    navigate("/communication?" + params.toString());
+    setOpenCommunicationLeadId(null);
+  };
     useEffect(() => {
     if (selectedLeadId) {
       setTimeout(() => {
@@ -295,8 +311,8 @@ return (
           <p className="page-sub">Track and manage school admission inquiries</p>
         </div>
         <div className="view-toggle">
-          <button className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')}><GridIcon /></button>
-          <button className={`view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')}><ListIcon /></button>
+          <button type="button" className={`view-btn grid-view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} title="Card View" aria-label="Card View" aria-pressed={viewMode === 'grid'}><GridIcon /></button>
+          <button type="button" className={`view-btn list-view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} title="List View" aria-label="List View" aria-pressed={viewMode === 'list'}><ListIcon /></button>
         </div>
       </div>
 
@@ -436,7 +452,23 @@ return (
                   <td><div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}><span className="src-dot" style={{ background: lead.sourceColor }} />{lead.source}</div></td>
                   <td><span className={`badge ${statusMap[lead.status] || 'badge-gray'}`}>{lead.status}</span></td>
                   <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} disabled={assigningLeadId === lead.id} onChange={e=>handleAssignLead(lead.id,e.target.value)} aria-label={`Assign ${lead.name} to counselor`} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
-                  <td><span className="lead-last-contact">{lead.lastContact}</span></td><td><button type="button" className="lead-open-btn" onClick={(event) => { event.stopPropagation(); navigate(`/leads/${lead.id}`); }}>View lead <span aria-hidden="true">→</span></button></td>
+                  <td><span className="lead-last-contact">{lead.lastContact}</span></td><td className="lead-row-actions" onClick={(event) => event.stopPropagation()}>
+                    <button type="button" className="lead-open-btn" onClick={() => navigate('/leads/' + lead.id)}>View lead <span aria-hidden="true">→</span></button>
+                    <div className="lead-communication-menu-wrap" ref={openCommunicationLeadId === lead.id ? communicationMenuRef : null}>
+                      <button type="button" className="lead-communication-btn" aria-haspopup="menu" aria-expanded={openCommunicationLeadId === lead.id} onClick={() => setOpenCommunicationLeadId((current) => current === lead.id ? null : lead.id)}>
+                        <CommunicationIcon /> Communication <ChevronDownIcon />
+                      </button>
+                      {openCommunicationLeadId === lead.id && (
+                        <div className="lead-communication-menu" role="menu" aria-label={'Communication options for ' + lead.name}>
+                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'whatsapp')}><WhatsAppIcon /> WhatsApp</button>
+                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'email')}><EmailIcon /> Email</button>
+                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'sms')}><SmsIcon /> SMS</button>
+                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'call')}><CallIcon /> Call</button>
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" className="lead-task-btn" onClick={() => navigate('/tasks?leadId=' + encodeURIComponent(lead.id))}><TaskActionIcon /> Add task</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -481,3 +513,11 @@ function PhoneIconSm() { return <svg width="11" height="11" viewBox="0 0 24 24" 
 function MailIconSm() { return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg> }
 function UserIconSm() { return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> }
 function ClockIconSm() { return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> }
+
+function CommunicationIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> }
+function ChevronDownIcon() { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg> }
+function TaskActionIcon() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><polyline points="9 11 12 14 22 4"/></svg> }
+function WhatsAppIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.6 7.4L3 20l1.2-5.1A8.5 8.5 0 1 1 21 11.5Z"/><path d="M8.5 8.5c.5 2.5 2.5 4.5 5 5"/></svg> }
+function EmailIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg> }
+function SmsIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9333ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-9 8.5 9 9 0 0 1-4-.9L3 20l1-4.5a8.5 8.5 0 1 1 17-4Z"/></svg> }
+function CallIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1A19.5 19.5 0 0 1 4.7 12 19.8 19.8 0 0 1 1.6 3.5 2 2 0 0 1 3.6 1.3h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L7.9 8.9a16 16 0 0 0 6.1 6.1l1-1a2 2 0 0 1 2.1-.5c.9.4 1.8.6 2.8.7a2 2 0 0 1 2.1 2.1Z"/></svg> }

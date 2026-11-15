@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import './Communication.css'
 import { leadsAPI, communicationAPI } from "../services/api";
 
@@ -10,11 +11,12 @@ const typeIcon  = {
   call:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.64 3.48 2 2 0 0 1 3.61 1.3h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.94a16 16 0 0 0 6.06 6.06l.94-1.02a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7a2 2 0 0 1 1.72 2.02z"/></svg>,
 }
 
-function ComposePanel({ onClose, onSent }) {
+function ComposePanel({ onClose, onSent, initialLeadId = "", initialLeadName = "", initialChannel = "" }) {
 
-  const [tab, setTab] = useState("Email");
-  const [lead, setLead] = useState("");
-  const [leadSearch, setLeadSearch] = useState("");
+  const channelLabels = { whatsapp: "WhatsApp", email: "Email", sms: "SMS", call: "Call" };
+  const [tab, setTab] = useState(channelLabels[initialChannel] || "Email");
+  const [lead, setLead] = useState(initialLeadId);
+  const [leadSearch, setLeadSearch] = useState(initialLeadName);
   const [leadOptions, setLeadOptions] = useState([]);
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
@@ -158,9 +160,13 @@ function ComposePanel({ onClose, onSent }) {
 const FILTERS = [['All', ''], ['Email', 'email'], ['SMS', 'sms'], ['WhatsApp', 'whatsapp'], ['Call', 'call']]
 
 export default function Communication() {
+  const [searchParams] = useSearchParams();
+  const initialLeadId = searchParams.get("leadId") || "";
+  const initialLeadName = searchParams.get("leadName") || "";
+  const initialChannel = (searchParams.get("channel") || "").toLowerCase();
   const [filter, setFilter] = useState('')
   const [search, setSearch] = useState('')
-  const [showCompose, setShowCompose] = useState(false)
+  const [showCompose, setShowCompose] = useState(Boolean(initialLeadId || initialChannel))
   const [data, setData] = useState({ items: [], counts: {}, pagination: { page: 1, totalPages: 1 } })
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
@@ -168,6 +174,13 @@ export default function Communication() {
   const [notice, setNotice] = useState('')
   const requestIdRef = useRef(0)
   const [refreshKey, setRefreshKey] = useState(0)
+
+  useEffect(() => {
+    if (initialLeadId || initialChannel) {
+      setShowCompose(true);
+      if (["email", "sms", "whatsapp", "call"].includes(initialChannel)) setFilter(initialChannel);
+    }
+  }, [initialLeadId, initialChannel]);
 
   const load = async () => {
     const requestId = ++requestIdRef.current
@@ -231,6 +244,9 @@ export default function Communication() {
 
       {showCompose && (
         <ComposePanel
+          initialLeadId={initialLeadId}
+          initialLeadName={initialLeadName}
+          initialChannel={initialChannel}
           onClose={() => setShowCompose(false)}
           onSent={(text) => { setShowCompose(false); setNotice(text); setPage(1); setRefreshKey((key) => key + 1) }}
         />
