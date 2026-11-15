@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { leadsAPI, reportsAPI, communicationAPI, usersAPI } from '../services/api'
 import './Leads.css'
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -61,7 +62,9 @@ export default function Leads() {
   const [usersError, setUsersError] = useState('');
   const [assigningLeadId, setAssigningLeadId] = useState(null);
   const [openCommunicationLeadId, setOpenCommunicationLeadId] = useState(null);
+  const [communicationMenuPosition, setCommunicationMenuPosition] = useState({ top: 0, left: 0 });
   const communicationMenuRef = useRef(null);
+  const communicationTriggerRef = useRef(null);
   const [users, setUsers] = useState([]);
   const [communicationHistory, setCommunicationHistory] = useState({});
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '')
@@ -102,13 +105,48 @@ export default function Leads() {
   const selectedLeadId = searchParams.get("leadId");
   useEffect(() => {
     const closeMenu = (event) => {
-      if (communicationMenuRef.current && !communicationMenuRef.current.contains(event.target)) setOpenCommunicationLeadId(null);
+      if (
+        communicationMenuRef.current?.contains(event.target) ||
+        communicationTriggerRef.current?.contains(event.target)
+      ) return;
+      setOpenCommunicationLeadId(null);
     };
-    const closeOnEscape = (event) => { if (event.key === "Escape") setOpenCommunicationLeadId(null); };
-    document.addEventListener("mousedown", closeMenu);
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        setOpenCommunicationLeadId(null);
+        communicationTriggerRef.current?.focus();
+      }
+    };
+    const closeOnViewportChange = () => setOpenCommunicationLeadId(null);
+    document.addEventListener("pointerdown", closeMenu);
     document.addEventListener("keydown", closeOnEscape);
-    return () => { document.removeEventListener("mousedown", closeMenu); document.removeEventListener("keydown", closeOnEscape); };
+    window.addEventListener("resize", closeOnViewportChange);
+    window.addEventListener("scroll", closeOnViewportChange, true);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenu);
+      document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("resize", closeOnViewportChange);
+      window.removeEventListener("scroll", closeOnViewportChange, true);
+    };
   }, []);
+  const toggleCommunicationMenu = (event, leadId) => {
+    event.stopPropagation();
+    if (openCommunicationLeadId === leadId) {
+      setOpenCommunicationLeadId(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = 184;
+    const menuHeight = 176;
+    const gap = 8;
+    const left = Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8));
+    const top = rect.top >= menuHeight + gap + 8
+      ? rect.top - menuHeight - gap
+      : Math.min(rect.bottom + gap, window.innerHeight - menuHeight - 8);
+    communicationTriggerRef.current = event.currentTarget;
+    setCommunicationMenuPosition({ top, left });
+    setOpenCommunicationLeadId(leadId);
+  };
   const openLeadCommunication = (lead, channel) => {
     const params = new URLSearchParams({ leadId: String(lead.id), leadName: lead.name || "", channel });
     navigate("/communication?" + params.toString());
@@ -454,19 +492,15 @@ return (
                   <td onClick={e=>e.stopPropagation()}><select value={lead.assignedTo||""} disabled={assigningLeadId === lead.id} onChange={e=>handleAssignLead(lead.id,e.target.value)} aria-label={`Assign ${lead.name} to counselor`} style={{padding:"4px 8px",border:"1px solid #ddd",borderRadius:"6px",fontSize:"12px"}}><option value="" disabled>Unassigned</option>{users.map(user=><option key={user.id} value={String(user.id)}>{user.name}</option>)}</select></td>
                   <td><span className="lead-last-contact">{lead.lastContact}</span></td><td className="lead-row-actions" onClick={(event) => event.stopPropagation()}>
                     <button type="button" className="lead-open-btn" onClick={() => navigate('/leads/' + lead.id)}>View lead <span aria-hidden="true">→</span></button>
-                    <div className="lead-communication-menu-wrap" ref={openCommunicationLeadId === lead.id ? communicationMenuRef : null}>
-                      <button type="button" className="lead-communication-btn" aria-haspopup="menu" aria-expanded={openCommunicationLeadId === lead.id} onClick={() => setOpenCommunicationLeadId((current) => current === lead.id ? null : lead.id)}>
-                        <CommunicationIcon /> Communication <ChevronDownIcon />
-                      </button>
-                      {openCommunicationLeadId === lead.id && (
-                        <div className="lead-communication-menu" role="menu" aria-label={'Communication options for ' + lead.name}>
-                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'whatsapp')}><WhatsAppIcon /> WhatsApp</button>
-                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'email')}><EmailIcon /> Email</button>
-                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'sms')}><SmsIcon /> SMS</button>
-                          <button type="button" role="menuitem" onClick={() => openLeadCommunication(lead, 'call')}><CallIcon /> Call</button>
-                        </div>
-                      )}
-                    </div>
+                    <button
+                      type="button"
+                      className="lead-communication-btn"
+                      aria-haspopup="menu"
+                      aria-expanded={openCommunicationLeadId === lead.id}
+                      onClick={(event) => toggleCommunicationMenu(event, lead.id)}
+                    >
+                      <CommunicationIcon /> Communication <ChevronDownIcon />
+                    </button>
                     <button type="button" className="lead-task-btn" onClick={() => navigate('/tasks?leadId=' + encodeURIComponent(lead.id))}><TaskActionIcon /> Add task</button>
                   </td>
                 </tr>
@@ -493,6 +527,23 @@ return (
             Next
           </button>
         </div>
+
+      {openCommunicationLeadId !== null && createPortal(
+        <div
+          ref={communicationMenuRef}
+          className="lead-communication-menu lead-communication-menu-portal"
+          role="menu"
+          aria-label="Communication channel options"
+          style={{ position: "fixed", top: communicationMenuPosition.top, left: communicationMenuPosition.left }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button type="button" role="menuitem" onClick={() => openLeadCommunication(leadsData.find((lead) => lead.id === openCommunicationLeadId), "whatsapp")}><WhatsAppIcon /> WhatsApp</button>
+          <button type="button" role="menuitem" onClick={() => openLeadCommunication(leadsData.find((lead) => lead.id === openCommunicationLeadId), "email")}><EmailIcon /> Email</button>
+          <button type="button" role="menuitem" onClick={() => openLeadCommunication(leadsData.find((lead) => lead.id === openCommunicationLeadId), "sms")}><SmsIcon /> SMS</button>
+          <button type="button" role="menuitem" onClick={() => openLeadCommunication(leadsData.find((lead) => lead.id === openCommunicationLeadId), "call")}><CallIcon /> Call</button>
+        </div>,
+        document.body
+      )}
 
     </div>
   )
